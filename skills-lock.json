@@ -103,6 +103,24 @@
       "skillPath": "skills/misc/migrate-to-shoehorn/SKILL.md",
       "computedHash": "6397731ced114f3657aa88b55ed13d1344a56d77ca449c568e3200c21740fa99"
     },
+    "obsidian": {
+      "source": "gapmiss/obsidian-plugin-skill",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/obsidian/SKILL.md",
+      "computedHash": "3a978f3c06c7a752aa7868e0a71b670c744328d65095071641172ff24e02d1c2"
+    },
+    "obsidian-cli": {
+      "source": "kepano/obsidian-skills",
+      "sourceType": "github",
+      "skillPath": "skills/obsidian-cli/SKILL.md",
+      "computedHash": "f46ae626875f7e47c410c2ee93896c4526024ebe127719e8fb430261b5677edc"
+    },
+    "obsidian-dev-rules": {
+      "source": "agents365-ai/365-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/obsidian-dev-rules/skills/obsidian-dev-rules/SKILL.md",
+      "computedHash": "5a602f3e8ec9c49a65c017f5a9e00b0dcda77c4ae822c79e94eca1eaac32a8a3"
+    },
     "pr": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -186,6 +204,12 @@
       "sourceType": "github",
       "skillPath": "skills/engineering/triage/SKILL.md",
       "computedHash": "a683e69163e23630f39c05a50fb9d83a3795a6a6fbd317357669e082cd43a158"
+    },
+    "vitest": {
+      "source": "antfu/skills",
+      "sourceType": "github",
+      "skillPath": "skills/vitest/SKILL.md",
+      "computedHash": "21af2b13d47d31f3094b61c0f41abc8d6a7eed0df3c9a4029ea671f6978b7209"
     },
     "wait-what": {
       "source": "mattpocock/skills",

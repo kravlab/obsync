@@ -27,6 +27,15 @@ conditional: skip any unnecessary phase, and recommend a different relevant
 skill when it must resolve a prerequisite first. Recommend only; never invoke
 the next command automatically.
 
+### Plugin development skills
+
+Project-level skills in `.agents/skills/` (pinned in `skills-lock.json`) for building this Obsidian plugin:
+
+- **`obsidian`**: Obsidian plugin guidelines: `eslint-plugin-obsidianmd` rules, lifecycle and memory cleanup, `requestUrl` instead of `fetch`, UI standards, community submission. Use for any work on `main.ts`, `manifest.json` or Obsidian API code.
+- **`obsidian-dev-rules`**: reference mirrored from docs.obsidian.md: Vault and Editor APIs, events, CodeMirror 6 editor extensions, settings/views/modals, release. Manual only: invoke `/obsidian-dev-rules` (e.g. for the conflict editor's CM6 extension).
+- **`obsidian-cli`**: drives a running Obsidian through its CLI: reload the plugin, run JavaScript, capture errors, take screenshots, inspect the DOM. Needs Obsidian open with the CLI enabled, so it works on the host, not in the devcontainer.
+- **`vitest`**: Vitest reference: config, module mocking (e.g. mocking `requestUrl` from `obsidian`), fake timers, coverage. Use when writing or running tests.
+
 ## Session links
 
 Everything you publish stays free of Claude Code session links
