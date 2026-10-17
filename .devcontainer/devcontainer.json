@@ -1,0 +1,69 @@
+// Devcontainer for everyday development. It does not use hostrunner; the
+// Claude Code container wired to it is
+// .devcontainer/claude/devcontainer.json.
+//
+// From the devcontainer template (github.com/kravlad/devcontainer-template),
+// which owns this file: `mise run dc-template-update` updates it and merges
+// local edits.
+// The specs named here are in its docs/specs/.
+{
+  // The project's name is its folder's, here and in the names below.
+  "name": "${localWorkspaceFolderBasename}",
+  "build": { "dockerfile": "Dockerfile", "target": "base" },
+
+  // A recognizable container name and shell prompt host name. Names are
+  // unique per host: of two projects in folders of the same name only one
+  // can have its container, running or stopped.
+  "runArgs": [
+    "--name", "${localWorkspaceFolderBasename}-dev",
+    "--hostname", "${localWorkspaceFolderBasename}-dev"
+  ],
+
+  // The toolchain comes from mise.toml, like on the host (mise is in the
+  // image): the project's setup-dev task, or the template's default,
+  // `mise install` (.config/mise/conf.d/devcontainer.toml).
+  "postCreateCommand": "mise trust && mise run setup-dev",
+
+  // mise installs into the tool store mounted below, which the host's
+  // projects share: what one of them installed, no other downloads
+  // (docs/specs/devcontainer-shared-store.md).
+  "containerEnv": {
+    "MISE_INSTALLS_DIR": "/home/vscode/.local/share/mise-store/installs"
+  },
+
+  // All run on the host, in parallel; any failing fails `devcontainer up`.
+  // A script is given to /bin/sh, the shell its first line names: named
+  // as the program it would need its executable bit, which a project's
+  // copy of the file can lose.
+  "initializeCommand": {
+    // Copies user.name and user.email from the host's global git config
+    // into the directory mounted at /run/host-config
+    // (docs/specs/devcontainer-host-config.md).
+    "git-identity": [
+      "/bin/sh", "${localWorkspaceFolder}/.devcontainer/git-identity.sh",
+      "${localEnv:XDG_RUNTIME_DIR}/hostrunner-host-config/${devcontainerId}"
+    ],
+    // Copies the host's global git excludes file there too; the image links
+    // ~/.config/git/ignore to it (docs/specs/devcontainer-git-excludes.md).
+    "git-excludes": [
+      "/bin/sh", "${localWorkspaceFolder}/.devcontainer/git-excludes.sh",
+      "${localEnv:XDG_RUNTIME_DIR}/hostrunner-host-config/${devcontainerId}"
+    ]
+  },
+
+  "mounts": [
+    // Bash history survives rebuilds (see the Dockerfile).
+    "source=${localWorkspaceFolderBasename}-bashhistory-${devcontainerId},target=/home/vscode/.commandhistory,type=volume",
+    // The tool store and the package cache of the host: two volumes with
+    // the same names in every project, which the everyday containers
+    // write to. The Claude Code container reads the store and does not
+    // see the cache.
+    "source=devcontainer-mise-store,target=/home/vscode/.local/share/mise-store,type=volume",
+    "source=devcontainer-cache,target=/home/vscode/.cache,type=volume",
+    // The host's git identity, included from the image's system git config,
+    // and its global excludes, linked from ~/.config/git/ignore.
+    // A directory: the scripts replace the files, and a single-file mount
+    // would keep showing the old ones.
+    "source=${localEnv:XDG_RUNTIME_DIR}/hostrunner-host-config/${devcontainerId},target=/run/host-config,type=bind,readonly"
+  ]
+}

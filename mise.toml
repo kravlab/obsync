@@ -1,4 +1,5 @@
 # Tools of the project; `mise install` installs them.
 
 [tools]
+"github:kravlab/hostrunner" = "latest"
 lefthook = "2.1.14"  # runs the git hooks (lefthook.yml)

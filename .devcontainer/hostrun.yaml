@@ -1,0 +1,44 @@
+# Rules for `hostrun`: which host commands the Claude Code devcontainer
+# (claude/devcontainer.json) may run.
+# A command no rule matches is denied; the rule with the longest matching
+# command prefix decides. See hostrunner's README for the full reference.
+#
+# This file is the project's: add its rules here. The devcontainer template
+# (github.com/kravlad/devcontainer-template) only creates it, with the git
+# rules below, when the project has none; `mise run dc-template-update` leaves
+# it alone, so a later change to the template's rules does not reach it. A
+# deleted file is created again by the next update: to deny every command,
+# keep the file with `rules: []`.
+#
+# Prefer `allow` lists for flags: git has flags that make it run a command
+# of your choosing (--upload-pack, --receive-pack, --exec), and a deny list
+# would have to know them all.
+#
+# Rules restrict argv only: git reads .git/config and hooks from the
+# workspace. The container mounts both read-only, but can still redirect
+# host git to a config and hooks it writes (see hostrunner's README).
+rules:
+  - command: git status
+    args: any
+  - command: git rev-parse
+    args: any
+
+  - command: git fetch
+    flags:
+      allow: [--prune, -p, --tags, --all, --quiet, -q, --verbose, -v]
+    positional:
+      # remotes by name only: no URLs, scp-style addresses or local paths
+      deny: ["*://*", "*@*:*", "/*", ".*", "~*", "ext::*", "file:*"]
+
+  - command: git pull
+    flags:
+      allow: [--ff-only, --rebase, -r, --no-rebase, --prune, -p, --tags, --quiet, -q, --verbose, -v]
+    positional:
+      deny: ["*://*", "*@*:*", "/*", ".*", "~*", "ext::*", "file:*"]
+
+  - command: git push
+    flags:
+      allow: [-u, --set-upstream, --tags, --follow-tags, --dry-run, -n, --quiet, -q, --verbose, -v]
+    positional:
+      # force refspecs (+ref), deletions (:ref), and remotes other than by name
+      deny: ["+*", ":*", "*://*", "*@*:*", "/*", ".*", "~*", "ext::*", "file:*"]
