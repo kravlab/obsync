@@ -8,13 +8,14 @@ Every decision needed to write the spec for the first release of an Obsidian plu
 
 ## Notes
 
-- Domain: Obsidian community plugin in TypeScript. Vocabulary is in `GLOSSARY.md` (Vault, Device, Provider, Remote, Metadata folder, Sync snapshot). Decisions with lasting weight are ADRs in `docs/adr/`.
+- Domain: Obsidian community plugin in TypeScript. Vocabulary is in `GLOSSARY.md`. Decisions with lasting weight are ADRs in `docs/adr/`.
 - Every cloud sits behind the Provider abstraction, and no engine decision may assume a capability only one provider has. The contract is checked against Google Drive, Dropbox, OneDrive, WebDAV and S3-compatible storage. Exactly one of them is implemented for the first release: Dropbox (see [First provider choice](issues/16-first-provider-choice.md)).
 - User scenario: a single person, several devices, long offline periods with edits on more than one device. Edits made offline on two devices are the normal case.
 - Platforms: desktop, Android and iOS are all required.
 - Earlier ideas (line-based 3-way merge with inline markers, inline Accept buttons (replaced by visible markers with an action row, see Decisions so far), last-write-wins for binaries (rejected, see Decisions so far), OAuth with PKCE via an `obsidian://` redirect (refuted for Google Drive, see Decisions so far), a provider change feed, a serialized operation queue, debounced local events) are hypotheses. Each is confirmed or replaced by its ticket, never assumed.
 - Skills: `obsidian` for any Obsidian API question, `/obsidian-dev-rules` for editor extensions and Vault API detail, `research` for research tickets, `grilling` + `domain-modeling` for grilling tickets, `prototype` for prototype tickets.
 - Language: everything on this map is written in English.
+- Left to the spec, with no decision pending on the map: the release and community-submission checklist, including the Dropbox production review (approval within two weeks once 50 users link the app; an app name without "Dropbox", fixed once in production, which also names the user's `Apps/` folder); the testing strategy (fake provider, mocked `requestUrl`, manual multi-device checks); and versioning of the plugin's own state format.
 
 ## Decisions so far
 
@@ -36,14 +37,12 @@ Every decision needed to write the spec for the first release of an Obsidian plu
 - [First provider choice](issues/16-first-provider-choice.md): Dropbox is the first provider (PKCE + paste-the-code on all platforms, App Folder). The first release builds only the conditional-write path, with no Device journals: a provider without conditional writes is refused until they exist. Dropbox implements the `changes` Capability, falling back to a full listing on `cursorLost`. Its mobile risks are checked in [Mobile runtime checks](issues/17-mobile-runtime-checks.md).
 - [First provider auth design](issues/14-first-provider-auth-design.md): the plugin ships its own Dropbox app key (PKCE, no secret) with paste-the-code login on every platform and four scopes. App Folder access, with each Remote a subfolder picked at connect time. The refresh token lives in `SecretStorage` per device. An `auth` error pauses sync until a login to the same account. Disconnect revokes and clears local state only. The provider owns login, token refresh and revoke; the plugin owns the Connection's storage, account check, pause and cleanup.
 - [Mobile runtime checks](issues/17-mobile-runtime-checks.md): measured on Android and iOS with a probe plugin. The contract stays whole-buffer (100 MB in memory is fine on both), while the provider keeps each HTTP request under 20 MB (Android crashed downloading 30 MB) via upload sessions and `Range`; the limit is user-configurable. `visible` and `online` work as triggers, `hidden` does not. Dropbox works on both. Templater JS can install plugins on iOS.
+- [Synced file scope](issues/11-synced-file-scope.md): all visible files sync; other dot-paths never do. The config folder syncs in per-device categories (settings, themes, plugins with a secrets warning), stored under one fixed Remote name, while workspace files and the plugin's own folder are always excluded. Config changes need a restart, and config conflicts keep the local copy in the plugin folder. The ignore list is shared per Remote, and the size ceiling is 100 MB by default.
+- [Conflict-avoidance guidance for users](issues/18-conflict-avoidance-guidance.md): four practices (one device first, connect with an empty or current vault, wait for "synced", sync after being offline) appear on a one-time onboarding screen. The full explanations (conflicts, outside edits, config, skipped files) live in a help section. A "First sync in progress" mark warns other devices. The UI ships in English and Russian.
 
 ## Not yet specified
 
-- Settings, status indicator and how sync errors and conflicts are surfaced to the user (status bar, notices, sync log, one conflict list covering files with Conflict blocks and Conflict copies), plus the Deletion guard prompt (apply / restore / review list) and notices for restored or renamed files, and the First sync preview.
-- Testing strategy: a fake provider for the engine, mocked `requestUrl`, manual multi-device checks.
-- Choosing a provider in the UI once more than one exists.
-- Release and community plugin submission requirements, including Dropbox production review: once 50 users link the app, approval must be obtained within two weeks or new links freeze. The Dropbox app name may not contain "Dropbox", cannot change after production status, and by default names the user's `Apps/` folder.
-- Versioning and migration of the plugin's own sync state format.
+Nothing left. The last patch, the status and notices UI, became [Status and notices UI](issues/19-status-and-notices-ui.md).
 
 ## Out of scope
 
@@ -54,3 +53,5 @@ Kept for future efforts; this map does not decide them.
 - End-to-end encryption of vault contents: kept for the future.
 - Syncing one vault to several Remotes at once: kept for the future.
 - One vault shared by several people: the target user is a single person.
+- Selective sync (excluding paths on one device only): kept for the future; the ignore list is shared by all devices of a Remote ([Synced file scope](issues/11-synced-file-scope.md)).
+- Choosing a provider in the UI once more than one exists: the first release ships Dropbox only, and the contract and connect model are already provider-neutral.
