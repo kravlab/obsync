@@ -32,6 +32,10 @@ _Avoid_: Cloud path, provider path, key (S3 term), id
 An optional ability a provider reports for a Remote after connecting (such as a change feed, conditional writes or server-side move); anything not reported is treated as absent.
 _Avoid_: Feature, flag
 
+**Connection**:
+One device's authorised link to an account at a provider and to the Remote chosen there; it exists only on that device.
+_Avoid_: Login, session, account link
+
 **Metadata folder**:
 The single plugin-owned folder at the root of a Remote; the only place on a Remote that holds anything other than vault files.
 _Avoid_: Control folder, config folder, `.obsidian` (that is the vault's own configuration)

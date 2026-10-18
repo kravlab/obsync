@@ -17,7 +17,8 @@ Prototype on real devices (a throwaway plugin driven via `/obsidian-cli` on the 
 - Dropbox, the first provider ([First provider choice](16-first-provider-choice.md)), on Android and iOS:
   - whether a `Dropbox-API-Arg` header carrying a path with escaped non-ASCII characters reaches Dropbox unchanged through `requestUrl`;
   - whether binary upload and download through the Dropbox content endpoint work through `requestUrl`;
-  - whether the PKCE paste-the-code login works on a phone: the Dropbox authorize page opens in the browser, and the code can be copied back into Obsidian.
+  - whether the PKCE paste-the-code login works on a phone: the Dropbox authorize page opens in the browser, and the code can be copied back into Obsidian;
+  - whether linking the app on a second device leaves the first device's refresh token working ([First provider auth design](14-first-provider-auth-design.md) assumes one independent refresh token per device).
 
 Decide from the results:
 

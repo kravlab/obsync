@@ -1,0 +1,3 @@
+# Dropbox app with App Folder access
+
+The plugin's Dropbox app is registered with App Folder access, not Full Dropbox, so the plugin can reach only `Apps/<app folder name>`, and each Remote is a subfolder there chosen or created at connect time. A sync engine bug or a wrong Remote choice then cannot touch the user's other Dropbox files, and Dropbox's production review checks that an app requests no broader permission than it needs. The cost is that a vault cannot be synced into a folder the user already has elsewhere in their Dropbox. Dropbox does not let an app change its permission type after creation (Dropbox staff forum reply), so reversing this means registering a new app with a new app key and having every user connect again.
