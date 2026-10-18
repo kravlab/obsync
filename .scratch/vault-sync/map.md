@@ -39,10 +39,11 @@ Every decision needed to write the spec for the first release of an Obsidian plu
 - [Mobile runtime checks](issues/17-mobile-runtime-checks.md): measured on Android and iOS with a probe plugin. The contract stays whole-buffer (100 MB in memory is fine on both), while the provider keeps each HTTP request under 20 MB (Android crashed downloading 30 MB) via upload sessions and `Range`; the limit is user-configurable. `visible` and `online` work as triggers, `hidden` does not. Dropbox works on both. Templater JS can install plugins on iOS.
 - [Synced file scope](issues/11-synced-file-scope.md): all visible files sync; other dot-paths never do. The config folder syncs in per-device categories (settings, themes, plugins with a secrets warning), stored under one fixed Remote name, while workspace files and the plugin's own folder are always excluded. Config changes need a restart, and config conflicts keep the local copy in the plugin folder. The ignore list is shared per Remote, and the size ceiling is 100 MB by default.
 - [Conflict-avoidance guidance for users](issues/18-conflict-avoidance-guidance.md): four practices (one device first, connect with an empty or current vault, wait for "synced", sync after being offline) appear on a one-time onboarding screen. The full explanations (conflicts, outside edits, config, skipped files) live in a help section. A "First sync in progress" mark warns other devices. The UI ships in English and Russian.
+- [Status and notices UI](issues/19-status-and-notices-ui.md): variant A wins. On desktop a status bar item, on mobile a ribbon icon (status bar items are unsupported there), plus commands, all open a Sync window with Conflicts / Skipped / Activity tabs. Prompts are modal, notices are toasts that are also logged, in English and Russian.
 
 ## Not yet specified
 
-Nothing left. The last patch, the status and notices UI, became [Status and notices UI](issues/19-status-and-notices-ui.md).
+Nothing left. The map is complete: every ticket is resolved, and the remaining spec-level items are listed in Notes.
 
 ## Out of scope
 
