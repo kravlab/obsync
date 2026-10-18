@@ -9,7 +9,7 @@ Every decision needed to write the spec for the first release of an Obsidian plu
 ## Notes
 
 - Domain: Obsidian community plugin in TypeScript. Vocabulary is in `GLOSSARY.md` (Vault, Device, Provider, Remote, Metadata folder, Sync snapshot). Decisions with lasting weight are ADRs in `docs/adr/`.
-- Every cloud sits behind the Provider abstraction, and no engine decision may assume a capability only one provider has. The contract is checked against Google Drive, Dropbox, OneDrive, WebDAV and S3-compatible storage. Exactly one of them is implemented for the first release, and it need not be Google Drive: the simplest one to implement and connect wins (see [First provider choice](issues/16-first-provider-choice.md)).
+- Every cloud sits behind the Provider abstraction, and no engine decision may assume a capability only one provider has. The contract is checked against Google Drive, Dropbox, OneDrive, WebDAV and S3-compatible storage. Exactly one of them is implemented for the first release: Dropbox (see [First provider choice](issues/16-first-provider-choice.md)).
 - User scenario: a single person, several devices, long offline periods with edits on more than one device. Edits made offline on two devices are the normal case.
 - Platforms: desktop, Android and iOS are all required.
 - Earlier ideas (line-based 3-way merge with inline markers, inline Accept buttons (replaced by visible markers with an action row, see Decisions so far), last-write-wins for binaries (rejected, see Decisions so far), OAuth with PKCE via an `obsidian://` redirect (refuted for Google Drive, see Decisions so far), a provider change feed, a serialized operation queue, debounced local events) are hypotheses. Each is confirmed or replaced by its ticket, never assumed.
@@ -33,6 +33,7 @@ Every decision needed to write the spec for the first release of an Obsidian plu
 - [Deletions and renames](issues/10-deletions-and-renames.md): deletions are found from the Sync snapshot, with no Remote tombstones. An edit beats a delete, and local deletes go to the user's trash. A Deletion guard stops mass deletes for confirmation. Renames are detected by event, stable id or unique hash and applied with `vault.rename` (no link rewrite). Rename combined with an edit or delete keeps the file. With two different names the Remote name wins, and an occupied target becomes a Conflict copy.
 - [First sync against an existing Remote](issues/12-first-sync-against-existing-remote.md): a device with no Sync snapshot does a union-only First sync with no deletes. A preview with a summary comes first, offering a bulk "Remote + Conflict copies" option. Identical files are matched by hash, using the server hash when the algorithm matches. A lost snapshot means re-registering, and a simultaneous Remote setup is a settings collision.
 - [Sync triggers and lifecycle](issues/13-sync-triggers-and-lifecycle.md): sync runs on vault open, manual command, post-edit pause, polling, and return to app or network where available, one sync at a time. There is no persisted queue: an interrupted sync re-derives its work from vault, Sync snapshot and Remote. Local changes are found by a scan, with events as hints. The open note waits for a typing pause, uploads go first, and offline is a normal state.
+- [First provider choice](issues/16-first-provider-choice.md): Dropbox is the first provider (PKCE + paste-the-code on all platforms, App Folder). The first release builds only the conditional-write path, with no Device journals: a provider without conditional writes is refused until they exist. Dropbox implements the `changes` Capability, falling back to a full listing on `cursorLost`. Its mobile risks are checked in [Mobile runtime checks](issues/17-mobile-runtime-checks.md).
 
 ## Not yet specified
 
@@ -40,7 +41,7 @@ Every decision needed to write the spec for the first release of an Obsidian plu
 - Testing strategy: a fake provider for the engine, mocked `requestUrl`, manual multi-device checks.
 - Choosing and connecting a provider in the UI once more than one exists; the provider-neutral connect / disconnect flow.
 - Secure storage of credentials on each platform.
-- Release and community plugin submission requirements.
+- Release and community plugin submission requirements, including Dropbox production review: once 50 users link the app, approval must be obtained within two weeks or new links freeze.
 - Versioning and migration of the plugin's own sync state format.
 
 ## Out of scope
