@@ -27,3 +27,5 @@ Decided in a grilling session.
 5. **Order of work.** Local changes go to the Remote first, small text files before large attachments; downloads follow. Mobile apps can be frozen within seconds of backgrounding, and until uploaded, local edits exist only on this device.
 6. **Offline is a normal state, not an error.** Attempts fail as `transient` and retry with growing backoff and on triggers. The status shows "offline" without repeated notices, and no queue is kept, because the next scan finds the edits.
 7. **Unverified mobile events.** Whether `visibilitychange` (return to the app) and `online` fire in Obsidian's mobile app is checked in [Mobile runtime checks](17-mobile-runtime-checks.md). Until confirmed, polling and the post-edit trigger cover those cases.
+
+_Confirmed by [Mobile runtime checks](17-mobile-runtime-checks.md): `visibilitychange` → `visible` and `online` fire on Android and iOS and are used as triggers. `hidden` is not relied on, and polling stays as the fallback._

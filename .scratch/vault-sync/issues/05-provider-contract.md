@@ -42,3 +42,5 @@ Decided in a grilling session. New glossary terms: Vault path, Remote path, Capa
 10. **Data transfer.** `read` returns and `write` accepts the whole file as one buffer. The provider reports its maximum file size. The size ceiling for syncing is decided in [Synced file scope](11-synced-file-scope.md).
 11. **Connecting.** A separate connect step lets the user browse the provider's folders and create one, to pick the Remote root. The provider may fix the root itself, for example Dropbox's App Folder. Every other operation is confined to the chosen root.
 12. **The Metadata folder** is read and written with the same operations and appears in listings. The engine excludes it from the vault comparison. Providers know nothing about its purpose.
+
+_Refined by [Mobile runtime checks](17-mobile-runtime-checks.md): the whole-buffer `read`/`write` of point 10 stands, but the provider keeps every single HTTP request body below a per-request limit (under 20 MB by default, user-configurable), using upload sessions and `Range` downloads internally._
