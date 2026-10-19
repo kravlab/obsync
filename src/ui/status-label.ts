@@ -10,5 +10,7 @@ export function statusLabel(status: SyncStatus, strings: Strings): string {
 	switch (status.state) {
 		case "notConnected":
 			return strings.statusNotConnected;
+		case "connected":
+			return strings.statusConnected;
 	}
 }

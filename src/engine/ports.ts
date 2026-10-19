@@ -19,11 +19,21 @@ export interface Connection {
 	 * for some services, an id for others); opaque to the engine.
 	 */
 	readonly remoteRoot: string;
+	/** This device as registered in the Remote's Metadata folder. */
+	readonly device: DeviceIdentity;
+}
+
+/** How a device is known on a Remote. */
+export interface DeviceIdentity {
+	/** Random id, created when the device connects to the Remote. */
+	readonly id: string;
+	/** The name shown to the user, in messages and conflict labels. */
+	readonly name: string;
 }
 
 /**
- * Opens the provider of a Connection. The connect step (login, choosing
- * the Remote) and disconnect join this port with the first real provider.
+ * Opens the provider of a Connection for syncing. Logging in, choosing the
+ * Remote and disconnecting go through the connect step (connect-step.ts).
  */
 export interface ProviderConnector {
 	/** Returns the Provider bound to the Connection's Remote. */
@@ -32,19 +42,31 @@ export interface ProviderConnector {
 
 /**
  * Per-device state that never syncs: never in `data.json` or the vault.
- * Grows with the Sync snapshot, Base copies and Device ID in later tickets.
+ * Grows with the Sync snapshot and Base copies in later tickets.
  */
 export interface DeviceStore {
 	/** Returns this device's Connection, or null if it has none. */
 	loadConnection(): Promise<Connection | null>;
+	/** Stores this device's Connection, replacing any earlier one. */
+	saveConnection(connection: Connection): Promise<void>;
+	/**
+	 * Erases everything this device keeps for its Connection: the
+	 * Connection itself and, once they exist, the Sync snapshot and Base.
+	 */
+	clear(): Promise<void>;
 }
 
 /** Secrets kept on this device only, over Obsidian's `SecretStorage`. */
 export interface SecretStore {
 	/** Returns the secret stored under `id`, or null if there is none. */
 	getSecret(id: string): string | null;
-	/** Stores `secret` under `id`, a lowercase alphanumeric id with dashes. */
+	/**
+	 * Stores `secret` under `id`, a lowercase alphanumeric id with dashes.
+	 * An empty secret is not a secret: use `deleteSecret`.
+	 */
 	setSecret(id: string, secret: string): void;
+	/** Removes the secret under `id`; `getSecret` then returns null. */
+	deleteSecret(id: string): void;
 }
 
 /** The current time. */

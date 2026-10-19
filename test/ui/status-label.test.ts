@@ -10,4 +10,12 @@ describe("statusLabel", () => {
 	it("names the Not connected state in Russian", () => {
 		expect(statusLabel({ state: "notConnected" }, selectStrings("ru"))).toBe("Не подключено");
 	});
+
+	it("names the Connected state in English", () => {
+		expect(statusLabel({ state: "connected" }, selectStrings("en"))).toBe("Connected");
+	});
+
+	it("names the Connected state in Russian", () => {
+		expect(statusLabel({ state: "connected" }, selectStrings("ru"))).toBe("Подключено");
+	});
 });

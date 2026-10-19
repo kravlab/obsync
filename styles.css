@@ -1,2 +1,7 @@
 /* Styles for the plugin's own elements; every selector is scoped to an
    obsync- class so themes and other plugins are untouched. */
+
+/* A message at the top of the connect window, such as a refused code. */
+.obsync-message:not(:empty) {
+	color: var(--text-error);
+}

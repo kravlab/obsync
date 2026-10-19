@@ -4,3 +4,6 @@ node_modules/
 # Build output: esbuild writes the bundle to the root, where Obsidian expects
 # it next to manifest.json and styles.css.
 main.js
+
+# Local build settings, such as the Dropbox app key (see esbuild.config.mjs).
+.env

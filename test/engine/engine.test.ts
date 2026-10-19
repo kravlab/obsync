@@ -11,6 +11,17 @@ describe("sync engine", () => {
 		expect(device.ui.statuses).toEqual([{ state: "notConnected" }]);
 	});
 
+	it("reports Connected on a device that has a Connection", async () => {
+		const device = createTestDevice(new FakeRemote());
+		device.deviceStore.connection = {
+			accountId: "account",
+			remoteRoot: "My vault",
+			device: { id: "laptop-id", name: "Laptop" },
+		};
+		await createSyncEngine(device.ports).start();
+		expect(device.ui.statuses).toEqual([{ state: "connected" }]);
+	});
+
 	it("runs one engine per device on a shared Remote, each with its own stores", async () => {
 		const remote = new FakeRemote();
 		const laptop = createTestDevice(remote);
@@ -22,7 +33,7 @@ describe("sync engine", () => {
 		expect(laptop.vault).not.toBe(phone.vault);
 		expect(laptop.deviceStore).not.toBe(phone.deviceStore);
 
-		const connection = { accountId: "account", remoteRoot: "" };
+		const connection = { accountId: "account", remoteRoot: "", device: { id: "laptop-id", name: "Laptop" } };
 		const laptopProvider = await laptop.ports.providers.open(connection, "secret");
 		const phoneProvider = await phone.ports.providers.open(connection, "secret");
 		await laptopProvider.write("note.md", bytes("from laptop"));

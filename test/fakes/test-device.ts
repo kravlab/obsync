@@ -21,6 +21,16 @@ export class InMemoryDeviceStore implements DeviceStore {
 	loadConnection(): Promise<Connection | null> {
 		return Promise.resolve(this.connection);
 	}
+
+	saveConnection(connection: Connection): Promise<void> {
+		this.connection = connection;
+		return Promise.resolve();
+	}
+
+	clear(): Promise<void> {
+		this.connection = null;
+		return Promise.resolve();
+	}
 }
 
 /** A Secret store in memory. */
@@ -34,12 +44,21 @@ export class InMemorySecretStore implements SecretStore {
 	setSecret(id: string, secret: string): void {
 		this.secrets.set(id, secret);
 	}
+
+	deleteSecret(id: string): void {
+		this.secrets.delete(id);
+	}
 }
 
 /** A UI port that records what the engine showed. */
 export class RecordingUi implements UiPort {
 	/** Every status shown, oldest first. */
 	readonly statuses: SyncStatus[] = [];
+
+	/** The status shown last, or undefined if none was. */
+	get lastStatus(): SyncStatus | undefined {
+		return this.statuses[this.statuses.length - 1];
+	}
 
 	showStatus(status: SyncStatus): void {
 		this.statuses.push(status);
