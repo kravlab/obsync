@@ -1,0 +1,5 @@
+# Install scripts dependencies may run (pnpm approve-builds).
+allowBuilds:
+  # esbuild's postinstall checks that its platform binary
+  # (@esbuild/<platform>) is installed and runs.
+  esbuild: true

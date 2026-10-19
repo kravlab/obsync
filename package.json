@@ -1,0 +1,27 @@
+{
+	"name": "obsync",
+	"version": "0.1.0",
+	"description": "Sync a vault across devices through a cloud storage service.",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"packageManager": "pnpm@12.13.0",
+	"scripts": {
+		"build": "tsc --noEmit && node esbuild.config.mjs production",
+		"dev": "node esbuild.config.mjs",
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint . --max-warnings 0",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"@eslint/js": "9.39.5",
+		"@eslint/json": "0.14.0",
+		"esbuild": "0.28.2",
+		"eslint": "9.39.5",
+		"eslint-plugin-obsidianmd": "0.4.2",
+		"obsidian": "1.14.4",
+		"typescript": "6.0.3",
+		"typescript-eslint": "8.71.2",
+		"vitest": "5.0.4"
+	}
+}

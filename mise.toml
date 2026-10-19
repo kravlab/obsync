@@ -3,3 +3,41 @@
 [tools]
 "github:kravlab/hostrunner" = "latest"
 lefthook = "2.1.14"  # runs the git hooks (lefthook.yml)
+node = "24.21.0"  # runs the build, lint and tests
+pnpm = "12.13.0"  # installs package.json's devDependencies
+
+# Development tasks; each runs the package.json script of the same name, so
+# `mise run <task>` and `pnpm run <script>` do the same thing.
+
+[tasks.build]
+description = "Type-check, then bundle src/main.ts into main.js"
+run = "pnpm run build"
+
+[tasks.typecheck]
+description = "Type-check src/ and test/"
+run = "pnpm run typecheck"
+
+[tasks.lint]
+description = "Lint with the Obsidian community scanner's ruleset; warnings fail too"
+run = "pnpm run lint"
+
+[tasks.test]
+description = "Run the Vitest suite once"
+run = "pnpm run test"
+
+[tasks.check]
+description = "Type-check, lint and test"
+depends = ["typecheck", "lint", "test"]
+
+# What a new devcontainer runs (postCreateCommand); they replace the
+# template's defaults in .config/mise/conf.d/devcontainer.toml, which only
+# run mise install. The lockfile is frozen so a container never resolves
+# versions other than the committed ones.
+
+[tasks.setup-dev]
+description = "Install the tools and devDependencies in the everyday devcontainer"
+run = "mise install && pnpm install --frozen-lockfile"
+
+[tasks.setup-agent]
+description = "Install the tools and devDependencies in the Claude Code devcontainer"
+depends = ["setup-dev"]  # the same setup in both containers

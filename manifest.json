@@ -1,0 +1,9 @@
+{
+	"id": "obsync",
+	"name": "Obsync",
+	"version": "0.1.0",
+	"minAppVersion": "1.11.4",
+	"description": "Sync a vault across devices through a cloud storage service.",
+	"author": "kravlad",
+	"isDesktopOnly": false
+}
