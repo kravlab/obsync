@@ -27,6 +27,11 @@ conditional: skip any unnecessary phase, and recommend a different relevant
 skill when it must resolve a prerequisite first. Recommend only; never invoke
 the next command automatically.
 
+`/implement` and `/implement-spec` are not done until every ticket they
+implemented is closed as described in `docs/agents/issue-tracker.md`
+("Closing an implementation ticket"). The pinned skills do not say this
+themselves, so this rule applies on top of them.
+
 ### Plugin development skills
 
 Project-level skills in `.agents/skills/` (pinned in `skills-lock.json`) for building this Obsidian plugin:

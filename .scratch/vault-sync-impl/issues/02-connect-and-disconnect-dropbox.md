@@ -12,7 +12,7 @@ Disconnecting revokes the login and clears only this device's local state.
 
 **Blocked by:** 01 (Plugin scaffold and test harness).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The login works the same on desktop, Android and iOS. A reused or expired code (`invalid_grant`) restarts the login with a clear message.
 - [ ] Only the four scopes from the spec are requested. The refresh token is stored in `SecretStorage`, never in `data.json`, the vault or the Remote. Access tokens refresh transparently.
@@ -21,3 +21,7 @@ Disconnecting revokes the login and clears only this device's local state.
 - [ ] The `account_id` is recorded with the Connection. A later login to a different account is refused with an explanation.
 - [ ] Disconnect calls token revoke, then clears this device's secret, Sync snapshot, Base and Remote binding even if offline. It leaves vault files, the Remote and other devices untouched.
 - [ ] The Provider contract suite covers the connect step, code exchange, refresh, account check and revoke, with `requestUrl` mocked.
+
+## Comments
+
+- 2026-10-19: Implemented in commit `01ed227` (feat(dropbox): connect and disconnect a device) on `main`; plan: `.scratch/vault-sync-impl/plans/02-dropbox-connect.md`. Ticket closed.

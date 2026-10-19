@@ -11,7 +11,7 @@ Parent spec: `.scratch/vault-sync/spec.md` ("Vault sync plugin: first release").
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The plugin builds into the three community-plugin files and loads on desktop, Android and iOS without errors.
 - [ ] The build and lint follow the project's `obsidian` skill rules: network through `requestUrl`, no Node or Electron APIs on mobile paths.
@@ -23,3 +23,7 @@ Parent spec: `.scratch/vault-sync/spec.md` ("Vault sync plugin: first release").
 - [ ] Several engine instances can share one FakeProvider Remote, standing in for several devices.
 - [ ] Every UI string comes from the EN/RU table, and switching Obsidian's language switches the plugin's language.
 - [ ] A "Not connected" state is visible: a status bar item on desktop, a ribbon icon on mobile.
+
+## Comments
+
+- 2026-10-19: Implemented in commit `3149750` (feat(plugin): add scaffold and test harness) on `main`; plan: `.scratch/vault-sync-impl/plans/01-plugin-scaffold.md`. Ticket closed.

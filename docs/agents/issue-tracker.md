@@ -14,6 +14,15 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 
 Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
 
+## Closing an implementation ticket
+
+When the work for a ticket under `.scratch/<feature-slug>/issues/` is committed, close it in the same change:
+
+- set its `Status:` line to `resolved`;
+- append a line under `## Comments` (creating the heading if needed) with the date, the commit hash and subject, and the plan file if one exists.
+
+A ticket whose code is committed but whose `Status:` is still open is a bug in the workflow, not a valid state.
+
 ## When a skill says "fetch the relevant ticket"
 
 Read the file at the referenced path. The user will normally pass the path or the issue number directly.
