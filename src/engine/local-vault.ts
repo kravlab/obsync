@@ -41,6 +41,11 @@ export type VaultChangeHint =
 /** This device's vault. Paths of missing entries fail with an Error. */
 export interface LocalVault {
 	/**
+	 * The vault's configuration folder (`vault.configDir`). Its name differs
+	 * between devices, so the engine takes it from here, never assumes it.
+	 */
+	readonly configDir: VaultPath;
+	/**
 	 * Lists every visible entry plus the configuration folder's entries;
 	 * other dot-paths (such as `.git` or `.trash`) are not listed.
 	 */

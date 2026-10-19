@@ -12,7 +12,7 @@ import {
 	type RemotePath,
 } from "../../src/engine/provider";
 import { toRemoteFile, type FakeRemote, type StoredFile } from "./fake-remote";
-import { parentOf } from "./paths";
+import { parentOf } from "../../src/engine/paths";
 
 /** The operations a FakeProvider counts and can inject faults into. */
 export type FakeOperation =

@@ -12,5 +12,11 @@ export function statusLabel(status: SyncStatus, strings: Strings): string {
 			return strings.statusNotConnected;
 		case "connected":
 			return strings.statusConnected;
+		case "syncing":
+			return strings.statusSyncing;
+		case "synced":
+			return strings.statusSynced;
+		case "syncFailed":
+			return strings.statusSyncFailed;
 	}
 }

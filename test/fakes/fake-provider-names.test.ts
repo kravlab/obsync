@@ -50,6 +50,13 @@ describe("FakeProvider name rules and size", () => {
 		expect(text(await provider.read("NOTE.md"))).toBe("second");
 	});
 
+	it("files a new entry under its folder's case when case-insensitive", async () => {
+		const provider = new FakeRemote({ nameRules: { caseInsensitive: true } }).openProvider();
+		await provider.createFolder("Notes");
+		await provider.write("notes/b.md", bytes("b"));
+		expect((await provider.list()).entries.map((entry) => entry.path)).toEqual(["Notes", "Notes/b.md"]);
+	});
+
 	it("keeps names that differ only by case apart when case-sensitive", async () => {
 		const provider = new FakeRemote().openProvider();
 		await provider.write("note.md", bytes("first"));

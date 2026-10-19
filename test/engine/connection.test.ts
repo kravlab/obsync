@@ -181,6 +181,43 @@ describe("connecting a device", () => {
 	});
 });
 
+describe("refusing a provider without conditional writes", () => {
+	it("refuses a chosen folder, writing nothing there and storing no Connection", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1", { conditionalWrite: false });
+		account.addFolder("Notes");
+		const laptop = createConnectingDevice(service, "laptop");
+
+		const outcome = await (await authorize(laptop, account)).useFolder("Notes", "Laptop");
+
+		expect(outcome).toEqual({ kind: "unsupportedProvider" });
+		expect(account.folders.get("Notes")?.list()).toEqual([]);
+		expect(laptop.deviceStore.connection).toBeNull();
+		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBeNull();
+	});
+
+	it("refuses a new Remote before writing its Metadata folder", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1", { conditionalWrite: false });
+		const laptop = createConnectingDevice(service, "laptop");
+
+		const outcome = await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
+
+		expect(outcome).toEqual({ kind: "unsupportedProvider" });
+		expect(account.folders.get("My vault")?.get(".obsync")).toBeUndefined();
+		expect(laptop.deviceStore.connection).toBeNull();
+	});
+
+	it("connects to a folder whose provider reports conditional writes", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		account.addFolder("Notes");
+		const laptop = createConnectingDevice(service, "laptop");
+
+		expect(await (await authorize(laptop, account)).useFolder("Notes", "Laptop")).toEqual({ kind: "connected" });
+	});
+});
+
 describe("logging in", () => {
 	it("asks for a new login when the pasted code is refused, storing nothing", async () => {
 		const service = new FakeService();

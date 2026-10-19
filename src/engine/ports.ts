@@ -3,9 +3,10 @@
  * "Architecture and modules"). The shell supplies the real adapters, tests
  * supply fakes; the engine never imports Obsidian.
  */
-import type { LocalVault } from "./local-vault";
+import type { LocalVault, VaultPath } from "./local-vault";
 import type { Provider } from "./provider";
 import type { SyncStatus } from "./status";
+import type { SnapshotEntry, SyncSnapshot } from "./sync-snapshot";
 
 /**
  * This device's authorised link to an account and the Remote chosen there.
@@ -36,24 +37,45 @@ export interface DeviceIdentity {
  * Remote and disconnecting go through the connect step (connect-step.ts).
  */
 export interface ProviderConnector {
+	/**
+	 * Names the provider, as its connect step does; the secret is stored
+	 * under `providerSecretId(providerId)`.
+	 */
+	readonly providerId: string;
 	/** Returns the Provider bound to the Connection's Remote. */
 	open(connection: Connection, secret: string): Promise<Provider>;
 }
 
 /**
  * Per-device state that never syncs: never in `data.json` or the vault.
- * Grows with the Sync snapshot and Base copies in later tickets.
+ * It holds the Connection and the Sync snapshot; Base copies join later.
  */
 export interface DeviceStore {
 	/** Returns this device's Connection, or null if it has none. */
 	loadConnection(): Promise<Connection | null>;
 	/** Stores this device's Connection, replacing any earlier one. */
 	saveConnection(connection: Connection): Promise<void>;
+	/** Returns the Sync snapshot; empty when none was saved or it is unreadable. */
+	loadSnapshot(): Promise<SyncSnapshot>;
+	/**
+	 * Records `entry` for `path`, replacing what was recorded. It is durable
+	 * once the returned promise resolves, so a sync cut off after it keeps
+	 * the entry.
+	 */
+	saveSnapshotEntry(path: VaultPath, entry: SnapshotEntry): Promise<void>;
 	/**
 	 * Erases everything this device keeps for its Connection: the
-	 * Connection itself and, once they exist, the Sync snapshot and Base.
+	 * Connection itself and the Sync snapshot (and the Base, once it exists).
 	 */
 	clear(): Promise<void>;
+}
+
+/**
+ * The Secret store id of a provider's login secret, e.g. `obsync-dropbox`:
+ * the connect step stores the secret there and syncing reads it back.
+ */
+export function providerSecretId(providerId: string): string {
+	return `obsync-${providerId}`;
 }
 
 /** Secrets kept on this device only, over Obsidian's `SecretStorage`. */

@@ -7,8 +7,14 @@
 export const en = {
 	/** Sync status of a device that has no Connection yet. */
 	statusNotConnected: "Not connected",
-	/** Sync status of a device that has a Connection, before syncing exists. */
+	/** Sync status of a connected device that has not synced since the plugin started. */
 	statusConnected: "Connected",
+	/** Sync status while a sync runs. */
+	statusSyncing: "Syncing…",
+	/** Sync status after a sync finished. */
+	statusSynced: "Synced",
+	/** Sync status after a sync stopped on a failure. */
+	statusSyncFailed: "Sync failed",
 
 	/** Settings row naming the provider the device connects to. */
 	settingsDropbox: "Dropbox",
@@ -18,6 +24,10 @@ export const en = {
 	settingsConnectedAs: "Connected as {device}.",
 	connect: "Connect",
 	disconnect: "Disconnect",
+	/** The command and button that sync this device at once. */
+	syncNow: "Sync now",
+	/** Settings row description of Sync now. */
+	settingsSyncNow: "Upload this device's new and changed files, then download those from other devices.",
 
 	/** Title of the connect window. */
 	connectTitle: "Connect to Dropbox",
@@ -50,6 +60,9 @@ export const en = {
 	folderTaken: "A folder with this name already exists.",
 	/** Creating a folder whose name holds a slash. */
 	folderNameInvalid: "A folder name cannot contain \"/\".",
+	/** The chosen folder's provider cannot refuse a write over a newer version, so syncing it could lose changes. */
+	providerUnsupported:
+		"This provider cannot stop two devices from overwriting each other's changes, so this folder cannot be synced.",
 	deviceName: "Device name",
 	deviceNameDescription: "How other devices name this one, in conflicts and messages.",
 

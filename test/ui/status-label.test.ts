@@ -18,4 +18,13 @@ describe("statusLabel", () => {
 	it("names the Connected state in Russian", () => {
 		expect(statusLabel({ state: "connected" }, selectStrings("ru"))).toBe("Подключено");
 	});
+
+	it.each([
+		["syncing", "Syncing…", "Синхронизация…"],
+		["synced", "Synced", "Синхронизировано"],
+		["syncFailed", "Sync failed", "Ошибка синхронизации"],
+	] as const)("names the %s state in English and Russian", (state, english, russian) => {
+		expect(statusLabel({ state }, selectStrings("en"))).toBe(english);
+		expect(statusLabel({ state }, selectStrings("ru"))).toBe(russian);
+	});
 });

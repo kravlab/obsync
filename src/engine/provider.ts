@@ -199,3 +199,18 @@ export class ProviderError extends Error {
 		super(message);
 	}
 }
+
+/**
+ * Whether the engine syncs through `provider`: only with the
+ * conditional-write Capability, since providers without it need Device
+ * journals (ADR 0003), which this release does not build. Connecting
+ * refuses such a provider, and a sync stops before touching anything.
+ */
+export function isSyncable(provider: Provider): boolean {
+	return provider.capabilities.conditionalWrite;
+}
+
+/** Whether `error` is a provider failure of `category`. */
+export function isFailure(error: unknown, category: ProviderErrorCategory): boolean {
+	return error instanceof ProviderError && error.failure.category === category;
+}

@@ -4,10 +4,10 @@ import type {
 	ConnectStep,
 	AuthorizationAttempt,
 	RootCandidate,
-	RootSetup,
 } from "../../src/engine/connect-step";
-import { ProviderError, type ProviderFailure } from "../../src/engine/provider";
-import { FakeRemote } from "./fake-remote";
+import { ProviderError, type Provider, type ProviderFailure } from "../../src/engine/provider";
+import type { FakeProvider } from "./fake-provider";
+import { FakeRemote, type FakeServiceOptions } from "./fake-remote";
 
 /** The connect-step operations a FakeConnectStep can inject faults into. */
 export type FakeConnectOperation =
@@ -38,9 +38,12 @@ export class FakeService {
 	private lastAttempt = 0;
 	private lastIssued = 0;
 
-	/** Creates an account with no folders. */
-	addAccount(accountId: string): FakeAccount {
-		const account = new FakeAccount(this, accountId);
+	/**
+	 * Creates an account with no folders; every folder made in it supports
+	 * what `folderService` says (conditional writes and nothing more by default).
+	 */
+	addAccount(accountId: string, folderService: FakeServiceOptions = {}): FakeAccount {
+		const account = new FakeAccount(this, accountId, folderService);
 		this.accounts.set(accountId, account);
 		return account;
 	}
@@ -105,10 +108,12 @@ export class FakeAccount {
 	/**
 	 * @param service the service holding the account
 	 * @param accountId the id a login to this account reports
+	 * @param folderService what every folder of the account supports
 	 */
 	constructor(
 		private readonly service: FakeService,
 		readonly accountId: string,
+		private readonly folderService: FakeServiceOptions,
 	) {}
 
 	/** Plays the user approving the login at `authorizeUrl`; returns the code. */
@@ -118,7 +123,7 @@ export class FakeAccount {
 
 	/** Creates an empty folder named `name` and returns its Remote. */
 	addFolder(name: string): FakeRemote {
-		const remote = new FakeRemote();
+		const remote = new FakeRemote(this.folderService);
 		this.folders.set(name, remote);
 		return remote;
 	}
@@ -174,19 +179,26 @@ export class FakeConnectStep implements ConnectStep {
 	}
 
 	/**
-	 * The setup operations on `root`, checking the secret on every call
-	 * like a real service does.
+	 * The Provider on `root`, checking the secret and the root again on
+	 * every call like a real service does. Its Capabilities and name rules
+	 * are the root's own.
 	 */
-	private openRoot(account: () => FakeAccount, root: string): RootSetup {
-		const remote = (): FakeRemote => {
+	private openRoot(account: () => FakeAccount, root: string): Provider {
+		const provider = (): FakeProvider => {
 			const found = account().folders.get(root);
 			if (!found) throw new ProviderError({ category: "notFound" }, `no root: ${root}`);
-			return found;
+			return found.openProvider();
 		};
+		const { capabilities, nameRules, maxFileSize } = provider();
 		return {
-			createFolder: (path) => this.run("createFolder", () => remote().openProvider().createFolder(path)),
-			write: (path, data, precondition) =>
-				this.run("write", () => remote().openProvider().write(path, data, precondition)),
+			capabilities,
+			nameRules,
+			maxFileSize,
+			list: () => Promise.resolve().then(() => provider().list()),
+			read: (path) => Promise.resolve().then(() => provider().read(path)),
+			delete: (path, precondition) => Promise.resolve().then(() => provider().delete(path, precondition)),
+			createFolder: (path) => this.run("createFolder", () => provider().createFolder(path)),
+			write: (path, data, precondition) => this.run("write", () => provider().write(path, data, precondition)),
 		};
 	}
 

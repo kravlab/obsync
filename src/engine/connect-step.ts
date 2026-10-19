@@ -45,12 +45,6 @@ export interface RootCandidate {
 	readonly holdsMarker: boolean;
 }
 
-/**
- * The operations that set up a Remote: creating the Metadata folder and
- * writing its files. They behave as the same operations of a Provider.
- */
-export type RootSetup = Pick<Provider, "createFolder" | "write">;
-
 /** The provider seen through one login's secret. */
 export interface AccountAccess {
 	/**
@@ -64,8 +58,11 @@ export interface AccountAccess {
 	 * `preconditionFailed` when the name is taken.
 	 */
 	createRoot(name: string): Promise<RootCandidate>;
-	/** Returns the setup operations confined to `root`. */
-	openRoot(root: string): RootSetup;
+	/**
+	 * Returns the Provider bound to `root`, through which the Remote is set
+	 * up; its Capabilities say whether it can be synced.
+	 */
+	openRoot(root: string): Provider;
 	/**
 	 * Revokes the secret at the service, so it no longer works anywhere.
 	 * Other devices' logins are unaffected.
@@ -77,7 +74,7 @@ export interface AccountAccess {
 export interface ConnectStep {
 	/**
 	 * Names the provider, lowercase alphanumeric with dashes; the engine
-	 * stores the secret under an id built from it.
+	 * stores the secret under `providerSecretId(providerId)` (ports.ts).
 	 */
 	readonly providerId: string;
 	/** Starts a login. */

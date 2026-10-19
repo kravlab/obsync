@@ -1,4 +1,5 @@
 import type { Change, ChangeBatch, NameRules, RemoteEntry, RemoteFile, RemotePath } from "../../src/engine/provider";
+import { nameOf, parentOf } from "../../src/engine/paths";
 import { FakeProvider } from "./fake-provider";
 
 /** A file as the fake service stores it. */
@@ -74,11 +75,12 @@ export class FakeRemote {
 
 	/**
 	 * Stores `entry` at `path`, replacing what was there under the path it
-	 * already had, and logs it.
+	 * already had, and logs it. A new entry goes under the path its folder
+	 * is stored with, as a case-insensitive service files it.
 	 */
 	put(path: RemotePath, entry: StoredEntry): void {
 		const key = this.key(path);
-		const storedPath = this.entries.get(key)?.path ?? path;
+		const storedPath = this.entries.get(key)?.path ?? this.storedPathOf(path);
 		this.entries.set(key, { path: storedPath, entry });
 		this.changeLog.push(storedPath);
 	}
@@ -172,6 +174,13 @@ export class FakeRemote {
 				!reserved.has(this.key(segment)) &&
 				(rules.maxSegmentLength === undefined || segment.length <= rules.maxSegmentLength),
 		);
+	}
+
+	/** `path` with its folders as they are stored: their case on a case-insensitive service. */
+	private storedPathOf(path: RemotePath): RemotePath {
+		const parent = parentOf(path);
+		const storedParent = parent === "" ? "" : (this.entries.get(this.key(parent))?.path ?? parent);
+		return storedParent === "" ? path : `${storedParent}/${nameOf(path)}`;
 	}
 
 	/** The key a path is stored under: folded on a case-insensitive service. */

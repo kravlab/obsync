@@ -7,8 +7,8 @@
  * Remote's Metadata folder, and the local cleanup on disconnect.
  */
 import type { AccountAccess, Authorization, ConnectStep } from "./connect-step";
-import type { DeviceIdentity, DeviceStore, SecretStore, UiPort } from "./ports";
-import { ProviderError, type ProviderErrorCategory } from "./provider";
+import { providerSecretId, type DeviceIdentity, type DeviceStore, type SecretStore, type UiPort } from "./ports";
+import { ProviderError, isFailure, isSyncable } from "./provider";
 import {
 	DEFAULT_REMOTE_SETTINGS,
 	DEVICES_FOLDER,
@@ -105,7 +105,7 @@ export interface RemoteChooser {
 	 * holds, or makes a plain folder a new Remote, then registers this
 	 * device and stores the Connection.
 	 */
-	useFolder(root: string, deviceName: string): Promise<void>;
+	useFolder(root: string, deviceName: string): Promise<ConnectOutcome>;
 	/**
 	 * Creates a new Remote named `name`, with the Metadata folder holding
 	 * the default shared settings and this device's record, then stores the
@@ -118,35 +118,45 @@ export interface RemoteChooser {
 }
 
 /**
- * What creating a Remote led to:
- * - `connected`: the Remote exists and the device is connected to it;
+ * What choosing a folder led to:
+ * - `connected`: the device is connected to the Remote in it;
+ * - `unsupportedProvider`: the provider does not report conditional
+ *   writes for it, so it cannot be synced (`isSyncable`); nothing was
+ *   written there and nothing stored.
+ */
+export type ConnectOutcome = { readonly kind: "connected" } | { readonly kind: "unsupportedProvider" };
+
+/**
+ * What creating a Remote led to: a `ConnectOutcome` for the new folder, or
  * - `nameTaken`: a folder with that name already exists; nothing changed;
  * - `invalidName`: the name holds a `/`, so it would make a nested folder
  *   that `list()` never offers; nothing changed.
+ *
+ * After `unsupportedProvider` the new folder stays, empty, and is listed
+ * as a plain folder.
  */
-export type CreateRemoteOutcome =
-	| { readonly kind: "connected" }
-	| { readonly kind: "nameTaken" }
-	| { readonly kind: "invalidName" };
+export type CreateRemoteOutcome = ConnectOutcome | { readonly kind: "nameTaken" } | { readonly kind: "invalidName" };
 
 /** Builds the connection service over `ports`. */
 export function createConnectionService(ports: ConnectionPorts): ConnectionService {
 	const { connectStep, deviceStore, secretStore, ui } = ports;
-	const secretId = `obsync-${connectStep.providerId}`;
+	const secretId = providerSecretId(connectStep.providerId);
 
 	/**
-	 * Sets up the Metadata folder in `root` and registers this device there,
-	 * then stores the secret and, last, the Connection: a device interrupted
-	 * before that point is simply still not connected.
+	 * Checks that `root` can be synced, sets up the Metadata folder there and
+	 * registers this device, then stores the secret and, last, the
+	 * Connection: a device interrupted before that point is simply still not
+	 * connected.
 	 */
 	async function connect(
 		access: AccountAccess,
 		authorization: Authorization,
 		root: string,
 		deviceName: string,
-	): Promise<void> {
-		const device: DeviceIdentity = { id: ports.newDeviceId(), name: deviceName };
+	): Promise<ConnectOutcome> {
 		const setup = access.openRoot(root);
+		if (!isSyncable(setup)) return { kind: "unsupportedProvider" };
+		const device: DeviceIdentity = { id: ports.newDeviceId(), name: deviceName };
 		await setup.createFolder(METADATA_FOLDER);
 		try {
 			await setup.write(SETTINGS_PATH, encodeSettings(DEFAULT_REMOTE_SETTINGS), { kind: "absent" });
@@ -160,6 +170,7 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 		secretStore.setSecret(secretId, authorization.secret);
 		await deviceStore.saveConnection({ accountId: authorization.accountId, remoteRoot: root, device });
 		ui.showStatus({ state: "connected" });
+		return { kind: "connected" };
 	}
 
 	/** The Remote choice offered after `authorization` logged in. */
@@ -170,8 +181,8 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 				const roots = await access.listRoots(METADATA_FOLDER);
 				return roots.map(({ root, name, holdsMarker }) => ({ root, name, isRemote: holdsMarker }));
 			},
-			async useFolder(root: string, deviceName: string): Promise<void> {
-				await connect(access, authorization, root, deviceName);
+			useFolder(root: string, deviceName: string): Promise<ConnectOutcome> {
+				return connect(access, authorization, root, deviceName);
 			},
 			async createRemote(name: string, deviceName: string): Promise<CreateRemoteOutcome> {
 				if (name.includes("/")) return { kind: "invalidName" };
@@ -182,8 +193,7 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 					if (isFailure(error, "preconditionFailed")) return { kind: "nameTaken" };
 					throw error;
 				}
-				await connect(access, authorization, root, deviceName);
-				return { kind: "connected" };
+				return connect(access, authorization, root, deviceName);
 			},
 		};
 	}
@@ -244,9 +254,4 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 			return outcome;
 		},
 	};
-}
-
-/** Whether `error` is a provider failure of `category`. */
-function isFailure(error: unknown, category: ProviderErrorCategory): boolean {
-	return error instanceof ProviderError && error.failure.category === category;
 }

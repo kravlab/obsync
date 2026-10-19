@@ -1,9 +1,14 @@
 import { Plugin, getLanguage, requestUrl } from "obsidian";
 import { createConnectionService } from "./engine/connection";
+import { createSyncEngine } from "./engine/engine";
+import type { Scheduler } from "./engine/ports";
 import { ObsidianDeviceStore } from "./obsidian/device-store";
+import { ObsidianLocalVault } from "./obsidian/local-vault";
 import { ObsidianSecretStore } from "./obsidian/secret-store";
 import { DROPBOX_APP_KEY } from "./providers/dropbox/app-key";
 import { createDropboxConnectStep } from "./providers/dropbox/connect-step";
+import type { DropboxOptions } from "./providers/dropbox/options";
+import { createDropboxConnector } from "./providers/dropbox/provider";
 import { ConnectModal } from "./ui/connect-modal";
 import { selectStrings } from "./ui/i18n/strings";
 import { ObsyncSettingTab } from "./ui/settings-tab";
@@ -16,32 +21,68 @@ import { StatusIndicator } from "./ui/status-indicator";
 export default class ObsyncPlugin extends Plugin {
 	/**
 	 * Called by Obsidian when the plugin is enabled or the app starts. Builds
-	 * the connection service over Dropbox and this device's stores, adds the
-	 * status entry point and the settings tab, then shows the state of this
-	 * device's Connection. Strings follow Obsidian's language as read at load.
-	 *
-	 * The whole sync engine joins once there is syncing to run.
+	 * the connection service and the sync engine over Dropbox and this
+	 * device's vault and stores, adds the status entry point, the "Sync now"
+	 * command and the settings tab, then shows the state of this device's
+	 * Connection. Strings follow Obsidian's language as read at load.
 	 */
 	override async onload(): Promise<void> {
 		const strings = selectStrings(getLanguage());
+		const dropbox: DropboxOptions = { appKey: DROPBOX_APP_KEY, http: requestUrl, clock: { now: () => Date.now() } };
+		const deviceStore = new ObsidianDeviceStore(this.app);
+		const secretStore = new ObsidianSecretStore(this.app);
+		const ui = new StatusIndicator(this, strings);
 		const connection = createConnectionService({
-			connectStep: createDropboxConnectStep({
-				appKey: DROPBOX_APP_KEY,
-				http: requestUrl,
-				clock: { now: () => Date.now() },
-			}),
-			deviceStore: new ObsidianDeviceStore(this.app),
-			secretStore: new ObsidianSecretStore(this.app),
-			ui: new StatusIndicator(this, strings),
+			connectStep: createDropboxConnectStep(dropbox),
+			deviceStore,
+			secretStore,
+			ui,
 			newDeviceId: () => crypto.randomUUID(),
 		});
-		const settingTab = new ObsyncSettingTab(this.app, this, connection, strings, () => {
-			new ConnectModal(this.app, connection, strings, this.app.vault.getName(), () => {
-				void settingTab.reload();
-			}).open();
+		const engine = createSyncEngine({
+			providers: createDropboxConnector(dropbox),
+			vault: new ObsidianLocalVault(this.app),
+			deviceStore,
+			secretStore,
+			clock: dropbox.clock,
+			scheduler: this.scheduler(),
+			ui,
 		});
+		// The engine shows Sync failed itself; an error reaching here is a
+		// bug, logged for the bug report.
+		const syncNow = (): void => {
+			engine.sync().catch((error: unknown) => console.error("obsync: sync failed", error));
+		};
+		this.addCommand({ id: "sync-now", name: strings.syncNow, callback: syncNow });
+		const settingTab = new ObsyncSettingTab(
+			this.app,
+			this,
+			connection,
+			strings,
+			() => {
+				new ConnectModal(this.app, connection, strings, this.app.vault.getName(), () => {
+					void settingTab.reload();
+				}).open();
+			},
+			syncNow,
+		);
 		this.addSettingTab(settingTab);
 		await connection.showStatus();
 		await settingTab.reload();
+	}
+
+	/**
+	 * The engine's Scheduler over the window's timers. A task still pending
+	 * when the plugin unloads is cancelled with it.
+	 */
+	private scheduler(): Scheduler {
+		return {
+			schedule: (delayMs, task) => {
+				const id = window.setTimeout(task, delayMs);
+				const cancel = (): void => window.clearTimeout(id);
+				this.register(cancel);
+				return cancel;
+			},
+		};
 	}
 }

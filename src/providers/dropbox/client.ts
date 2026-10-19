@@ -1,10 +1,10 @@
 /**
- * The Dropbox HTTP API as the provider uses it: RPC and upload calls with
- * a bearer access token, refreshed from the refresh token when missing or
- * near the end of its `expires_in`, and the token endpoint (spec, "Dropbox
- * provider"). Route errors
- * (409) are returned to the caller, which knows what each means; every
- * other failure is thrown as a ProviderError.
+ * The Dropbox HTTP API as the provider uses it: RPC, upload and download
+ * calls with a bearer access token, refreshed from the refresh token when
+ * missing or near the end of its `expires_in`, and the token endpoint
+ * (spec, "Dropbox provider"). Route errors (409) are returned to the
+ * caller, which knows what each means; every other failure is thrown as a
+ * ProviderError.
  */
 import type { Clock } from "../../engine/ports";
 import { ProviderError } from "../../engine/provider";
@@ -22,6 +22,11 @@ const EXPIRY_MARGIN_MS = 5 * 60 * 1000;
 
 /** A route's result: its JSON value, or the error a 409 carried. */
 export type RouteResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: Tagged };
+
+/** A download's result: the file's bytes, or the error a 409 carried. */
+export type DownloadResult =
+	| { readonly ok: true; readonly data: ArrayBuffer }
+	| { readonly ok: false; readonly error: Tagged };
 
 /** An access token and when it stops working, in ms since the epoch. */
 export interface AccessToken {
@@ -104,19 +109,37 @@ export class DropboxClient {
 	}
 
 	/**
+	 * Downloads a whole file in one request with the `files/download`
+	 * argument `arg`, sent in the `Dropbox-API-Arg` header; the body is
+	 * empty and the file's bytes come back as the response body.
+	 */
+	async download(arg: unknown): Promise<DownloadResult> {
+		const response = await this.authorized((token) => ({
+			url: `${CONTENT_URL}files/download`,
+			method: "POST",
+			headers: { Authorization: `Bearer ${token}`, "Dropbox-API-Arg": headerSafeJson(arg) },
+			throw: false,
+		}));
+		if (response.status === 200) return { ok: true, data: response.arrayBuffer };
+		return { ok: false, error: routeErrorOrThrow(response) };
+	}
+
+	/** Sends a request whose successful response is JSON. */
+	private async call(build: (accessToken: string) => HttpRequest): Promise<RouteResult> {
+		const response = await this.authorized(build);
+		if (response.status === 200) return { ok: true, value: successBody(response) };
+		return { ok: false, error: routeErrorOrThrow(response) };
+	}
+
+	/**
 	 * Sends a request built around an access token. An expired token is
 	 * refreshed once and the request retried; any other 401 is `auth`.
 	 */
-	private async call(build: (accessToken: string) => HttpRequest): Promise<RouteResult> {
-		let response = await send(this.http, build(await this.token()));
-		if (isExpiredToken(response)) {
-			this.accessToken = undefined;
-			response = await send(this.http, build(await this.token()));
-		}
-		if (response.status === 200) return { ok: true, value: successBody(response) };
-		const error = response.status === 409 ? routeErrorOf(response) : undefined;
-		if (error) return { ok: false, error };
-		throw failureOf(response);
+	private async authorized(build: (accessToken: string) => HttpRequest): Promise<HttpResponse> {
+		const response = await send(this.http, build(await this.token()));
+		if (!isExpiredToken(response)) return response;
+		this.accessToken = undefined;
+		return send(this.http, build(await this.token()));
 	}
 
 	/**
@@ -172,6 +195,16 @@ async function send(http: HttpClient, request: HttpRequest): Promise<HttpRespons
 	} catch (error) {
 		throw new ProviderError({ category: "transient" }, `no response from ${request.url}: ${String(error)}`);
 	}
+}
+
+/**
+ * The route error a failed response carries (409), for the caller to
+ * tell apart; any other failure is thrown as its ProviderError.
+ */
+function routeErrorOrThrow(response: HttpResponse): Tagged {
+	const error = response.status === 409 ? routeErrorOf(response) : undefined;
+	if (error) return error;
+	throw failureOf(response);
 }
 
 /** The JSON body of a successful response; a body that is not JSON is `permanent`. */

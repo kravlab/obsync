@@ -1,7 +1,7 @@
 import type { LocalVault, VaultChangeHint, VaultEntry, VaultPath } from "../../src/engine/local-vault";
 import type { Clock } from "../../src/engine/ports";
 import { ManualClock } from "./manual-clock";
-import { parentOf } from "./paths";
+import { parentOf } from "../../src/engine/paths";
 
 /** An entry as the fake vault stores it. */
 type StoredVaultEntry =
@@ -30,7 +30,7 @@ export class FakeVault implements LocalVault {
 	private readonly entries = new Map<VaultPath, StoredVaultEntry>();
 	private readonly listeners = new Set<(hint: VaultChangeHint) => void>();
 	private readonly clock: Clock;
-	private readonly configDir: string;
+	readonly configDir: string;
 
 	/** @param options the clock and configuration folder */
 	constructor(options: FakeVaultOptions = {}) {

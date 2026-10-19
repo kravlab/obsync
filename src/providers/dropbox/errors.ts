@@ -45,6 +45,12 @@ export function isInvalidGrant(response: HttpResponse): boolean {
 }
 
 /**
+ * How long to wait after `too_many_write_operations`, which names no
+ * delay: one second, as for a 429 that names none.
+ */
+export const WRITE_RETRY_AFTER_MS = 1000;
+
+/**
  * The category of a WriteError, the reason `upload` and `create_folder_v2`
  * give for not writing. A conflict is something in the way; anything the
  * contract has no category for is permanent.
@@ -61,7 +67,7 @@ export function writeFailure(reason: Tagged | undefined): ProviderFailure {
 		case "disallowed_name":
 			return { category: "nameNotRepresentable" };
 		case "too_many_write_operations":
-			return { category: "throttled", retryAfterMs: 1000 };
+			return { category: "throttled", retryAfterMs: WRITE_RETRY_AFTER_MS };
 		default:
 			return { category: "permanent" };
 	}

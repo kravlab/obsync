@@ -20,8 +20,14 @@ export const ACCESS_TOKEN_SECONDS = 14400;
  * - RPC routes on `api.dropboxapi.com/2/`: a JSON body (none for routes
  *   without an argument), a bearer access token, 401 with an AuthError for
  *   a bad or expired token, 409 with `{error_summary, error}` route errors;
- * - `content.dropboxapi.com/2/files/upload`: the argument in the
- *   `Dropbox-API-Arg` header, which must be ASCII, as HTTP headers are.
+ * - `content.dropboxapi.com/2/files/upload` and `files/download`: the
+ *   argument in the `Dropbox-API-Arg` header, which must be ASCII, as HTTP
+ *   headers are; a download answers the file's bytes with its metadata in
+ *   `Dropbox-API-Result`;
+ * - `files/delete_v2`, honouring `parent_rev`. Dropbox does not document
+ *   its answer to a `parent_rev` that is not the file's latest; this fake
+ *   answers a WriteError conflict (`path_write/conflict/file/`), an
+ *   assumption still to be checked against the real service.
  *
  * Each account's App Folder is one tree of entries, keyed by lowercased
  * path, since Dropbox paths are case-insensitive.
@@ -86,6 +92,16 @@ export class FakeDropbox {
 		return code;
 	}
 
+	/**
+	 * Issues a refresh token for `account` directly, as an earlier login
+	 * would have: for tests of what a device does once connected.
+	 */
+	issueRefreshToken(account: FakeDropboxAccount): string {
+		const refreshToken = `refresh-${this.next()}`;
+		this.refreshTokens.set(refreshToken, account);
+		return refreshToken;
+	}
+
 	/** Makes every access token issued so far expire. */
 	expireAccessTokens(): void {
 		for (const token of this.accessTokens.values()) token.expired = true;
@@ -111,7 +127,9 @@ export class FakeDropbox {
 		if ("response" in tokenOwner) return tokenOwner.response;
 		const { account, refreshToken } = tokenOwner;
 		if (url.origin === "https://content.dropboxapi.com") {
-			return route === "files/upload" ? this.upload(account, request) : status(404, "unknown route");
+			if (route === "files/upload") return this.upload(account, request);
+			if (route === "files/download") return this.download(account, request);
+			return status(404, "unknown route");
 		}
 		if (url.origin !== "https://api.dropboxapi.com") return status(404, "unknown host");
 		const arg = parseBody(request);
@@ -130,6 +148,8 @@ export class FakeDropbox {
 				return this.getMetadata(account, arg as { path: string });
 			case "files/create_folder_v2":
 				return this.createFolder(account, arg as { path: string; autorename?: boolean });
+			case "files/delete_v2":
+				return this.delete(account, arg as { path: string; parent_rev?: string });
 			default:
 				return status(404, `unknown route ${route}`);
 		}
@@ -201,8 +221,8 @@ export class FakeDropbox {
 		if (arg.path !== "" && account.get(arg.path)?.kind !== "folder") {
 			return routeError("path/not_found/", { ".tag": "path", path: { ".tag": "not_found" } });
 		}
-		const entries = account.children(arg.path, arg.recursive ?? false);
-		return this.listPage(entries, 0);
+		const recursive = arg.recursive ?? false;
+		return this.listPage(account.children(arg.path, recursive), 0, [arg.path, recursive]);
 	}
 
 	/** `files/list_folder/continue`: the page a cursor points at. */
@@ -215,7 +235,7 @@ export class FakeDropbox {
 	private listPage(
 		entries: readonly Record<string, unknown>[],
 		offset: number,
-		folder: readonly [string, boolean] = ["", false],
+		folder: readonly [string, boolean],
 	): HttpResponse {
 		const end = offset + this.listPageSize;
 		return json(200, {
@@ -243,6 +263,53 @@ export class FakeDropbox {
 		if (parent !== "" && account.get(parent)?.kind === "file") return writeConflict("file_ancestor");
 		account.putFolder(arg.path);
 		return json(200, { metadata: account.metadata(arg.path) });
+	}
+
+	/**
+	 * `files/delete_v2`: removes the entry and everything inside it, or
+	 * answers `path_lookup/not_found`. With `parent_rev`, only a file of
+	 * that revision is removed (see the class comment for the assumed
+	 * answer otherwise).
+	 */
+	private delete(account: FakeDropboxAccount, arg: { path: string; parent_rev?: string }): HttpResponse {
+		const existing = account.get(arg.path);
+		if (!existing) {
+			return routeError("path_lookup/not_found/", { ".tag": "path_lookup", path_lookup: { ".tag": "not_found" } });
+		}
+		if (arg.parent_rev !== undefined && (existing.kind !== "file" || existing.rev !== arg.parent_rev)) {
+			return routeError("path_write/conflict/file/", {
+				".tag": "path_write",
+				path_write: { ".tag": "conflict", conflict: { ".tag": "file" } },
+			});
+		}
+		const metadata = account.metadata(arg.path);
+		account.remove(arg.path);
+		return json(200, { metadata });
+	}
+
+	/**
+	 * `files/download` in one request: the file's bytes, or
+	 * `path/not_found` for a path holding no file.
+	 */
+	private download(account: FakeDropboxAccount, request: HttpRequest): HttpResponse {
+		const header = request.headers?.["Dropbox-API-Arg"] ?? "";
+		if (/[^\x20-\x7e]/.test(header)) return status(400, "Dropbox-API-Arg is not ASCII");
+		if (request.body !== undefined) return status(400, "a download has no body");
+		const { path } = JSON.parse(header) as { path: string };
+		const data = account.file(path);
+		if (!data) return routeError("path/not_found/", { ".tag": "path", path: { ".tag": "not_found" } });
+		return {
+			status: 200,
+			headers: {
+				"content-type": "application/octet-stream",
+				"dropbox-api-result": JSON.stringify(account.metadata(path)).replace(
+					/[\u007f-\uffff]/g,
+					(character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+				),
+			},
+			text: "",
+			arrayBuffer: data.slice(0),
+		};
 	}
 
 	/**
@@ -315,6 +382,14 @@ export class FakeDropboxAccount {
 		const id = this.get(path)?.id ?? this.nextId();
 		const stored = this.get(path)?.path ?? path;
 		this.entries.set(path.toLowerCase(), { kind: "file", path: stored, id, data, rev });
+	}
+
+	/** Removes the entry at `path` and everything inside it. */
+	remove(path: string): void {
+		const lower = path.toLowerCase();
+		for (const key of [...this.entries.keys()]) {
+			if (key === lower || key.startsWith(`${lower}/`)) this.entries.delete(key);
+		}
 	}
 
 	/** The entry at `path`, compared without case. */

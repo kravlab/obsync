@@ -74,6 +74,24 @@ export function describeProviderContract(
 			);
 		});
 
+		it("lists nested entries by their paths below the Remote root", async () => {
+			const provider = await openEmptyRemote();
+			await provider.createFolder("projects");
+			await provider.createFolder("projects/plans");
+			await provider.write("projects/plans/q4.md", bytes("plan"));
+			const paths = (await provider.list()).entries.map((entry) => `${entry.kind} ${entry.path}`);
+			expect(paths.sort()).toEqual(["file projects/plans/q4.md", "folder projects", "folder projects/plans"]);
+		});
+
+		it("keeps non-ASCII names exactly, in writing, listing and reading", async () => {
+			const provider = await openEmptyRemote();
+			await provider.createFolder("Заметки");
+			await provider.write("Заметки/café ☕.md", bytes("текст"));
+			const paths = (await provider.list()).entries.map((entry) => entry.path);
+			expect(paths.sort()).toEqual(["Заметки", "Заметки/café ☕.md"]);
+			expect(text(await provider.read("Заметки/café ☕.md"))).toBe("текст");
+		});
+
 		it("returns an existing folder when it is created again", async () => {
 			const provider = await openEmptyRemote();
 			await provider.createFolder("notes");

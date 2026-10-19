@@ -136,10 +136,7 @@ export class ConnectModal extends Modal {
 				.setDesc(candidate.isRemote ? strings.folderIsRemote : strings.folderIsPlain)
 				.addButton((button) =>
 					button.setButtonText(strings.useFolder).onClick(() => {
-						void this.connectWith(remotes, async () => {
-							await remotes.useFolder(candidate.root, chosenDeviceName());
-							return { kind: "connected" };
-						});
+						void this.connectWith(remotes, () => remotes.useFolder(candidate.root, chosenDeviceName()));
 					}),
 				);
 		}
@@ -156,8 +153,9 @@ export class ConnectModal extends Modal {
 	}
 
 	/**
-	 * Runs one Remote choice. A refused name is shown on the same screen; a
-	 * failure lists the folders again with its message.
+	 * Runs one Remote choice. A refused name or a folder that cannot be
+	 * synced is shown on the same screen; a failure lists the folders again
+	 * with its message.
 	 */
 	private async connectWith(remotes: RemoteChooser, choice: () => Promise<CreateRemoteOutcome>): Promise<void> {
 		const result = await this.attempt(choice);
@@ -172,6 +170,9 @@ export class ConnectModal extends Modal {
 				return;
 			case "invalidName":
 				this.showMessage(this.strings.folderNameInvalid);
+				return;
+			case "unsupportedProvider":
+				this.showMessage(this.strings.providerUnsupported);
 				return;
 		}
 	}

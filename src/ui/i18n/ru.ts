@@ -4,12 +4,17 @@ import type { Strings } from "./strings";
 export const ru: Strings = {
 	statusNotConnected: "Не подключено",
 	statusConnected: "Подключено",
+	statusSyncing: "Синхронизация…",
+	statusSynced: "Синхронизировано",
+	statusSyncFailed: "Ошибка синхронизации",
 
 	settingsDropbox: "Dropbox",
 	settingsNotConnected: "Это устройство не подключено.",
 	settingsConnectedAs: "Подключено как {device}.",
 	connect: "Подключить",
 	disconnect: "Отключить",
+	syncNow: "Синхронизировать сейчас",
+	settingsSyncNow: "Выгрузить новые и изменённые файлы этого устройства, затем загрузить файлы других устройств.",
 
 	connectTitle: "Подключение к Dropbox",
 	loginInstructions: "Откройте Dropbox, разрешите доступ и вставьте код, который покажет Dropbox.",
@@ -30,6 +35,8 @@ export const ru: Strings = {
 	create: "Создать",
 	folderTaken: "Папка с таким именем уже есть.",
 	folderNameInvalid: "В имени папки не может быть «/».",
+	providerUnsupported:
+		"Этот провайдер не может помешать двум устройствам перезаписать изменения друг друга, поэтому эту папку нельзя синхронизировать.",
 	deviceName: "Имя устройства",
 	deviceNameDescription: "Под этим именем устройство видят другие устройства: в конфликтах и сообщениях.",
 
