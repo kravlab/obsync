@@ -29,6 +29,10 @@ export interface FakeVaultOptions {
 export class FakeVault implements LocalVault {
 	private readonly entries = new Map<VaultPath, StoredVaultEntry>();
 	private readonly listeners = new Set<(hint: VaultChangeHint) => void>();
+	/** When each path was last typed into, by the clock. */
+	private readonly typed = new Map<VaultPath, number>();
+	/** Hooks to run once, just before the engine's next write to each path takes effect. */
+	private readonly beforeWrite = new Map<VaultPath, () => Promise<void>>();
 	private readonly clock: Clock;
 	readonly configDir: string;
 
@@ -49,13 +53,55 @@ export class FakeVault implements LocalVault {
 		return Promise.resolve(this.toEntry(path));
 	}
 
+	/**
+	 * Writes `data` to `path` as the user typing it in an editor would,
+	 * so `lastTypedAt` reports the clock's time now.
+	 */
+	async typeInto(path: VaultPath, data: ArrayBuffer): Promise<void> {
+		await this.store(path, data);
+		this.typed.set(path, this.clock.now());
+	}
+
+	lastTypedAt(path: VaultPath): number | null {
+		return this.typed.get(path) ?? null;
+	}
+
+	/**
+	 * Runs `hook` once, just before the engine's next write to `path`
+	 * takes effect: the user editing the file at the last moment.
+	 */
+	beforeNextWrite(path: VaultPath, hook: () => Promise<void>): void {
+		this.beforeWrite.set(path, hook);
+	}
+
 	read(path: VaultPath): Promise<ArrayBuffer> {
 		const stored = this.entries.get(path);
 		if (stored?.kind !== "file") return Promise.reject(missing(path));
 		return Promise.resolve(stored.data.slice(0));
 	}
 
-	write(path: VaultPath, data: ArrayBuffer): Promise<void> {
+	async write(path: VaultPath, data: ArrayBuffer): Promise<void> {
+		await this.runBeforeWrite(path);
+		await this.store(path, data);
+	}
+
+	async replace(path: VaultPath, expected: ArrayBuffer, data: ArrayBuffer): Promise<boolean> {
+		await this.runBeforeWrite(path);
+		const stored = this.entries.get(path);
+		if (stored?.kind !== "file" || !sameBytes(stored.data, expected)) return false;
+		await this.store(path, data);
+		return true;
+	}
+
+	/** Runs and forgets the hook waiting for a write to `path`, if any. */
+	private async runBeforeWrite(path: VaultPath): Promise<void> {
+		const hook = this.beforeWrite.get(path);
+		this.beforeWrite.delete(path);
+		if (hook) await hook();
+	}
+
+	/** Stores `data` at `path` and reports the change. */
+	private store(path: VaultPath, data: ArrayBuffer): Promise<void> {
 		if (!this.isFolder(parentOf(path))) return Promise.reject(missing(parentOf(path)));
 		const existed = this.entries.has(path);
 		this.entries.set(path, { kind: "file", data: data.slice(0), mtime: this.clock.now() });
@@ -135,4 +181,11 @@ function isHidden(path: VaultPath): boolean {
 /** The error for an operation on a path that does not exist. */
 function missing(path: VaultPath): Error {
 	return new Error(`no such entry: ${path}`);
+}
+
+/** Whether `a` and `b` hold the same bytes. */
+function sameBytes(a: ArrayBuffer, b: ArrayBuffer): boolean {
+	const left = new Uint8Array(a);
+	const right = new Uint8Array(b);
+	return left.length === right.length && left.every((byte, index) => byte === right[index]);
 }

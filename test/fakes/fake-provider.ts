@@ -10,6 +10,7 @@ import {
 	type RemoteFile,
 	type RemoteFolder,
 	type RemotePath,
+	type RemoteContent,
 } from "../../src/engine/provider";
 import { toRemoteFile, type FakeRemote, type StoredFile } from "./fake-remote";
 import { parentOf } from "../../src/engine/paths";
@@ -58,6 +59,8 @@ export class FakeProvider implements Provider {
 	private readonly failures = new Map<FakeOperation, ProviderFailure[]>();
 	/** Hooks to run, in order, before the next calls of each operation. */
 	private readonly hooks = new Map<FakeOperation, (() => Promise<void>)[]>();
+	/** Hooks to run once, before the next read of each path. */
+	private readonly readHooks = new Map<RemotePath, () => Promise<void>>();
 	/** Operations started so far on this device. */
 	private operationCount = 0;
 	private crash: { readonly at: number; readonly when: "before" | "after" } | undefined;
@@ -94,6 +97,14 @@ export class FakeProvider implements Provider {
 		queue(this.hooks, operation).push(hook);
 	}
 
+	/**
+	 * Runs `hook` just before the next read of `path` takes effect, e.g. the
+	 * user editing the vault file while its Remote version downloads.
+	 */
+	beforeNextRead(path: RemotePath, hook: () => Promise<void>): void {
+		this.readHooks.set(path, hook);
+	}
+
 	/** Makes the `n`th operation from now throw SimulatedCrash, undone. */
 	crashBefore(n: number): void {
 		this.crash = { at: this.operationCount + n, when: "before" };
@@ -111,11 +122,14 @@ export class FakeProvider implements Provider {
 		});
 	}
 
-	read(path: RemotePath): Promise<ArrayBuffer> {
-		return this.run("read", () => {
+	read(path: RemotePath): Promise<RemoteContent> {
+		return this.run("read", async () => {
+			const hook = this.readHooks.get(path);
+			this.readHooks.delete(path);
+			if (hook) await hook();
 			const stored = this.remote.get(path);
 			if (stored?.kind !== "file") throw notFound(path);
-			return Promise.resolve(stored.data.slice(0));
+			return { data: stored.data.slice(0), revision: stored.revision };
 		});
 	}
 

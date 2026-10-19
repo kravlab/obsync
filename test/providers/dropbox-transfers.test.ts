@@ -3,9 +3,10 @@ import type { HttpRequest } from "../../src/providers/dropbox/http";
 import { createDropboxConnector } from "../../src/providers/dropbox/provider";
 import { FakeDropbox, LOSE_RESPONSE, json, routeError, status } from "../fakes/fake-dropbox";
 import { ManualClock } from "../fakes/manual-clock";
-import { bytes, patterned, text } from "../support/bytes";
+import { bytes, patterned } from "../support/bytes";
 import { openDropboxRemote, testRequestLimit, type DropboxRemote } from "../support/dropbox-remote";
 import { expectFailure } from "../support/provider-failure";
+import { readText, readBytes } from "../support/provider-read";
 
 /** The Per-request limit these tests open the Remote with, in bytes. */
 const LIMIT = 1000;
@@ -83,9 +84,9 @@ describe("Dropbox transfers", () => {
 		dropbox.onRequest = (request) => {
 			if (request.headers?.Range === "bytes=1000-1999") account.putFile("/My vault/scan.pdf", bytes("theirs"), "rev900");
 		};
-		expect([...new Uint8Array(await provider.read("scan.pdf"))]).toEqual([...new Uint8Array(patterned(2 * LIMIT))]);
+		expect([...new Uint8Array(await readBytes(provider, "scan.pdf"))]).toEqual([...new Uint8Array(patterned(2 * LIMIT))]);
 		dropbox.onRequest = () => undefined;
-		expect(text(await provider.read("scan.pdf"))).toBe("theirs");
+		expect(await readText(provider, "scan.pdf")).toBe("theirs");
 	});
 });
 
@@ -96,7 +97,7 @@ describe("Dropbox upload session retries", () => {
 		dropbox.interceptions.push(null, status(503, "unavailable"), new Error("offline"));
 		await provider.write("scan.pdf", patterned(2 * LIMIT + 500));
 		expect(waits).toEqual([1000, 1000]);
-		expect(isPatterned(await provider.read("scan.pdf"), 2 * LIMIT + 500)).toBe(true);
+		expect(isPatterned(await readBytes(provider, "scan.pdf"), 2 * LIMIT + 500)).toBe(true);
 	});
 
 	it("waits as long as a rate limit asks before retrying", async () => {
@@ -109,7 +110,7 @@ describe("Dropbox upload session retries", () => {
 		);
 		await provider.write("scan.pdf", patterned(2 * LIMIT + 500));
 		expect(waits).toEqual([7000]);
-		expect(isPatterned(await provider.read("scan.pdf"), 2 * LIMIT + 500)).toBe(true);
+		expect(isPatterned(await readBytes(provider, "scan.pdf"), 2 * LIMIT + 500)).toBe(true);
 	});
 
 	it("gives up after 3 retries with the last failure", async () => {
@@ -131,7 +132,7 @@ describe("Dropbox upload session retries", () => {
 			2 * LIMIT,
 		]);
 		expect(waits).toEqual([1000]);
-		expect(isPatterned(await provider.read("scan.pdf"), 3 * LIMIT + 500)).toBe(true);
+		expect(isPatterned(await readBytes(provider, "scan.pdf"), 3 * LIMIT + 500)).toBe(true);
 	});
 
 	it("gives up as transient after 3 resumes in a row that do not get a request through", async () => {
@@ -154,7 +155,7 @@ describe("Dropbox upload session retries", () => {
 			[LIMIT + 500, 0],
 		]);
 		expect(waits).toEqual([1000]);
-		expect(isPatterned(await provider.read("scan.pdf"), LIMIT + 500)).toBe(true);
+		expect(isPatterned(await readBytes(provider, "scan.pdf"), LIMIT + 500)).toBe(true);
 	});
 
 	it("retries a finish refused with too_many_write_operations", async () => {
@@ -165,7 +166,7 @@ describe("Dropbox upload session retries", () => {
 		);
 		await provider.write("scan.pdf", patterned(LIMIT + 500));
 		expect(waits).toEqual([1000]);
-		expect(isPatterned(await provider.read("scan.pdf"), LIMIT + 500)).toBe(true);
+		expect(isPatterned(await readBytes(provider, "scan.pdf"), LIMIT + 500)).toBe(true);
 	});
 });
 

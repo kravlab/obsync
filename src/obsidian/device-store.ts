@@ -12,14 +12,21 @@ const SNAPSHOT_DATABASE_KEY = "obsync-snapshot-database";
 /** The format version of the stored Connection. */
 const CONNECTION_FORMAT_VERSION = 1;
 
-/**
- * The format version of the snapshot, which is also its database's
- * IndexedDB schema version.
- */
+/** The format version of the snapshot entries; another version reads as an empty snapshot. */
 const SNAPSHOT_FORMAT_VERSION = 1;
+
+/**
+ * The snapshot database's IndexedDB schema version: 1 held the entries
+ * only, 2 adds the Bases. A database of version 1 is upgraded in place,
+ * keeping its entries.
+ */
+const SNAPSHOT_SCHEMA_VERSION = 2;
 
 /** The object store holding one snapshot entry per vault path. */
 const ENTRIES = "entries";
+
+/** The object store holding the Base of each text file, by vault path. */
+const BASES = "bases";
 
 /**
  * The Device store on this device only, never in `data.json` or the
@@ -30,7 +37,9 @@ const ENTRIES = "entries";
  * - the Sync snapshot in an IndexedDB database, one record per vault path,
  *   so saving one entry is one write however large the vault is. IndexedDB
  *   is shared by every vault of the app, and Obsidian names no vault id, so
- *   the database gets a random name, kept in the vault's localStorage.
+ *   the database gets a random name, kept in the vault's localStorage;
+ * - the Bases in a second object store of that database, written in the
+ *   same transaction as their entries and read one at a time when merging.
  *
  * Both carry a format version. A Connection that is missing, of another
  * version or malformed reads as none, and a snapshot of another version as
@@ -71,11 +80,24 @@ export class ObsidianDeviceStore implements DeviceStore {
 		return snapshot;
 	}
 
-	async saveSnapshotEntry(path: VaultPath, entry: SnapshotEntry): Promise<void> {
+	async saveSnapshotEntry(path: VaultPath, entry: SnapshotEntry, base: ArrayBuffer | null): Promise<void> {
 		const name = this.databaseName() ?? this.newDatabase();
-		const transaction = (await this.open(name)).transaction(ENTRIES, "readwrite");
+		const transaction = (await this.open(name)).transaction([ENTRIES, BASES], "readwrite");
 		transaction.objectStore(ENTRIES).put(entry, path);
+		if (base === null) transaction.objectStore(BASES).delete(path);
+		else transaction.objectStore(BASES).put(base, path);
 		await completion(transaction);
+	}
+
+	async loadBase(path: VaultPath): Promise<ArrayBuffer | null> {
+		const name = this.databaseName();
+		if (name === null) return null;
+		const request = (await this.open(name)).transaction(BASES, "readonly").objectStore(BASES).get(path);
+		const stored = await new Promise<unknown>((resolve, reject) => {
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error ?? new Error("Base read failed"));
+		});
+		return stored instanceof ArrayBuffer ? stored : null;
 	}
 
 	async clear(): Promise<void> {
@@ -114,16 +136,46 @@ export class ObsidianDeviceStore implements DeviceStore {
 		return name;
 	}
 
-	/** Opens the database `name`, once, creating its object store on first use. */
+	/** Closes the snapshot database if it is open; the plugin calls it when it unloads. */
+	close(): void {
+		const open = this.database;
+		this.database = undefined;
+		void open?.opened.then((database) => database.close()).catch(() => undefined);
+	}
+
+	/**
+	 * Opens the database `name`, once, creating the object stores it lacks:
+	 * both on first use, the Bases' when upgrading from schema version 1.
+	 * An upgrade another connection blocks fails instead of waiting, and
+	 * this connection closes when another one needs to upgrade, so neither
+	 * side hangs.
+	 */
 	private open(name: string): Promise<IDBDatabase> {
 		if (this.database?.name !== name) {
 			const opened = new Promise<IDBDatabase>((resolve, reject) => {
-				const request = indexedDB.open(name, SNAPSHOT_FORMAT_VERSION);
-				request.onupgradeneeded = () => request.result.createObjectStore(ENTRIES);
-				request.onsuccess = () => resolve(request.result);
+				const request = indexedDB.open(name, SNAPSHOT_SCHEMA_VERSION);
+				request.onupgradeneeded = () => {
+					const database = request.result;
+					for (const store of [ENTRIES, BASES]) {
+						if (!database.objectStoreNames.contains(store)) database.createObjectStore(store);
+					}
+				};
+				request.onblocked = () => reject(new Error(`upgrading ${name} is blocked by another connection`));
+				request.onsuccess = () => {
+					const database = request.result;
+					database.onversionchange = () => {
+						database.close();
+						if (this.database?.name === name) this.database = undefined;
+					};
+					resolve(database);
+				};
 				request.onerror = () => reject(request.error ?? new Error(`cannot open ${name}`));
 			});
 			this.database = { name, opened };
+			// A failed open is not kept: the next sync tries again.
+			opened.catch(() => {
+				if (this.database?.opened === opened) this.database = undefined;
+			});
 		}
 		return this.database.opened;
 	}

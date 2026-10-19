@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createDropboxConnector } from "../../src/providers/dropbox/provider";
-import { bytes, text } from "../support/bytes";
+import { bytes } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
 import { openDropboxRemote, testTransfers, type DropboxRemote } from "../support/dropbox-remote";
 import { FakeDropbox, json, routeError, status } from "../fakes/fake-dropbox";
 import { ManualClock } from "../fakes/manual-clock";
+import { readText } from "../support/provider-read";
 
 /**
  * The Dropbox Provider on a fake account's Remote "/My vault", which has
@@ -75,7 +76,7 @@ describe("Dropbox provider", () => {
 	it("uploads with the argument in an ASCII-only Dropbox-API-Arg header", async () => {
 		const { dropbox, provider } = await setUp();
 		await provider.write("ноты.md", bytes("ноты"));
-		expect(text(await provider.read("ноты.md"))).toBe("ноты");
+		expect(await readText(provider, "ноты.md")).toBe("ноты");
 		const upload = dropbox.requests.find((request) => request.url.endsWith("/files/upload"));
 		expect(upload?.headers?.["Dropbox-API-Arg"]).toMatch(/^\{"path":"\/My vault\/\\u043d\\u043e\\u0442\\u044b\.md",/);
 	});

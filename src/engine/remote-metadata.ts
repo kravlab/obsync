@@ -8,8 +8,11 @@
  * - `settings.json`: the shared Remote settings, the same for every device;
  * - `devices/<Device ID>.json`: one record per device, written only by it.
  */
+import type { VaultPath } from "./local-vault";
+import { nameOf } from "./paths";
 import type { DeviceIdentity } from "./ports";
-import type { RemotePath } from "./provider";
+import { isFailure, type Provider, type RemotePath } from "./provider";
+import { decodeUtf8 } from "./utf8";
 
 /** The Metadata folder's name at the Remote root. */
 export const METADATA_FOLDER: RemotePath = ".obsync";
@@ -51,6 +54,26 @@ export const DEFAULT_REMOTE_SETTINGS: RemoteSettings = {
 	sizeCeilingBytes: 100 * 1024 * 1024,
 };
 
+/**
+ * Extensions of JSON files, which never get Conflict block markers, even
+ * when the text-extension list names them (spec, "Text merge").
+ */
+const JSON_EXTENSIONS: readonly string[] = ["json", "canvas"];
+
+/**
+ * How a sync treats a file's content, by its extension, compared without
+ * case: `text` when the shared text-extension list names it and it is
+ * not JSON, `json` for JSON, `other` for anything else. Text also has to
+ * be UTF-8, which only the content tells.
+ */
+export function contentKindOf(path: VaultPath, settings: RemoteSettings): "text" | "json" | "other" {
+	const name = nameOf(path);
+	const dot = name.lastIndexOf(".");
+	const extension = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+	if (JSON_EXTENSIONS.includes(extension)) return "json";
+	return settings.textExtensions.some((listed) => listed.toLowerCase() === extension) ? "text" : "other";
+}
+
 /** The record of the device `device` in the Metadata folder. */
 export function devicePath(device: DeviceIdentity): RemotePath {
 	return `${DEVICES_FOLDER}/${device.id}.json`;
@@ -59,6 +82,44 @@ export function devicePath(device: DeviceIdentity): RemotePath {
 /** Encodes the shared Remote settings as the bytes of `settings.json`. */
 export function encodeSettings(settings: RemoteSettings): ArrayBuffer {
 	return encodeJson({ formatVersion: FORMAT_VERSION, ...settings });
+}
+
+/**
+ * The shared Remote settings, read from `settings.json` at the start of
+ * every sync; null when the file is missing, is not JSON, is of another
+ * format version or lacks a setting.
+ */
+export async function readRemoteSettings(provider: Provider): Promise<RemoteSettings | null> {
+	try {
+		return decodeSettings((await provider.read(SETTINGS_PATH)).data);
+	} catch (error) {
+		if (isFailure(error, "notFound")) return null;
+		throw error;
+	}
+}
+
+/** The shared Remote settings in the bytes of `settings.json`, or null if they are not valid ones. */
+function decodeSettings(data: ArrayBuffer): RemoteSettings | null {
+	const decoded = decodeUtf8(data);
+	if (decoded === null) return null;
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(decoded);
+	} catch {
+		return null;
+	}
+	if (typeof parsed !== "object" || parsed === null) return null;
+	const { formatVersion, namePolicy, textExtensions, ignoreList, sizeCeilingBytes } = parsed as Record<string, unknown>;
+	if (formatVersion !== FORMAT_VERSION) return null;
+	if (namePolicy !== "skipAndReport" && namePolicy !== "encodeReversibly") return null;
+	if (!isStringList(textExtensions) || !isStringList(ignoreList)) return null;
+	if (typeof sizeCeilingBytes !== "number" || !(sizeCeilingBytes > 0)) return null;
+	return { namePolicy, textExtensions, ignoreList, sizeCeilingBytes };
+}
+
+/** Whether `value` is an array of strings. */
+function isStringList(value: unknown): value is string[] {
+	return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 /** Encodes a device record as the bytes of its file. */

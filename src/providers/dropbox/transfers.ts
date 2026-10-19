@@ -13,7 +13,7 @@
  *   file gets no `Range`, whose answer for it Dropbox does not document.
  */
 import type { RequestLimit } from "../../engine/request-limit";
-import { ProviderError } from "../../engine/provider";
+import { ProviderError, type RemoteContent } from "../../engine/provider";
 import type { DropboxClient, RouteResult } from "./client";
 import { WRITE_RETRY_AFTER_MS, writeFailure, type Tagged } from "./errors";
 import type { Wait } from "./options";
@@ -175,9 +175,13 @@ function transferFailure(route: string, error: Tagged): ProviderError {
 
 /**
  * Downloads the file at the App-Folder `path` in responses no larger than
- * the limit. A path holding no file is `notFound`, a folder `permanent`.
+ * the limit, with the revision it read. A path holding no file is `notFound`, a folder `permanent`.
  */
-export async function downloadFile(client: DropboxClient, path: string, { limit }: TransferRules): Promise<ArrayBuffer> {
+export async function downloadFile(
+	client: DropboxClient,
+	path: string,
+	{ limit }: TransferRules,
+): Promise<RemoteContent> {
 	const found = await client.rpc("files/get_metadata", { path });
 	if (!found.ok) throw lookupFailure("get_metadata", found.error);
 	const metadata = found.value as Metadata;
@@ -190,7 +194,7 @@ export async function downloadFile(client: DropboxClient, path: string, { limit 
 	if (size <= part) {
 		const result = await client.download(revision);
 		if (!result.ok) throw lookupFailure("download", result.error);
-		return result.data;
+		return { data: result.data, revision: rev };
 	}
 	const whole = new Uint8Array(size);
 	for (let start = 0; start < size; start += part) {
@@ -205,5 +209,5 @@ export async function downloadFile(client: DropboxClient, path: string, { limit 
 		}
 		whole.set(new Uint8Array(result.data), start);
 	}
-	return whole.buffer;
+	return { data: whole.buffer, revision: rev };
 }

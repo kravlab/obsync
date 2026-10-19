@@ -1,27 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createSyncEngine } from "../../src/engine/engine";
-import { bytes, text } from "../support/bytes";
+import { bytes } from "../support/bytes";
 import { SimulatedCrash } from "../fakes/fake-provider";
 import { FakeRemote } from "../fakes/fake-remote";
-import { connectTestDevice, type TestDevice } from "../fakes/test-device";
+import { connectTestDevice } from "../fakes/test-device";
 import { rejection } from "../support/assertions";
-
-/** Runs one "Sync now" on `device`. */
-async function syncNow(device: TestDevice): Promise<void> {
-	await createSyncEngine(device.ports).sync();
-}
-
-/** The text of the vault file at `path` on `device`. */
-async function vaultText(device: TestDevice, path: string): Promise<string> {
-	return text(await device.vault.read(path));
-}
-
-/** The text of the Remote file at `path`. */
-function remoteText(remote: FakeRemote, path: string): string {
-	const stored = remote.get(path);
-	if (stored?.kind !== "file") throw new Error(`no Remote file at ${path}`);
-	return text(stored.data);
-}
+import { mirror, remoteText, syncNow, syncedPair, vaultText } from "../support/sync";
 
 describe("syncing new files and folders", () => {
 	it("uploads a note created on one device and downloads it on another", async () => {
@@ -133,20 +117,9 @@ describe("syncing new files and folders", () => {
 		await syncNow(laptop);
 
 		expect(laptop.ui.statuses).toEqual([{ state: "notConnected" }]);
-		expect(remote.list()).toEqual([]);
+		expect(mirror(remote)).toEqual([]);
 	});
 });
-
-/** Two devices on one Remote that both hold `note.md` with `content`, synced. */
-async function syncedPair(content: string): Promise<{ remote: FakeRemote; laptop: TestDevice; phone: TestDevice }> {
-	const remote = new FakeRemote();
-	const laptop = connectTestDevice(remote, "Laptop");
-	const phone = connectTestDevice(remote, "Phone");
-	await laptop.vault.write("note.md", bytes(content));
-	await syncNow(laptop);
-	await syncNow(phone);
-	return { remote, laptop, phone };
-}
 
 describe("syncing changed files", () => {
 	it("carries edits back and forth between two devices", async () => {
@@ -195,33 +168,38 @@ describe("syncing changed files", () => {
 		});
 	});
 
-	it("leaves a file edited on both devices as it is on both sides", async () => {
-		const { remote, laptop, phone } = await syncedPair("v1");
-		await laptop.vault.write("note.md", bytes("laptop's edit"));
-		await syncNow(laptop);
-		await phone.vault.write("note.md", bytes("phone's edit"));
-
-		await syncNow(phone);
-		await syncNow(laptop);
-
-		expect(remoteText(remote, "note.md")).toBe("laptop's edit");
-		expect(await vaultText(phone, "note.md")).toBe("phone's edit");
-		expect(phone.ui.lastStatus).toEqual({ state: "synced" });
-	});
-
-	it("leaves a file created on both devices with different content as it is on both sides", async () => {
+	it("leaves a file that is not text, edited on both devices, as it is on both sides", async () => {
 		const remote = new FakeRemote();
 		const laptop = connectTestDevice(remote, "Laptop");
 		const phone = connectTestDevice(remote, "Phone");
-		await laptop.vault.write("note.md", bytes("laptop's"));
-		await phone.vault.write("note.md", bytes("phone's"));
+		await laptop.vault.write("photo.png", bytes("v1"));
+		await syncNow(laptop);
+		await syncNow(phone);
+		await laptop.vault.write("photo.png", bytes("laptop's edit"));
+		await syncNow(laptop);
+		await phone.vault.write("photo.png", bytes("phone's edit"));
+
+		await syncNow(phone);
+		await syncNow(laptop);
+
+		expect(remoteText(remote, "photo.png")).toBe("laptop's edit");
+		expect(await vaultText(phone, "photo.png")).toBe("phone's edit");
+		expect(phone.ui.lastStatus).toEqual({ state: "synced" });
+	});
+
+	it("leaves a file that is not text, created on both devices with different content, as it is on both sides", async () => {
+		const remote = new FakeRemote();
+		const laptop = connectTestDevice(remote, "Laptop");
+		const phone = connectTestDevice(remote, "Phone");
+		await laptop.vault.write("photo.png", bytes("laptop's"));
+		await phone.vault.write("photo.png", bytes("phone's"));
 
 		await syncNow(laptop);
 		await syncNow(phone);
 
-		expect(remoteText(remote, "note.md")).toBe("laptop's");
-		expect(await vaultText(phone, "note.md")).toBe("phone's");
-		expect(phone.deviceStore.snapshot.has("note.md")).toBe(false);
+		expect(remoteText(remote, "photo.png")).toBe("laptop's");
+		expect(await vaultText(phone, "photo.png")).toBe("phone's");
+		expect(phone.deviceStore.snapshot.has("photo.png")).toBe(false);
 	});
 
 	it("matches paths without case on a case-insensitive provider, keeping each device's case", async () => {
@@ -241,7 +219,7 @@ describe("syncing changed files", () => {
 		expect(await phone.vault.stat("Notes")).toBeNull();
 		expect(await vaultText(phone, "notes/a.md")).toBe("laptop's");
 		expect(await vaultText(laptop, "Notes/b.md")).toBe("phone's");
-		expect(remote.list().map((entry) => entry.path).sort()).toEqual(["Notes", "Notes/a.md", "Notes/b.md"]);
+		expect(mirror(remote).map((entry) => entry.path).sort()).toEqual(["Notes", "Notes/a.md", "Notes/b.md"]);
 		expect([...phone.deviceStore.snapshot.keys()].sort()).toEqual(["notes", "notes/a.md", "notes/b.md"]);
 	});
 
@@ -298,7 +276,7 @@ describe("what a sync leaves out", () => {
 
 		await syncNow(laptop);
 
-		expect(remote.list().map((entry) => entry.path)).toEqual(["note.md"]);
+		expect(mirror(remote).map((entry) => entry.path)).toEqual(["note.md"]);
 	});
 
 	it("leaves vault entries below a Remote file alone and syncs the rest", async () => {
@@ -345,7 +323,7 @@ describe("what a sync leaves out", () => {
 
 		await syncNow(laptop);
 
-		expect(remote.list().map((entry) => entry.path)).toEqual(["other.md"]);
+		expect(mirror(remote).map((entry) => entry.path)).toEqual(["other.md"]);
 		expect([...laptop.deviceStore.snapshot.keys()]).toEqual(["other.md"]);
 	});
 
@@ -373,17 +351,17 @@ describe("concurrent changes and interruptions", () => {
 		});
 
 		await syncNow(laptop);
-		await syncNow(laptop);
 
-		expect(remoteText(remote, "note.md")).toBe("phone's edit");
-		expect(await vaultText(laptop, "note.md")).toBe("laptop's edit");
+		const merged = "<<<<<<< Laptop\nlaptop's edit\n=======\nphone's edit\n>>>>>>> Remote\n";
+		expect(remoteText(remote, "note.md")).toBe(merged);
+		expect(await vaultText(laptop, "note.md")).toBe(merged);
 	});
 
 	it("does not overwrite a vault file edited while its Remote version downloads", async () => {
 		const { laptop, phone } = await syncedPair("v1");
 		await laptop.vault.write("note.md", bytes("v2 from laptop"));
 		await syncNow(laptop);
-		phone.provider.beforeNext("read", () => phone.vault.write("note.md", bytes("typed meanwhile")));
+		phone.provider.beforeNextRead("note.md", () => phone.vault.write("note.md", bytes("typed meanwhile")));
 
 		await syncNow(phone);
 
@@ -399,7 +377,7 @@ describe("concurrent changes and interruptions", () => {
 		expect(await rejection(syncNow(laptop))).toBeInstanceOf(SimulatedCrash);
 		await syncNow(laptop);
 
-		expect(remote.list().map((entry) => entry.path).sort()).toEqual(["a.md", "b.md", "c.md"]);
+		expect(mirror(remote).map((entry) => entry.path).sort()).toEqual(["a.md", "b.md", "c.md"]);
 		for (const name of ["a.md", "b.md", "c.md"]) expect(remoteText(remote, name)).toBe(`text of ${name}`);
 		expect([...laptop.deviceStore.snapshot.keys()].sort()).toEqual(["a.md", "b.md", "c.md"]);
 	});
@@ -442,7 +420,7 @@ describe("sync status and runs", () => {
 		await syncNow(laptop);
 
 		expect(laptop.ui.statuses).toEqual([{ state: "syncing" }, { state: "syncFailed" }]);
-		expect(remote.list()).toEqual([]);
+		expect(mirror(remote)).toEqual([]);
 	});
 
 	it("shows Sync failed when the Remote cannot be reached, and Synced once it can", async () => {

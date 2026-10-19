@@ -56,12 +56,26 @@ export interface LocalVault {
 	read(path: VaultPath): Promise<ArrayBuffer>;
 	/** Creates or replaces a whole file; its parent folder must exist. */
 	write(path: VaultPath, data: ArrayBuffer): Promise<void>;
+	/**
+	 * Replaces the file at `path` with `data` only if it still holds
+	 * exactly `expected`, checked and written in one step, so an edit made
+	 * meanwhile is never overwritten; returns whether it replaced it. For a
+	 * note open in an editor, what the editor holds counts, saved or not,
+	 * and the new content is on disk once this resolves.
+	 */
+	replace(path: VaultPath, expected: ArrayBuffer, data: ArrayBuffer): Promise<boolean>;
 	/** Creates a folder; its parent folder must exist. */
 	createFolder(path: VaultPath): Promise<void>;
 	/** Moves a file or folder to the trash the user's setting chooses. */
 	trash(path: VaultPath): Promise<void>;
 	/** Renames or moves a file or folder; `to` must be free. */
 	rename(from: VaultPath, to: VaultPath): Promise<void>;
+	/**
+	 * When the user last typed into `path` in an editor, in ms since the
+	 * epoch as the engine's Clock counts, or null if not since the plugin
+	 * started. A note typed into within the typing pause is not written.
+	 */
+	lastTypedAt(path: VaultPath): number | null;
 	/**
 	 * Calls `listener` for each change hint until the returned function is
 	 * called.

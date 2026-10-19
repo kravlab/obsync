@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createSyncEngine } from "../../src/engine/engine";
-import { bytes, text } from "../support/bytes";
+import { bytes } from "../support/bytes";
 import { FakeRemote } from "../fakes/fake-remote";
 import { createTestDevice } from "../fakes/test-device";
+import { readText } from "../support/provider-read";
 
 describe("sync engine", () => {
 	it("reports Not connected on a device that has no Connection", async () => {
@@ -37,6 +38,6 @@ describe("sync engine", () => {
 		const laptopProvider = await laptop.ports.providers.open(connection, "secret");
 		const phoneProvider = await phone.ports.providers.open(connection, "secret");
 		await laptopProvider.write("note.md", bytes("from laptop"));
-		expect(text(await phoneProvider.read("note.md"))).toBe("from laptop");
+		expect(await readText(phoneProvider, "note.md")).toBe("from laptop");
 	});
 });

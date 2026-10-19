@@ -40,6 +40,14 @@ export interface RemoteFolder {
 	readonly stableId?: string;
 }
 
+/** A file's whole content as read, with the revision those bytes are. */
+export interface RemoteContent {
+	/** The file's whole content. */
+	readonly data: ArrayBuffer;
+	/** The revision of `data`, as the listing and `write` report revisions. */
+	readonly revision: string;
+}
+
 /** One entry of the Remote mirror. */
 export type RemoteEntry = RemoteFile | RemoteFolder;
 
@@ -141,8 +149,11 @@ export interface Provider {
 	readonly maxFileSize: number;
 	/** Lists every entry of the Remote; the root itself is not an entry. */
 	list(): Promise<Listing>;
-	/** Reads a whole file. */
-	read(path: RemotePath): Promise<ArrayBuffer>;
+	/**
+	 * Reads a whole file, with the revision of the bytes returned, which may
+	 * be newer than the one the last listing showed.
+	 */
+	read(path: RemotePath): Promise<RemoteContent>;
 	/**
 	 * Creates or replaces a whole file and returns its new entry. The engine
 	 * creates the parent folder first; a provider may also create missing

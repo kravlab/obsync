@@ -2,6 +2,7 @@ import { describe, expect, it, type TestContext } from "vitest";
 import type { Provider } from "../../src/engine/provider";
 import { bytes, patterned, text } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
+import { readText, readBytes } from "../support/provider-read";
 
 /** A Provider opened with a Per-request limit, and what its HTTP traffic was. */
 export interface LimitedRemote {
@@ -30,7 +31,7 @@ export function describeProviderContract(
 		it("reads back the bytes a write stored", async () => {
 			const provider = await openEmptyRemote();
 			await provider.write("note.md", bytes("hello"));
-			expect(text(await provider.read("note.md"))).toBe("hello");
+			expect(await readText(provider, "note.md")).toBe("hello");
 		});
 
 		it("lists a written file with the revision and size the write returned", async () => {
@@ -43,18 +44,28 @@ export function describeProviderContract(
 			]);
 		});
 
+		it("reads a file with the revision of the bytes it returned, as the write and the listing report it", async () => {
+			const provider = await openEmptyRemote();
+			await provider.write("note.md", bytes("one"));
+			const written = await provider.write("note.md", bytes("two"));
+			const read = await provider.read("note.md");
+			expect(text(read.data)).toBe("two");
+			expect(read.revision).toBe(written.revision);
+			expect((await provider.list()).entries).toEqual([expect.objectContaining({ revision: read.revision })]);
+		});
+
 		it("stores an empty file", async () => {
 			const provider = await openEmptyRemote();
 			const written = await provider.write("empty.md", new ArrayBuffer(0));
 			expect(written.size).toBe(0);
-			expect((await provider.read("empty.md")).byteLength).toBe(0);
+			expect((await readBytes(provider, "empty.md")).byteLength).toBe(0);
 		});
 
 		it("stores binary bytes unchanged", async () => {
 			const provider = await openEmptyRemote();
 			const image = new Uint8Array([0x00, 0xff, 0x80, 0xc3, 0x28, 0x0a]);
 			await provider.write("image.png", image.buffer);
-			expect([...new Uint8Array(await provider.read("image.png"))]).toEqual([0x00, 0xff, 0x80, 0xc3, 0x28, 0x0a]);
+			expect([...new Uint8Array(await readBytes(provider, "image.png"))]).toEqual([0x00, 0xff, 0x80, 0xc3, 0x28, 0x0a]);
 		});
 
 		it("gives an overwritten file a new revision", async () => {
@@ -62,7 +73,7 @@ export function describeProviderContract(
 			const first = await provider.write("note.md", bytes("one"));
 			const second = await provider.write("note.md", bytes("two"));
 			expect(second.revision).not.toBe(first.revision);
-			expect(text(await provider.read("note.md"))).toBe("two");
+			expect(await readText(provider, "note.md")).toBe("two");
 		});
 
 		it("fails reading a missing file with notFound", async () => {
@@ -100,7 +111,7 @@ export function describeProviderContract(
 			await provider.write("Заметки/café ☕.md", bytes("текст"));
 			const paths = (await provider.list()).entries.map((entry) => entry.path);
 			expect(paths.sort()).toEqual(["Заметки", "Заметки/café ☕.md"]);
-			expect(text(await provider.read("Заметки/café ☕.md"))).toBe("текст");
+			expect(await readText(provider, "Заметки/café ☕.md")).toBe("текст");
 		});
 
 		it("returns an existing folder when it is created again", async () => {
@@ -143,21 +154,21 @@ export function describeProviderContract(
 		it("writes a new file on condition that it is absent", async (context) => {
 			const provider = await openConditional(context);
 			await provider.write("note.md", bytes("new"), { kind: "absent" });
-			expect(text(await provider.read("note.md"))).toBe("new");
+			expect(await readText(provider, "note.md")).toBe("new");
 		});
 
 		it("refuses to replace an existing file written on condition that it is absent", async (context) => {
 			const provider = await openConditional(context);
 			await provider.write("note.md", bytes("theirs"));
 			await expectFailure(provider.write("note.md", bytes("mine"), { kind: "absent" }), "preconditionFailed");
-			expect(text(await provider.read("note.md"))).toBe("theirs");
+			expect(await readText(provider, "note.md")).toBe("theirs");
 		});
 
 		it("replaces a file whose revision is the expected one", async (context) => {
 			const provider = await openConditional(context);
 			const { revision } = await provider.write("note.md", bytes("one"));
 			await provider.write("note.md", bytes("two"), { kind: "revision", revision });
-			expect(text(await provider.read("note.md"))).toBe("two");
+			expect(await readText(provider, "note.md")).toBe("two");
 		});
 
 		it("refuses to replace a file another write changed since the expected revision", async (context) => {
@@ -168,7 +179,7 @@ export function describeProviderContract(
 				provider.write("note.md", bytes("mine"), { kind: "revision", revision }),
 				"preconditionFailed",
 			);
-			expect(text(await provider.read("note.md"))).toBe("theirs");
+			expect(await readText(provider, "note.md")).toBe("theirs");
 		});
 
 		it("deletes a file whose revision is the expected one", async (context) => {
@@ -183,7 +194,7 @@ export function describeProviderContract(
 			const { revision } = await provider.write("note.md", bytes("one"));
 			await provider.write("note.md", bytes("theirs"));
 			await expectFailure(provider.delete("note.md", { kind: "revision", revision }), "preconditionFailed");
-			expect(text(await provider.read("note.md"))).toBe("theirs");
+			expect(await readText(provider, "note.md")).toBe("theirs");
 		});
 	});
 
@@ -211,8 +222,8 @@ export function describeProviderContract(
 			const { provider, largestBody } = await openLimited(context);
 			await provider.write("scan.pdf", patterned(3 * LIMIT));
 			await provider.write("photo.jpg", patterned(LIMIT + 1));
-			expect([...new Uint8Array(await provider.read("scan.pdf"))]).toEqual([...new Uint8Array(patterned(3 * LIMIT))]);
-			expect([...new Uint8Array(await provider.read("photo.jpg"))]).toEqual([...new Uint8Array(patterned(LIMIT + 1))]);
+			expect([...new Uint8Array(await readBytes(provider, "scan.pdf"))]).toEqual([...new Uint8Array(patterned(3 * LIMIT))]);
+			expect([...new Uint8Array(await readBytes(provider, "photo.jpg"))]).toEqual([...new Uint8Array(patterned(LIMIT + 1))]);
 			expect(largestBody()).toBeLessThanOrEqual(LIMIT);
 		});
 
@@ -223,17 +234,17 @@ export function describeProviderContract(
 			await expectFailure(provider.write("scan.pdf", patterned(2 * LIMIT), { kind: "absent" }), "preconditionFailed");
 			const stale = { kind: "revision", revision: "0123456789abcdef" } as const;
 			await expectFailure(provider.write("scan.pdf", patterned(2 * LIMIT), stale), "preconditionFailed");
-			expect(text(await provider.read("scan.pdf"))).toBe("theirs");
+			expect(await readText(provider, "scan.pdf")).toBe("theirs");
 			await provider.write("scan.pdf", patterned(2 * LIMIT), { kind: "revision", revision: theirs.revision });
-			expect((await provider.read("scan.pdf")).byteLength).toBe(2 * LIMIT);
+			expect((await readBytes(provider, "scan.pdf")).byteLength).toBe(2 * LIMIT);
 		});
 
 		it("reads and writes a file of exactly the limit, and an empty one", async (context) => {
 			const { provider, largestBody } = await openLimited(context);
 			await provider.write("exact.bin", patterned(LIMIT));
 			await provider.write("empty.md", new ArrayBuffer(0));
-			expect([...new Uint8Array(await provider.read("exact.bin"))]).toEqual([...new Uint8Array(patterned(LIMIT))]);
-			expect((await provider.read("empty.md")).byteLength).toBe(0);
+			expect([...new Uint8Array(await readBytes(provider, "exact.bin"))]).toEqual([...new Uint8Array(patterned(LIMIT))]);
+			expect((await readBytes(provider, "empty.md")).byteLength).toBe(0);
 			expect(largestBody()).toBeLessThanOrEqual(LIMIT);
 		});
 	});

@@ -48,7 +48,7 @@ export interface ProviderConnector {
 
 /**
  * Per-device state that never syncs: never in `data.json` or the vault.
- * It holds the Connection and the Sync snapshot; Base copies join later.
+ * It holds the Connection, the Sync snapshot and the Base of each text file.
  */
 export interface DeviceStore {
 	/** Returns this device's Connection, or null if it has none. */
@@ -58,14 +58,18 @@ export interface DeviceStore {
 	/** Returns the Sync snapshot; empty when none was saved or it is unreadable. */
 	loadSnapshot(): Promise<SyncSnapshot>;
 	/**
-	 * Records `entry` for `path`, replacing what was recorded. It is durable
-	 * once the returned promise resolves, so a sync cut off after it keeps
-	 * the entry.
+	 * Records `entry` for `path` with its Base, replacing what was recorded:
+	 * `base` is the file's synced bytes for a text file, or null for anything
+	 * else, which removes any Base. Entry and Base are written together and
+	 * are durable once the returned promise resolves, so a sync cut off
+	 * after it keeps both, and one never outlives the other.
 	 */
-	saveSnapshotEntry(path: VaultPath, entry: SnapshotEntry): Promise<void>;
+	saveSnapshotEntry(path: VaultPath, entry: SnapshotEntry, base: ArrayBuffer | null): Promise<void>;
+	/** Returns the Base recorded for `path`, or null if there is none. */
+	loadBase(path: VaultPath): Promise<ArrayBuffer | null>;
 	/**
 	 * Erases everything this device keeps for its Connection: the
-	 * Connection itself and the Sync snapshot (and the Base, once it exists).
+	 * Connection itself, the Sync snapshot and every Base.
 	 */
 	clear(): Promise<void>;
 }

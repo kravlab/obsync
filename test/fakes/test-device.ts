@@ -8,6 +8,12 @@ import {
 	type UiPort,
 } from "../../src/engine/ports";
 import type { VaultPath } from "../../src/engine/local-vault";
+import {
+	DEFAULT_REMOTE_SETTINGS,
+	METADATA_FOLDER,
+	SETTINGS_PATH,
+	encodeSettings,
+} from "../../src/engine/remote-metadata";
 import type { Provider } from "../../src/engine/provider";
 import type { SyncStatus } from "../../src/engine/status";
 import type { SnapshotEntry, SyncSnapshot } from "../../src/engine/sync-snapshot";
@@ -20,10 +26,12 @@ import { ManualScheduler } from "./manual-scheduler";
 /** The provider id of a test device's ProviderConnector. */
 export const TEST_PROVIDER_ID = "fake-service";
 
-/** A Device store in memory, holding at most one Connection and its Sync snapshot. */
+/** A Device store in memory, holding at most one Connection, its Sync snapshot and Bases. */
 export class InMemoryDeviceStore implements DeviceStore {
 	/** The Sync snapshot, by vault path. */
 	readonly snapshot = new Map<VaultPath, SnapshotEntry>();
+	/** The Base of each text file, by vault path. */
+	readonly bases = new Map<VaultPath, ArrayBuffer>();
 
 	/** @param connection this device's Connection, or null for none */
 	constructor(public connection: Connection | null = null) {}
@@ -41,14 +49,21 @@ export class InMemoryDeviceStore implements DeviceStore {
 		return Promise.resolve(new Map(this.snapshot));
 	}
 
-	saveSnapshotEntry(path: VaultPath, entry: SnapshotEntry): Promise<void> {
+	saveSnapshotEntry(path: VaultPath, entry: SnapshotEntry, base: ArrayBuffer | null): Promise<void> {
 		this.snapshot.set(path, entry);
+		if (base === null) this.bases.delete(path);
+		else this.bases.set(path, base.slice(0));
 		return Promise.resolve();
+	}
+
+	loadBase(path: VaultPath): Promise<ArrayBuffer | null> {
+		return Promise.resolve(this.bases.get(path)?.slice(0) ?? null);
 	}
 
 	clear(): Promise<void> {
 		this.connection = null;
 		this.snapshot.clear();
+		this.bases.clear();
 		return Promise.resolve();
 	}
 }
@@ -130,10 +145,20 @@ export function createTestDevice(remote: FakeRemote): TestDevice {
 
 /**
  * Builds a device on `remote` as `createTestDevice` does, already
- * connected as the device named `name`, with its login secret stored.
+ * connected as the device named `name`, with its login secret stored. A
+ * Remote without shared settings gets the defaults, as connecting writes
+ * them.
  */
 export function connectTestDevice(remote: FakeRemote, name: string): TestDevice {
 	const device = createTestDevice(remote);
+	if (remote.get(SETTINGS_PATH) === undefined) {
+		remote.put(METADATA_FOLDER, { kind: "folder" });
+		remote.put(SETTINGS_PATH, {
+			kind: "file",
+			data: encodeSettings(DEFAULT_REMOTE_SETTINGS),
+			revision: remote.nextRevision(),
+		});
+	}
 	device.deviceStore.connection = { accountId: "account", remoteRoot: "", device: { id: `${name}-id`, name } };
 	device.secretStore.setSecret(providerSecretId(TEST_PROVIDER_ID), `${name}-secret`);
 	return device;

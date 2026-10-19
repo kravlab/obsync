@@ -49,7 +49,7 @@ The content a text file had at a device's last successful sync, kept by that dev
 _Avoid_: Ancestor copy, cache, original
 
 **Conflict block**:
-A region of a text file, delimited by git-style markers labelled with device names, holding two versions that could not be merged automatically.
+A region of a text file, delimited by git-style markers labelled with this device's name and the other device's name, or "Remote" when that device is unknown, holding two versions that could not be merged automatically.
 _Avoid_: Conflict markers (the markers delimit the block), diff
 
 **Conflict copy**:

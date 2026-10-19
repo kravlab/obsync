@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { bytes, text } from "../support/bytes";
+import { bytes } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
 import { FakeRemote } from "./fake-remote";
+import { readText } from "../support/provider-read";
 
 describe("FakeProvider name rules and size", () => {
 	it("reports the configured name rules and maximum file size", () => {
@@ -47,7 +48,7 @@ describe("FakeProvider name rules and size", () => {
 		await provider.write("note.md", bytes("first"));
 		await provider.write("Note.md", bytes("second"));
 		expect((await provider.list()).entries.map((entry) => entry.path)).toEqual(["note.md"]);
-		expect(text(await provider.read("NOTE.md"))).toBe("second");
+		expect(await readText(provider, "NOTE.md")).toBe("second");
 	});
 
 	it("files a new entry under its folder's case when case-insensitive", async () => {

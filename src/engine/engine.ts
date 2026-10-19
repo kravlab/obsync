@@ -5,6 +5,7 @@
  */
 import { providerSecretId, type EnginePorts } from "./ports";
 import { ProviderError, isSyncable } from "./provider";
+import { readRemoteSettings } from "./remote-metadata";
 import { statusOf } from "./status";
 import { runSync } from "./sync-run";
 
@@ -30,7 +31,7 @@ export interface SyncEngine {
 
 /** Builds a sync engine over `ports`. */
 export function createSyncEngine(ports: EnginePorts): SyncEngine {
-	const { deviceStore, secretStore, providers, vault, ui } = ports;
+	const { deviceStore, secretStore, providers, vault, clock, ui } = ports;
 	let running: Promise<void> | undefined;
 
 	/** One sync, from reading the Connection to the final status. */
@@ -54,7 +55,13 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				ui.showStatus({ state: "syncFailed" });
 				return;
 			}
-			await runSync({ provider, vault, deviceStore });
+			// Shared settings this device cannot read could classify files differently from other devices.
+			const settings = await readRemoteSettings(provider);
+			if (settings === null) {
+				ui.showStatus({ state: "syncFailed" });
+				return;
+			}
+			await runSync({ provider, vault, deviceStore, settings, device: connection.device, clock });
 			ui.showStatus({ state: "synced" });
 		} catch (error) {
 			ui.showStatus({ state: "syncFailed" });

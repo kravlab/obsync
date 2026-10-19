@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ChangeFeed } from "../../src/engine/provider";
 import { rejection, reported } from "../support/assertions";
-import { bytes, text } from "../support/bytes";
+import { bytes } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
 import { SimulatedCrash } from "./fake-provider";
 import { FakeRemote } from "./fake-remote";
+import { readText } from "../support/provider-read";
 
 describe("FakeProvider fault injection", () => {
 	it("fails the next matching operation with throttled and its retry delay, then recovers", async () => {
@@ -13,7 +14,7 @@ describe("FakeProvider fault injection", () => {
 		provider.failNext("read", { category: "throttled", retryAfterMs: 30_000 });
 		const error = await rejection(provider.read("note.md"));
 		expect(error).toMatchObject({ failure: { category: "throttled", retryAfterMs: 30_000 } });
-		expect(text(await provider.read("note.md"))).toBe("a");
+		expect(await readText(provider, "note.md")).toBe("a");
 	});
 
 	it("fails a write with transient without storing anything", async () => {
@@ -43,7 +44,7 @@ describe("FakeProvider fault injection", () => {
 			laptop.write("note.md", bytes("from laptop"), { kind: "revision", revision }),
 			"preconditionFailed",
 		);
-		expect(text(await laptop.read("note.md"))).toBe("from phone");
+		expect(await readText(laptop, "note.md")).toBe("from phone");
 	});
 
 	it("injects faults into one device only", async () => {
@@ -52,7 +53,7 @@ describe("FakeProvider fault injection", () => {
 		const phone = remote.openProvider();
 		laptop.failNext("write", { category: "transient" });
 		await phone.write("note.md", bytes("phone"));
-		expect(text(await laptop.read("note.md"))).toBe("phone");
+		expect(await readText(laptop, "note.md")).toBe("phone");
 	});
 });
 
@@ -69,6 +70,6 @@ describe("FakeProvider crashes", () => {
 		const provider = new FakeRemote().openProvider();
 		provider.crashAfter(1);
 		await expect(provider.write("note.md", bytes("landed"))).rejects.toBeInstanceOf(SimulatedCrash);
-		expect(text(await provider.read("note.md"))).toBe("landed");
+		expect(await readText(provider, "note.md")).toBe("landed");
 	});
 });

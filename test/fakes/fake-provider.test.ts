@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { ProviderError } from "../../src/engine/provider";
 import { rejection } from "../support/assertions";
-import { bytes, text } from "../support/bytes";
+import { bytes } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
 import { FakeRemote } from "./fake-remote";
+import { readText, readBytes } from "../support/provider-read";
 
 describe("FakeProvider", () => {
 	it("lets a device read a file another device wrote to the same Remote", async () => {
 		const remote = new FakeRemote();
 		await remote.openProvider().write("note.md", bytes("from laptop"));
-		expect(text(await remote.openProvider().read("note.md"))).toBe("from laptop");
+		expect(await readText(remote.openProvider(), "note.md")).toBe("from laptop");
 	});
 
 	it("fails a device's conditional write after another device changed the file", async () => {
@@ -22,7 +23,7 @@ describe("FakeProvider", () => {
 			laptop.write("note.md", bytes("from laptop"), { kind: "revision", revision }),
 			"preconditionFailed",
 		);
-		expect(text(await phone.read("note.md"))).toBe("from phone");
+		expect(await readText(phone, "note.md")).toBe("from phone");
 	});
 
 	it("keeps stored bytes when the caller later changes its buffers", async () => {
@@ -30,8 +31,8 @@ describe("FakeProvider", () => {
 		const written = bytes("abc");
 		await provider.write("note.md", written);
 		new Uint8Array(written).fill(0);
-		new Uint8Array(await provider.read("note.md")).fill(0);
-		expect(text(await provider.read("note.md"))).toBe("abc");
+		new Uint8Array(await readBytes(provider, "note.md")).fill(0);
+		expect(await readText(provider, "note.md")).toBe("abc");
 	});
 
 	it("fails a write into a folder that does not exist with notFound", async () => {
@@ -55,7 +56,7 @@ describe("FakeProvider", () => {
 		const provider = new FakeRemote().openProvider();
 		await provider.write("note.md", bytes("keep me"));
 		await expectFailure(provider.createFolder("note.md"), "preconditionFailed");
-		expect(text(await provider.read("note.md"))).toBe("keep me");
+		expect(await readText(provider, "note.md")).toBe("keep me");
 	});
 
 	it("rejects deleting a folder that still holds entries with a plain Error", async () => {
@@ -65,6 +66,6 @@ describe("FakeProvider", () => {
 		const error = await rejection(provider.delete("notes"));
 		expect(error).toBeInstanceOf(Error);
 		expect(error).not.toBeInstanceOf(ProviderError);
-		expect(text(await provider.read("notes/a.md"))).toBe("a");
+		expect(await readText(provider, "notes/a.md")).toBe("a");
 	});
 });

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ChangeFeed, FileMove, FolderMove } from "../../src/engine/provider";
 import { reported } from "../support/assertions";
-import { bytes, text } from "../support/bytes";
+import { bytes } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
 import { FakeRemote } from "./fake-remote";
+import { readText } from "../support/provider-read";
 
 describe("FakeProvider Capability toggles", () => {
 	it("reports conditional write and nothing else by default", () => {
@@ -86,7 +87,7 @@ describe("FakeProvider Capability toggles", () => {
 			await provider.write("old.md", bytes("content"));
 			const moved = await reported<FileMove>(provider.capabilities.fileMove).moveFile("old.md", "new.md");
 			expect(moved).toMatchObject({ kind: "file", path: "new.md" });
-			expect(text(await provider.read("new.md"))).toBe("content");
+			expect(await readText(provider, "new.md")).toBe("content");
 			await expectFailure(provider.read("old.md"), "notFound");
 		});
 
@@ -98,8 +99,8 @@ describe("FakeProvider Capability toggles", () => {
 				reported<FileMove>(provider.capabilities.fileMove).moveFile("old.md", "new.md"),
 				"preconditionFailed",
 			);
-			expect(text(await provider.read("new.md"))).toBe("theirs");
-			expect(text(await provider.read("old.md"))).toBe("mine");
+			expect(await readText(provider, "new.md")).toBe("theirs");
+			expect(await readText(provider, "old.md")).toBe("mine");
 		});
 	});
 
@@ -112,7 +113,7 @@ describe("FakeProvider Capability toggles", () => {
 			await reported<FolderMove>(provider.capabilities.folderMove).moveFolder("old", "new");
 			const paths = (await provider.list()).entries.map((entry) => entry.path).sort();
 			expect(paths).toEqual(["new", "new/sub", "new/sub/a.md"]);
-			expect(text(await provider.read("new/sub/a.md"))).toBe("a");
+			expect(await readText(provider, "new/sub/a.md")).toBe("a");
 		});
 
 		it("reports each moved entry in the change feed", async () => {

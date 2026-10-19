@@ -45,6 +45,14 @@ export default class ObsyncPlugin extends Plugin {
 			},
 		};
 		const deviceStore = new ObsidianDeviceStore(this.app);
+		this.register(() => deviceStore.close());
+		const vault = new ObsidianLocalVault(this.app);
+		// Typing tells the engine which open note to leave alone until the typing pause has passed.
+		this.registerEvent(
+			this.app.workspace.on("editor-change", (_editor, info) => {
+				if (info.file) vault.noteTyped(info.file.path);
+			}),
+		);
 		const secretStore = new ObsidianSecretStore(this.app);
 		const ui = new StatusIndicator(this, strings);
 		const connection = createConnectionService({
@@ -56,7 +64,7 @@ export default class ObsyncPlugin extends Plugin {
 		});
 		const engine = createSyncEngine({
 			providers: createDropboxConnector(dropbox),
-			vault: new ObsidianLocalVault(this.app),
+			vault,
 			deviceStore,
 			secretStore,
 			clock: dropbox.clock,
