@@ -2,6 +2,12 @@ import type { Clock } from "../../src/engine/ports";
 import type { HttpRequest, HttpResponse } from "../../src/providers/dropbox/http";
 import { ManualClock } from "./manual-clock";
 
+/**
+ * An interception that serves the request but loses its response, as when
+ * the connection drops after the service acted: the caller gets no response.
+ */
+export const LOSE_RESPONSE = Symbol("lose response");
+
 /** How long an access token lasts, in seconds, as Dropbox's `expires_in` says. */
 export const ACCESS_TOKEN_SECONDS = 14400;
 
@@ -20,10 +26,14 @@ export const ACCESS_TOKEN_SECONDS = 14400;
  * - RPC routes on `api.dropboxapi.com/2/`: a JSON body (none for routes
  *   without an argument), a bearer access token, 401 with an AuthError for
  *   a bad or expired token, 409 with `{error_summary, error}` route errors;
- * - `content.dropboxapi.com/2/files/upload` and `files/download`: the
- *   argument in the `Dropbox-API-Arg` header, which must be ASCII, as HTTP
- *   headers are; a download answers the file's bytes with its metadata in
- *   `Dropbox-API-Result`;
+ * - `content.dropboxapi.com/2/files/upload`, the sequential upload
+ *   session routes (`upload_session/start`, `append_v2`, `finish`, with
+ *   offset checks) and `files/download`: the argument in the
+ *   `Dropbox-API-Arg` header, which must be ASCII, as HTTP headers are; a
+ *   download answers the file's bytes with its metadata in
+ *   `Dropbox-API-Result`, or `206` with the bytes a `Range` asks for;
+ * - `rev:<rev>` paths for `files/download` and `files/get_metadata`,
+ *   over every revision each file has had;
  * - `files/delete_v2`, honouring `parent_rev`. Dropbox does not document
  *   its answer to a `parent_rev` that is not the file's latest; this fake
  *   answers a WriteError conflict (`path_write/conflict/file/`), an
@@ -37,12 +47,23 @@ export class FakeDropbox {
 	listPageSize = 1000;
 	/** Every request received, oldest first. */
 	readonly requests: HttpRequest[] = [];
+	/** Every response given, oldest first; none for a request answered with no response at all. */
+	readonly responses: HttpResponse[] = [];
 	/**
 	 * Answers to give instead of serving the next requests, oldest first: a
-	 * response, an Error for no response at all (offline), or null to serve
-	 * that request as usual.
+	 * response, an Error for no response at all (offline), `LOSE_RESPONSE`
+	 * to serve the request and then give no response, or null to serve that
+	 * request as usual.
 	 */
-	readonly interceptions: (HttpResponse | Error | null)[] = [];
+	readonly interceptions: (HttpResponse | Error | null | typeof LOSE_RESPONSE)[] = [];
+	/**
+	 * WriteError tags the next commits answer with instead of writing,
+	 * oldest first, such as `too_many_write_operations`: a refusal that
+	 * comes only after a session's data arrived.
+	 */
+	readonly writeRefusals: string[] = [];
+	/** Called with each request before it is served: lets a test change the account mid-transfer. */
+	onRequest: (request: HttpRequest) => void = () => undefined;
 
 	private readonly accounts = new Map<string, FakeDropboxAccount>();
 	private readonly codes = new Map<string, { readonly account: FakeDropboxAccount; readonly challenge: string }>();
@@ -54,6 +75,8 @@ export class FakeDropbox {
 		{ readonly refreshToken: string; readonly expiresAt: number; expired: boolean }
 	>();
 	private lastIssued = 0;
+	/** Upload sessions not finished yet, by session id. */
+	private readonly sessions = new Map<string, FakeSession>();
 
 	/**
 	 * @param appKey the app key the plugin must present as `client_id`
@@ -107,12 +130,31 @@ export class FakeDropbox {
 		for (const token of this.accessTokens.values()) token.expired = true;
 	}
 
+	/**
+	 * The largest body of any request or response so far, in bytes: what
+	 * the per-request limit bounds.
+	 */
+	largestBody(): number {
+		const requestSizes = this.requests.map(({ body }) =>
+			body === undefined ? 0 : typeof body === "string" ? new TextEncoder().encode(body).byteLength : body.byteLength,
+		);
+		const responseSizes = this.responses.map((response) => response.arrayBuffer.byteLength);
+		return Math.max(0, ...requestSizes, ...responseSizes);
+	}
+
 	/** The `requestUrl`-shaped entry point the provider is given. */
-	readonly requestUrl = (request: HttpRequest): Promise<HttpResponse> => {
+	readonly requestUrl = async (request: HttpRequest): Promise<HttpResponse> => {
 		this.requests.push(request);
+		this.onRequest(request);
 		const interception = this.interceptions.shift();
-		if (interception instanceof Error) return Promise.reject(interception);
-		return interception ? Promise.resolve(interception) : this.handle(request);
+		if (interception instanceof Error) throw interception;
+		if (interception === LOSE_RESPONSE) {
+			this.responses.push(await this.handle(request));
+			throw new Error("connection lost after the request arrived");
+		}
+		const response = interception ?? (await this.handle(request));
+		this.responses.push(response);
+		return response;
 	};
 
 	/** Serves one request: the token endpoint, or a route with a bearer token. */
@@ -128,6 +170,9 @@ export class FakeDropbox {
 		const { account, refreshToken } = tokenOwner;
 		if (url.origin === "https://content.dropboxapi.com") {
 			if (route === "files/upload") return this.upload(account, request);
+			if (route === "files/upload_session/start") return this.startSession(request);
+			if (route === "files/upload_session/append_v2") return this.appendSession(request);
+			if (route === "files/upload_session/finish") return this.finishSession(account, request);
 			if (route === "files/download") return this.download(account, request);
 			return status(404, "unknown route");
 		}
@@ -247,9 +292,9 @@ export class FakeDropbox {
 
 	/** `files/get_metadata`: an entry's metadata, or `path/not_found`. */
 	private getMetadata(account: FakeDropboxAccount, arg: { path: string }): HttpResponse {
-		const entry = account.get(arg.path);
+		const entry = account.read(arg.path);
 		if (!entry) return routeError("path/not_found/", { ".tag": "path", path: { ".tag": "not_found" } });
-		return json(200, account.metadata(arg.path));
+		return json(200, metadataOf(entry));
 	}
 
 	/**
@@ -288,27 +333,39 @@ export class FakeDropbox {
 	}
 
 	/**
-	 * `files/download` in one request: the file's bytes, or
-	 * `path/not_found` for a path holding no file.
+	 * `files/download`: the file's bytes, or `path/not_found` for a path
+	 * holding no file. With `Range: bytes=start-end` it answers `206` with
+	 * those bytes and `Content-Range`, as on both mobile platforms; a range
+	 * past the end gets `416`, which Dropbox does not document.
 	 */
 	private download(account: FakeDropboxAccount, request: HttpRequest): HttpResponse {
 		const header = request.headers?.["Dropbox-API-Arg"] ?? "";
 		if (/[^\x20-\x7e]/.test(header)) return status(400, "Dropbox-API-Arg is not ASCII");
 		if (request.body !== undefined) return status(400, "a download has no body");
 		const { path } = JSON.parse(header) as { path: string };
-		const data = account.file(path);
-		if (!data) return routeError("path/not_found/", { ".tag": "path", path: { ".tag": "not_found" } });
+		const entry = account.read(path);
+		if (entry?.kind !== "file") {
+			return routeError("path/not_found/", { ".tag": "path", path: { ".tag": "not_found" } });
+		}
+		const headers = {
+			"content-type": "application/octet-stream",
+			"dropbox-api-result": JSON.stringify(metadataOf(entry)).replace(
+				/[\u007f-\uffff]/g,
+				(character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
+			),
+		};
+		const range = request.headers?.Range;
+		if (range === undefined) return { status: 200, headers, text: "", arrayBuffer: entry.data.slice(0) };
+		const bounds = /^bytes=(\d+)-(\d+)$/.exec(range);
+		if (!bounds) return status(400, `unsupported Range: ${range}`);
+		const start = Number(bounds[1]);
+		const end = Math.min(Number(bounds[2]), entry.data.byteLength - 1);
+		if (start > end) return status(416, "range not satisfiable");
 		return {
-			status: 200,
-			headers: {
-				"content-type": "application/octet-stream",
-				"dropbox-api-result": JSON.stringify(account.metadata(path)).replace(
-					/[\u007f-\uffff]/g,
-					(character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
-				),
-			},
+			status: 206,
+			headers: { ...headers, "content-range": `bytes ${start}-${end}/${entry.data.byteLength}` },
 			text: "",
-			arrayBuffer: data.slice(0),
+			arrayBuffer: entry.data.slice(start, end + 1),
 		};
 	}
 
@@ -317,29 +374,108 @@ export class FakeDropbox {
 	 * `strict_conflict`; the argument must arrive as ASCII-only JSON.
 	 */
 	private upload(account: FakeDropboxAccount, request: HttpRequest): HttpResponse {
-		const header = request.headers?.["Dropbox-API-Arg"] ?? "";
-		// HTTP headers carry only ASCII; the real service mangles anything else.
-		if (/[^\x20-\x7e]/.test(header)) return status(400, "Dropbox-API-Arg is not ASCII");
-		if (request.contentType !== "application/octet-stream" || !(request.body instanceof ArrayBuffer)) {
-			return status(400, "expected an application/octet-stream body");
+		const content = contentArg<CommitInfo>(request);
+		if ("response" in content) return content.response;
+		const committed = this.commit(account, content.arg, content.body);
+		if ("response" in committed) return committed.response;
+		// UploadError.path is a struct (UploadWriteFailed), so its fields sit beside the tag.
+		return routeError(`path/${tagPath(committed.writeError)}`, {
+			".tag": "path",
+			reason: committed.writeError,
+			upload_session_id: "session",
+		});
+	}
+
+	/** `files/upload_session/start`: a sequential session holding the first chunk. */
+	private startSession(request: HttpRequest): HttpResponse {
+		const content = contentArg<{ session_type?: string }>(request);
+		if ("response" in content) return content.response;
+		if (content.arg.session_type !== undefined && content.arg.session_type !== "sequential") {
+			return status(400, "only sequential sessions are faked");
 		}
-		const arg = JSON.parse(header) as {
-			path: string;
-			mode?: string | { ".tag": string; update?: string };
-			autorename?: boolean;
-			strict_conflict?: boolean;
-		};
-		const mode = typeof arg.mode === "string" ? { ".tag": arg.mode } : (arg.mode ?? { ".tag": "add" });
-		const existing = account.get(arg.path);
-		if (existing?.kind === "folder") return uploadConflict("folder");
-		if (existing && !arg.strict_conflict && sameBytes(existing.data, request.body)) {
+		const sessionId = `session-${this.next()}`;
+		this.sessions.set(sessionId, { data: [new Uint8Array(content.body)] });
+		return json(200, { session_id: sessionId });
+	}
+
+	/**
+	 * `files/upload_session/append_v2`: appends a chunk at the cursor's
+	 * offset, which must be the session's length so far.
+	 */
+	private appendSession(request: HttpRequest): HttpResponse {
+		const content = contentArg<{ cursor: SessionCursor }>(request);
+		if ("response" in content) return content.response;
+		const session = this.lookUpSession(content.arg.cursor);
+		if ("error" in session) return routeError(`${session.error[".tag"]}/`, session.error);
+		session.data.push(new Uint8Array(content.body));
+		return json(200, null);
+	}
+
+	/**
+	 * `files/upload_session/finish`: appends the last chunk at the cursor's
+	 * offset and commits the session's bytes as `files/upload` would. A
+	 * commit refused keeps the session with the chunk appended, as Dropbox
+	 * says: "Please retry with empty data body and updated offset."
+	 */
+	private finishSession(account: FakeDropboxAccount, request: HttpRequest): HttpResponse {
+		const content = contentArg<{ cursor: SessionCursor; commit: CommitInfo }>(request);
+		if ("response" in content) return content.response;
+		const session = this.lookUpSession(content.arg.cursor);
+		if ("error" in session) {
+			return routeError(`lookup_failed/${session.error[".tag"]}/`, { ".tag": "lookup_failed", lookup_failed: session.error });
+		}
+		session.data.push(new Uint8Array(content.body));
+		const whole = new Uint8Array(sessionLength(session));
+		let offset = 0;
+		for (const chunk of session.data) {
+			whole.set(chunk, offset);
+			offset += chunk.byteLength;
+		}
+		const committed = this.commit(account, content.arg.commit, whole.buffer);
+		if (!("response" in committed)) {
+			// UploadSessionFinishError.path is a union (WriteError), so it nests under its tag.
+			return routeError(`path/${tagPath(committed.writeError)}`, { ".tag": "path", path: committed.writeError });
+		}
+		this.sessions.delete(content.arg.cursor.session_id);
+		return committed.response;
+	}
+
+	/**
+	 * The session at `cursor`, or the UploadSessionLookupError Dropbox
+	 * answers: `not_found`, or `incorrect_offset` with the offset it
+	 * expects.
+	 */
+	private lookUpSession(cursor: SessionCursor): FakeSession | { readonly error: Tagged } {
+		const session = this.sessions.get(cursor.session_id);
+		if (!session) return { error: { ".tag": "not_found" } };
+		const length = sessionLength(session);
+		if (cursor.offset !== length) return { error: { ".tag": "incorrect_offset", correct_offset: length } };
+		return session;
+	}
+
+	/**
+	 * Writes `data` to the commit's path as `files/upload` does, honouring
+	 * the write `mode` and `strict_conflict`: the new metadata, or the
+	 * WriteError refusing it, the next of `writeRefusals` first.
+	 */
+	private commit(
+		account: FakeDropboxAccount,
+		commit: CommitInfo,
+		data: ArrayBuffer,
+	): { readonly response: HttpResponse } | { readonly writeError: Tagged } {
+		const refusal = this.writeRefusals.shift();
+		if (refusal !== undefined) return { writeError: { ".tag": refusal } };
+		const mode = typeof commit.mode === "string" ? { ".tag": commit.mode } : (commit.mode ?? { ".tag": "add" });
+		const existing = account.get(commit.path);
+		if (existing?.kind === "folder") return { writeError: conflict("folder") };
+		if (existing && !commit.strict_conflict && sameBytes(existing.data, data)) {
 			// Identical content is no conflict unless strict_conflict is set.
-			return json(200, account.metadata(arg.path));
+			return { response: json(200, account.metadata(commit.path)) };
 		}
-		if (mode[".tag"] === "add" && existing) return uploadConflict("file");
-		if (mode[".tag"] === "update" && existing?.rev !== mode.update) return uploadConflict("file");
-		account.putFile(arg.path, request.body.slice(0), `rev${this.next()}`);
-		return json(200, account.metadata(arg.path));
+		if (mode[".tag"] === "add" && existing) return { writeError: conflict("file") };
+		if (mode[".tag"] === "update" && existing?.rev !== mode.update) return { writeError: conflict("file") };
+		account.putFile(commit.path, data.slice(0), `rev${this.next()}`);
+		return { response: json(200, account.metadata(commit.path)) };
 	}
 
 	/** Issues an access token for `refreshToken`, valid for `ACCESS_TOKEN_SECONDS`. */
@@ -357,14 +493,81 @@ export class FakeDropbox {
 	}
 }
 
+/** The `files/upload` argument, and a session's `commit`. */
+interface CommitInfo {
+	readonly path: string;
+	readonly mode?: string | { readonly ".tag": string; readonly update?: string };
+	readonly autorename?: boolean;
+	readonly strict_conflict?: boolean;
+}
+
+/** Where an upload session request appends. */
+interface SessionCursor {
+	readonly session_id: string;
+	readonly offset: number;
+}
+
+/** An upload session: the chunks received so far. */
+interface FakeSession {
+	readonly data: Uint8Array[];
+}
+
+/** The bytes an upload session holds so far. */
+function sessionLength(session: FakeSession): number {
+	return session.data.reduce((total, chunk) => total + chunk.byteLength, 0);
+}
+
+/** A WriteError conflict with what is in the way. */
+function conflict(kind: "file" | "folder"): Tagged {
+	return { ".tag": "conflict", conflict: { ".tag": kind } };
+}
+
+/** The tags of a nested union value as an `error_summary` path, e.g. `conflict/file/`. */
+function tagPath(value: Tagged): string {
+	const nested = Object.values(value).find((field): field is Tagged => typeof field === "object" && field !== null && ".tag" in field);
+	return `${value[".tag"]}/${nested ? tagPath(nested) : ""}`;
+}
+
+/** A Dropbox union value: its tag plus the tag's fields. */
+interface Tagged {
+	readonly ".tag": string;
+	readonly [field: string]: unknown;
+}
+
+/**
+ * The argument of a content-upload route, from its ASCII-only
+ * `Dropbox-API-Arg` header, and its octet-stream body; or the 400 the
+ * service answers to a request without them.
+ */
+function contentArg<Arg>(
+	request: HttpRequest,
+): { readonly arg: Arg; readonly body: ArrayBuffer } | { readonly response: HttpResponse } {
+	const header = request.headers?.["Dropbox-API-Arg"] ?? "";
+	// HTTP headers carry only ASCII; the real service mangles anything else.
+	if (/[^\x20-\x7e]/.test(header)) return { response: status(400, "Dropbox-API-Arg is not ASCII") };
+	if (request.contentType !== "application/octet-stream" || !(request.body instanceof ArrayBuffer)) {
+		return { response: status(400, "expected an application/octet-stream body") };
+	}
+	return { arg: JSON.parse(header) as Arg, body: request.body };
+}
+
+/** A file revision of a fake App Folder. */
+interface FakeDropboxFile {
+	readonly kind: "file";
+	readonly path: string;
+	readonly id: string;
+	readonly data: ArrayBuffer;
+	readonly rev: string;
+}
+
 /** One entry of a fake App Folder. */
-type FakeDropboxEntry =
-	| { readonly kind: "folder"; readonly path: string; readonly id: string }
-	| { readonly kind: "file"; readonly path: string; readonly id: string; readonly data: ArrayBuffer; readonly rev: string };
+type FakeDropboxEntry = { readonly kind: "folder"; readonly path: string; readonly id: string } | FakeDropboxFile;
 
 /** A Dropbox account with its App Folder. */
 export class FakeDropboxAccount {
 	private readonly entries = new Map<string, FakeDropboxEntry>();
+	/** Every file revision ever stored, by `rev`, as Dropbox keeps file history. */
+	private readonly revisions = new Map<string, FakeDropboxFile>();
 	private lastId = 0;
 
 	/** @param accountId what `get_current_account` reports */
@@ -381,7 +584,17 @@ export class FakeDropboxAccount {
 		this.putParents(path);
 		const id = this.get(path)?.id ?? this.nextId();
 		const stored = this.get(path)?.path ?? path;
-		this.entries.set(path.toLowerCase(), { kind: "file", path: stored, id, data, rev });
+		const file: FakeDropboxFile = { kind: "file", path: stored, id, data, rev };
+		this.entries.set(path.toLowerCase(), file);
+		this.revisions.set(rev, file);
+	}
+
+	/**
+	 * The entry a ReadPath names: a path, compared without case, or
+	 * `rev:<rev>` for that revision of a file, even one replaced since.
+	 */
+	read(readPath: string): FakeDropboxEntry | undefined {
+		return readPath.startsWith("rev:") ? this.revisions.get(readPath.slice("rev:".length)) : this.get(readPath);
 	}
 
 	/** Removes the entry at `path` and everything inside it. */
@@ -416,15 +629,7 @@ export class FakeDropboxAccount {
 	metadata(path: string): Record<string, unknown> {
 		const entry = this.get(path);
 		if (!entry) throw new Error(`no entry at ${path}`);
-		const common = {
-			name: entry.path.slice(entry.path.lastIndexOf("/") + 1),
-			path_lower: entry.path.toLowerCase(),
-			path_display: entry.path,
-			id: entry.id,
-		};
-		return entry.kind === "folder"
-			? { ".tag": "folder", ...common }
-			: { ".tag": "file", ...common, rev: entry.rev, size: entry.data.byteLength };
+		return metadataOf(entry);
 	}
 
 	/** Creates the folders above `path`, as a write to it would. */
@@ -438,6 +643,19 @@ export class FakeDropboxAccount {
 		this.lastId += 1;
 		return `id:${this.accountId}-${this.lastId}`;
 	}
+}
+
+/** The Dropbox metadata of `entry`, tagged like `Metadata`. */
+function metadataOf(entry: FakeDropboxEntry): Record<string, unknown> {
+	const common = {
+		name: entry.path.slice(entry.path.lastIndexOf("/") + 1),
+		path_lower: entry.path.toLowerCase(),
+		path_display: entry.path,
+		id: entry.id,
+	};
+	return entry.kind === "folder"
+		? { ".tag": "folder", ...common }
+		: { ".tag": "file", ...common, rev: entry.rev, size: entry.data.byteLength };
 }
 
 /** Marks a request body that is not valid JSON. */
@@ -491,8 +709,8 @@ function response(code: number, text: string, contentType: string): HttpResponse
 	};
 }
 
-/** A 409 route error. */
-function routeError(summary: string, error: unknown): HttpResponse {
+/** A 409 route error, as Dropbox sends it. */
+export function routeError(summary: string, error: unknown): HttpResponse {
 	return json(409, { error_summary: summary, error });
 }
 
@@ -514,11 +732,3 @@ function writeConflict(kind: "file" | "folder" | "file_ancestor"): HttpResponse 
 	});
 }
 
-/** The `upload` error for something in the way. */
-function uploadConflict(kind: "file" | "folder"): HttpResponse {
-	return routeError(`path/conflict/${kind}/`, {
-		".tag": "path",
-		reason: { ".tag": "conflict", conflict: { ".tag": kind } },
-		upload_session_id: "session",
-	});
-}

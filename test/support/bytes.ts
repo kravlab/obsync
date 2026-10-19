@@ -8,3 +8,8 @@ export function bytes(text: string): ArrayBuffer {
 export function text(data: ArrayBuffer): string {
 	return new TextDecoder().decode(data);
 }
+
+/** `size` bytes counting up and wrapping at 251, so a misplaced part shows. */
+export function patterned(size: number): ArrayBuffer {
+	return Uint8Array.from({ length: size }, (_, index) => index % 251).buffer;
+}

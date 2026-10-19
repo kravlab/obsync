@@ -4,6 +4,7 @@ import { createSyncEngine } from "./engine/engine";
 import type { Scheduler } from "./engine/ports";
 import { ObsidianDeviceStore } from "./obsidian/device-store";
 import { ObsidianLocalVault } from "./obsidian/local-vault";
+import { ObsidianRequestLimitStore } from "./obsidian/request-limit-store";
 import { ObsidianSecretStore } from "./obsidian/secret-store";
 import { DROPBOX_APP_KEY } from "./providers/dropbox/app-key";
 import { createDropboxConnectStep } from "./providers/dropbox/connect-step";
@@ -28,7 +29,21 @@ export default class ObsyncPlugin extends Plugin {
 	 */
 	override async onload(): Promise<void> {
 		const strings = selectStrings(getLanguage());
-		const dropbox: DropboxOptions = { appKey: DROPBOX_APP_KEY, http: requestUrl, clock: { now: () => Date.now() } };
+		const requestLimit = new ObsidianRequestLimitStore(this.app);
+		const scheduler = this.scheduler();
+		const dropbox: DropboxOptions = {
+			appKey: DROPBOX_APP_KEY,
+			http: requestUrl,
+			clock: { now: () => Date.now() },
+			transfers: {
+				requestLimit: () => requestLimit.load(),
+				// A pause still pending at unload is cancelled with the plugin.
+				wait: (ms) =>
+					new Promise<void>((resolve) => {
+						scheduler.schedule(ms, resolve);
+					}),
+			},
+		};
 		const deviceStore = new ObsidianDeviceStore(this.app);
 		const secretStore = new ObsidianSecretStore(this.app);
 		const ui = new StatusIndicator(this, strings);
@@ -45,7 +60,7 @@ export default class ObsyncPlugin extends Plugin {
 			deviceStore,
 			secretStore,
 			clock: dropbox.clock,
-			scheduler: this.scheduler(),
+			scheduler,
 			ui,
 		});
 		// The engine shows Sync failed itself; an error reaching here is a
@@ -65,6 +80,7 @@ export default class ObsyncPlugin extends Plugin {
 				}).open();
 			},
 			syncNow,
+			requestLimit,
 		);
 		this.addSettingTab(settingTab);
 		await connection.showStatus();

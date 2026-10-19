@@ -15,6 +15,10 @@ export const ru: Strings = {
 	disconnect: "Отключить",
 	syncNow: "Синхронизировать сейчас",
 	settingsSyncNow: "Выгрузить новые и изменённые файлы этого устройства, затем загрузить файлы других устройств.",
+	settingsRequestLimit: "Предел на запрос (МиБ)",
+	settingsRequestLimitDescription:
+		"Файлы крупнее передаются частями такого размера, от 1 до 19 МиБ. Уменьшите его, если приложение закрывается при синхронизации больших файлов.",
+	settingsRequestLimitInvalid: "Введите целое число от 1 до 19.",
 
 	connectTitle: "Подключение к Dropbox",
 	loginInstructions: "Откройте Dropbox, разрешите доступ и вставьте код, который покажет Dropbox.",

@@ -1,6 +1,8 @@
 import { Notice, PluginSettingTab, Setting, requireApiVersion, type App, type Plugin, type SettingDefinitionItem } from "obsidian";
 import type { ConnectionService } from "../engine/connection";
 import type { DeviceIdentity } from "../engine/ports";
+import type { ObsidianRequestLimitStore } from "../obsidian/request-limit-store";
+import { parseRequestLimit } from "../engine/request-limit";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
 
@@ -14,7 +16,8 @@ interface Row {
 
 /**
  * The plugin's settings tab: this device's Connection, with Connect or
- * Disconnect, and "Sync now" while connected. It renders declaratively on
+ * Disconnect, "Sync now" while connected, and this device's per-request
+ * limit. It renders declaratively on
  * Obsidian 1.13 and later (`getSettingDefinitions`, also indexed for
  * settings search) and through `display` before that; both draw the same
  * rows.
@@ -32,6 +35,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	 * @param strings the UI strings in the user's language
 	 * @param openConnect opens the connect window
 	 * @param syncNow starts a sync of this device
+	 * @param requestLimit keeps this device's Per-request limit
 	 */
 	constructor(
 		app: App,
@@ -40,6 +44,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 		private readonly strings: Strings,
 		private readonly openConnect: () => void,
 		private readonly syncNow: () => void,
+		private readonly requestLimit: ObsidianRequestLimitStore,
 	) {
 		super(app, plugin);
 	}
@@ -52,8 +57,16 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	}
 
 	override getSettingDefinitions(): SettingDefinitionItem[] {
-		// A declarative action row runs when clicked, so it is named by what it does.
-		return this.rows().map((row) => ({ name: row.button, desc: row.description, action: row.action }));
+		const { strings } = this;
+		return [
+			// A declarative action row runs when clicked, so it is named by what it does.
+			...this.rows().map((row) => ({ name: row.button, desc: row.description, action: row.action })),
+			{
+				name: strings.settingsRequestLimit,
+				desc: strings.settingsRequestLimitDescription,
+				render: (setting) => this.drawRequestLimit(setting),
+			},
+		];
 	}
 
 	override display(): void {
@@ -69,6 +82,25 @@ export class ObsyncSettingTab extends PluginSettingTab {
 				.setDesc(row.description)
 				.addButton((button) => button.setButtonText(row.button).onClick(row.action));
 		}
+		this.drawRequestLimit(new Setting(this.containerEl));
+	}
+
+	/**
+	 * Draws the Per-request limit into `row`: a field holding the stored
+	 * limit in MiB, saved as it is typed. While the typed value is not a
+	 * limit, the stored one stays and the row says why, without a notice
+	 * per keystroke.
+	 */
+	private drawRequestLimit(row: Setting): void {
+		const { strings } = this;
+		row.setName(strings.settingsRequestLimit).setDesc(strings.settingsRequestLimitDescription);
+		row.addText((text) =>
+			text.setValue(String(this.requestLimit.load().mebibytes)).onChange((typed) => {
+				const limit = parseRequestLimit(typed);
+				if (limit !== null) this.requestLimit.save(limit);
+				row.setDesc(limit === null ? strings.settingsRequestLimitInvalid : strings.settingsRequestLimitDescription);
+			}),
+		);
 	}
 
 	/** The rows for the Connection as read last: Connect, or Disconnect and Sync now. */

@@ -67,3 +67,7 @@ _Avoid_: Safety net, mass-delete protection
 **Sync snapshot**:
 A device's own record of how its vault and the Remote looked after its last successful sync; it never leaves the device.
 _Avoid_: Sync state, manifest, index
+
+**Per-request limit**:
+The most file content a device lets a provider move in one request to or from its service; larger files move in parts. Each device sets its own.
+_Avoid_: Chunk size, request size limit, part size

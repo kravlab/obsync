@@ -25,6 +25,23 @@ export interface Metadata {
 	readonly size?: number;
 }
 
+/** What the plugin needs of a file's metadata: its revision and size. */
+export interface FileRevision {
+	readonly rev: string;
+	readonly size: number;
+}
+
+/**
+ * The revision and size of a file's metadata from `route`. A file
+ * without them is a response this provider cannot trust: `permanent`.
+ */
+export function fileRevision(file: Metadata, route: string): FileRevision {
+	if (file.rev === undefined || file.size === undefined) {
+		throw new ProviderError({ category: "permanent" }, `${route}: a file without rev or size: ${file.path_lower}`);
+	}
+	return { rev: file.rev, size: file.size };
+}
+
 /** A `list_folder` page. */
 interface ListPage {
 	readonly entries: readonly Metadata[];

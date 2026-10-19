@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createDropboxConnector } from "../../src/providers/dropbox/provider";
 import { bytes, text } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
-import { openDropboxRemote, type DropboxRemote } from "../support/dropbox-remote";
-import { FakeDropbox, json, status } from "../fakes/fake-dropbox";
+import { openDropboxRemote, testTransfers, type DropboxRemote } from "../support/dropbox-remote";
+import { FakeDropbox, json, routeError, status } from "../fakes/fake-dropbox";
 import { ManualClock } from "../fakes/manual-clock";
 
 /**
@@ -17,22 +17,23 @@ async function setUp(): Promise<DropboxRemote> {
 	return remote;
 }
 
-/** A 409 route error, as Dropbox sends it. */
-function routeError(summary: string, error: unknown) {
-	return json(409, { error_summary: summary, error });
-}
-
 describe("Dropbox provider", () => {
 	it("names the Connection's provider as the connect step does", () => {
-		const connector = createDropboxConnector({ appKey: "k", http: new FakeDropbox("k").requestUrl, clock: new ManualClock() });
+		const connector = createDropboxConnector({
+			appKey: "k",
+			http: new FakeDropbox("k").requestUrl,
+			clock: new ManualClock(),
+			transfers: testTransfers(),
+		});
 		expect(connector.providerId).toBe("dropbox");
 	});
 
-	it("reports conditional writes, case-insensitive names and the single-request size limit", async () => {
+	it("reports conditional writes, case-insensitive names and the upload-session size limit", async () => {
 		const { provider } = await setUp();
 		expect(provider.capabilities).toEqual({ conditionalWrite: true });
 		expect(provider.nameRules.caseInsensitive).toBe(true);
-		expect(provider.maxFileSize).toBe(150_000_000);
+		// 2^41 - 2^22 bytes (Dropbox API spec, upload_session/append:2).
+		expect(provider.maxFileSize).toBe(2_199_019_061_248);
 	});
 
 	it("takes each path segment's case from the entry's own name, not from path_display", async () => {
@@ -71,12 +72,12 @@ describe("Dropbox provider", () => {
 		await expectFailure(provider.list(), "permanent");
 	});
 
-	it("downloads with the argument in an ASCII-only Dropbox-API-Arg header", async () => {
+	it("uploads with the argument in an ASCII-only Dropbox-API-Arg header", async () => {
 		const { dropbox, provider } = await setUp();
 		await provider.write("ноты.md", bytes("ноты"));
 		expect(text(await provider.read("ноты.md"))).toBe("ноты");
-		const download = dropbox.requests.find((request) => request.url.endsWith("/files/download"));
-		expect(download?.headers?.["Dropbox-API-Arg"]).toBe('{"path":"/My vault/\\u043d\\u043e\\u0442\\u044b.md"}');
+		const upload = dropbox.requests.find((request) => request.url.endsWith("/files/upload"));
+		expect(upload?.headers?.["Dropbox-API-Arg"]).toMatch(/^\{"path":"\/My vault\/\\u043d\\u043e\\u0442\\u044b\.md",/);
 	});
 
 	it("deletes a file on condition of its revision with delete_v2 and parent_rev", async () => {

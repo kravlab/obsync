@@ -94,12 +94,13 @@ export class DropboxClient {
 	}
 
 	/**
-	 * Uploads `data` in one request with the `files/upload` argument `arg`,
-	 * sent in the `Dropbox-API-Arg` header.
+	 * Calls the content-upload `route` (`files/upload` or an upload session
+	 * route) with `data` as the body and `arg` in the `Dropbox-API-Arg`
+	 * header.
 	 */
-	upload(arg: unknown, data: ArrayBuffer): Promise<RouteResult> {
+	upload(route: string, arg: unknown, data: ArrayBuffer): Promise<RouteResult> {
 		return this.call((token) => ({
-			url: `${CONTENT_URL}files/upload`,
+			url: CONTENT_URL + route,
 			method: "POST",
 			contentType: "application/octet-stream",
 			body: data,
@@ -109,18 +110,24 @@ export class DropboxClient {
 	}
 
 	/**
-	 * Downloads a whole file in one request with the `files/download`
-	 * argument `arg`, sent in the `Dropbox-API-Arg` header; the body is
-	 * empty and the file's bytes come back as the response body.
+	 * Downloads a file with the `files/download` argument `arg`, sent in
+	 * the `Dropbox-API-Arg` header; the body is empty and the file's bytes
+	 * come back as the response body. With `range`, only the bytes from
+	 * `start` to `end` inclusive are asked for (`Range`), answered `206`;
+	 * any other success status is `permanent`.
 	 */
-	async download(arg: unknown): Promise<DownloadResult> {
+	async download(arg: unknown, range?: { readonly start: number; readonly end: number }): Promise<DownloadResult> {
 		const response = await this.authorized((token) => ({
 			url: `${CONTENT_URL}files/download`,
 			method: "POST",
-			headers: { Authorization: `Bearer ${token}`, "Dropbox-API-Arg": headerSafeJson(arg) },
+			headers: {
+				Authorization: `Bearer ${token}`,
+				"Dropbox-API-Arg": headerSafeJson(arg),
+				...(range === undefined ? {} : { Range: `bytes=${range.start}-${range.end}` }),
+			},
 			throw: false,
 		}));
-		if (response.status === 200) return { ok: true, data: response.arrayBuffer };
+		if (response.status === (range === undefined ? 200 : 206)) return { ok: true, data: response.arrayBuffer };
 		return { ok: false, error: routeErrorOrThrow(response) };
 	}
 

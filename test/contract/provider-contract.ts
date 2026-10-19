@@ -1,7 +1,14 @@
 import { describe, expect, it, type TestContext } from "vitest";
 import type { Provider } from "../../src/engine/provider";
-import { bytes, text } from "../support/bytes";
+import { bytes, patterned, text } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
+
+/** A Provider opened with a Per-request limit, and what its HTTP traffic was. */
+export interface LimitedRemote {
+	readonly provider: Provider;
+	/** The largest HTTP request or response body sent or received so far, in bytes. */
+	readonly largestBody: () => number;
+}
 
 /**
  * The Provider contract suite (spec, "Testing Decisions", seam 2). Every
@@ -10,10 +17,14 @@ import { expectFailure } from "../support/provider-failure";
  *
  * @param name the provider under test, shown in test names
  * @param openEmptyRemote returns a Provider bound to a new, empty Remote
+ * @param openLimitedRemote returns a Provider bound to a new, empty Remote
+ *   with the given Per-request limit in bytes, for a provider that talks
+ *   HTTP; without it the Per-request limit tests are skipped
  */
 export function describeProviderContract(
 	name: string,
 	openEmptyRemote: () => Promise<Provider>,
+	openLimitedRemote?: (limitBytes: number) => Promise<LimitedRemote>,
 ): void {
 	describe(`Provider contract: ${name}`, () => {
 		it("reads back the bytes a write stored", async () => {
@@ -173,6 +184,57 @@ export function describeProviderContract(
 			await provider.write("note.md", bytes("theirs"));
 			await expectFailure(provider.delete("note.md", { kind: "revision", revision }), "preconditionFailed");
 			expect(text(await provider.read("note.md"))).toBe("theirs");
+		});
+	});
+
+	describe(`Provider contract: ${name}, Per-request limit`, () => {
+		/** The Per-request limit these tests open the Remote with, in bytes. */
+		const LIMIT = 1000;
+
+		/** Opens a limited Remote, skipping the test for a provider without HTTP. */
+		async function openLimited(context: TestContext): Promise<LimitedRemote> {
+			if (!openLimitedRemote) context.skip();
+			return openLimitedRemote(LIMIT);
+		}
+
+		it("writes a file larger than the limit with no request above it, and lists it with its size", async (context) => {
+			const { provider, largestBody } = await openLimited(context);
+			const written = await provider.write("scan.pdf", patterned(2 * LIMIT + 500));
+			expect(written).toMatchObject({ kind: "file", path: "scan.pdf", size: 2 * LIMIT + 500 });
+			expect((await provider.list()).entries).toEqual([
+				expect.objectContaining({ path: "scan.pdf", revision: written.revision, size: 2 * LIMIT + 500 }),
+			]);
+			expect(largestBody()).toBeLessThanOrEqual(LIMIT);
+		});
+
+		it("reads back a file larger than the limit with no response above it", async (context) => {
+			const { provider, largestBody } = await openLimited(context);
+			await provider.write("scan.pdf", patterned(3 * LIMIT));
+			await provider.write("photo.jpg", patterned(LIMIT + 1));
+			expect([...new Uint8Array(await provider.read("scan.pdf"))]).toEqual([...new Uint8Array(patterned(3 * LIMIT))]);
+			expect([...new Uint8Array(await provider.read("photo.jpg"))]).toEqual([...new Uint8Array(patterned(LIMIT + 1))]);
+			expect(largestBody()).toBeLessThanOrEqual(LIMIT);
+		});
+
+		it("keeps a write above the limit conditional on absence and on the revision", async (context) => {
+			const { provider } = await openLimited(context);
+			if (!provider.capabilities.conditionalWrite) context.skip();
+			const theirs = await provider.write("scan.pdf", bytes("theirs"));
+			await expectFailure(provider.write("scan.pdf", patterned(2 * LIMIT), { kind: "absent" }), "preconditionFailed");
+			const stale = { kind: "revision", revision: "0123456789abcdef" } as const;
+			await expectFailure(provider.write("scan.pdf", patterned(2 * LIMIT), stale), "preconditionFailed");
+			expect(text(await provider.read("scan.pdf"))).toBe("theirs");
+			await provider.write("scan.pdf", patterned(2 * LIMIT), { kind: "revision", revision: theirs.revision });
+			expect((await provider.read("scan.pdf")).byteLength).toBe(2 * LIMIT);
+		});
+
+		it("reads and writes a file of exactly the limit, and an empty one", async (context) => {
+			const { provider, largestBody } = await openLimited(context);
+			await provider.write("exact.bin", patterned(LIMIT));
+			await provider.write("empty.md", new ArrayBuffer(0));
+			expect([...new Uint8Array(await provider.read("exact.bin"))]).toEqual([...new Uint8Array(patterned(LIMIT))]);
+			expect((await provider.read("empty.md")).byteLength).toBe(0);
+			expect(largestBody()).toBeLessThanOrEqual(LIMIT);
 		});
 	});
 }

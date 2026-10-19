@@ -11,7 +11,7 @@ import type { AccountAccess, ConnectStep, AuthorizationAttempt, RootCandidate } 
 import { ProviderError, type Provider } from "../../engine/provider";
 import { DropboxClient, exchangeCode } from "./client";
 import { writeFailure } from "./errors";
-import type { DropboxOptions } from "./options";
+import type { DropboxOptions, DropboxTransfers } from "./options";
 import { createPkce } from "./pkce";
 import { DROPBOX_PROVIDER_ID, createDropboxProvider } from "./provider";
 import { expectValue, listFolder, lookupTag, routeFailure, summary, writeErrorOf, type Metadata } from "./routes";
@@ -30,7 +30,7 @@ const DROPBOX_SCOPES: readonly string[] = [
 ];
 
 /** Builds the Dropbox connect step. */
-export function createDropboxConnectStep({ appKey, http, clock }: DropboxOptions): ConnectStep {
+export function createDropboxConnectStep({ appKey, http, clock, transfers }: DropboxOptions): ConnectStep {
 	return {
 		providerId: DROPBOX_PROVIDER_ID,
 
@@ -51,7 +51,7 @@ export function createDropboxConnectStep({ appKey, http, clock }: DropboxOptions
 		},
 
 		access(secret: string): AccountAccess {
-			return createAccess(new DropboxClient(http, clock, appKey, secret));
+			return createAccess(new DropboxClient(http, clock, appKey, secret), transfers);
 		},
 	};
 }
@@ -93,7 +93,7 @@ function authorizeUrl(appKey: string, challenge: string): string {
 }
 
 /** The connect-step operations of one login. */
-function createAccess(client: DropboxClient): AccountAccess {
+function createAccess(client: DropboxClient, transfers: DropboxTransfers): AccountAccess {
 	/** Whether anything exists at `path`. */
 	async function exists(path: string): Promise<boolean> {
 		const result = await client.rpc("files/get_metadata", { path });
@@ -124,7 +124,7 @@ function createAccess(client: DropboxClient): AccountAccess {
 		},
 
 		openRoot(root: string): Provider {
-			return createDropboxProvider(client, root);
+			return createDropboxProvider(client, root, transfers);
 		},
 
 		async revoke(): Promise<void> {

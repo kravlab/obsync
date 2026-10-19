@@ -6,6 +6,7 @@ import { rejection } from "../support/assertions";
 import { expectFailure } from "../support/provider-failure";
 import { ACCESS_TOKEN_SECONDS, FakeDropbox, json, status, type FakeDropboxAccount } from "../fakes/fake-dropbox";
 import { ManualClock } from "../fakes/manual-clock";
+import { testTransfers } from "../support/dropbox-remote";
 
 /** A Dropbox service with one account, and the connect step on it, sharing one clock. */
 function setUp(): {
@@ -17,7 +18,12 @@ function setUp(): {
 	const clock = new ManualClock();
 	const dropbox = new FakeDropbox("test-app-key", clock);
 	const account = dropbox.addAccount("dbid:account-1");
-	const connectStep = createDropboxConnectStep({ appKey: "test-app-key", http: dropbox.requestUrl, clock });
+	const connectStep = createDropboxConnectStep({
+		appKey: "test-app-key",
+		http: dropbox.requestUrl,
+		clock,
+		transfers: testTransfers(),
+	});
 	return { dropbox, account, clock, connectStep };
 }
 

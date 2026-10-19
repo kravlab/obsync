@@ -3,8 +3,9 @@
  * one Remote, a subfolder of the App Folder, through Dropbox's HTTP API.
  *
  * - `list` is a recursive `list_folder` of the root, paged.
- * - `read` is `files/download`, `write` is `files/upload`, each one
- *   request; chunked transfers for large files come later.
+ * - `read` is `get_metadata`, then `files/download` of that revision;
+ *   `write` is `files/upload`, or an upload session for a file above the
+ *   Per-request limit, which downloads also keep to (transfers.ts).
  * - `delete` is `delete_v2`.
  * - Conditional writes are upload modes (`add` for "absent", `update` with
  *   the known `rev`) and `delete_v2` with `parent_rev`, files only.
@@ -24,16 +25,16 @@ import {
 	type RemotePath,
 } from "../../engine/provider";
 import { DropboxClient } from "./client";
-import type { DropboxOptions } from "./options";
+import type { DropboxOptions, DropboxTransfers } from "./options";
 import { WRITE_RETRY_AFTER_MS, writeFailure, type Tagged } from "./errors";
-import { listFolder, lookupFailure, routeFailure, summary, writeErrorOf, type Metadata } from "./routes";
+import { downloadFile, uploadFile, type TransferRules } from "./transfers";
+import { fileRevision, listFolder, routeFailure, summary, writeErrorOf, type Metadata } from "./routes";
 
 /**
- * The largest file this provider accepts: Dropbox says a single upload
- * request "should not upload more than 150 MB", read here as decimal
- * megabytes, the smaller reading.
+ * The largest file this provider accepts: the most an upload session
+ * takes, 2^41 - 2^22 bytes (Dropbox API spec, `upload_session/append:2`).
  */
-const MAX_FILE_SIZE = 150_000_000;
+const MAX_FILE_SIZE = 2 ** 41 - 2 ** 22;
 
 /**
  * Dropbox paths are case-insensitive. Its other name rules are not
@@ -44,18 +45,27 @@ const NAME_RULES: NameRules = { forbiddenCharacters: [], reservedNames: [], case
 /** The id naming Dropbox in Connections and in the login secret's id. */
 export const DROPBOX_PROVIDER_ID = "dropbox";
 
-/** Builds the connector that opens a Connection's Remote on Dropbox. */
-export function createDropboxConnector({ appKey, http, clock }: DropboxOptions): ProviderConnector {
+/**
+ * Builds the connector that opens a Connection's Remote on Dropbox. Each
+ * Provider it opens keeps to the Per-request limit set at that moment.
+ */
+export function createDropboxConnector({ appKey, http, clock, transfers }: DropboxOptions): ProviderConnector {
 	return {
 		providerId: DROPBOX_PROVIDER_ID,
 		open(connection: Connection, secret: string): Promise<Provider> {
-			return Promise.resolve(createDropboxProvider(new DropboxClient(http, clock, appKey, secret), connection.remoteRoot));
+			const client = new DropboxClient(http, clock, appKey, secret);
+			return Promise.resolve(createDropboxProvider(client, connection.remoteRoot, transfers));
 		},
 	};
 }
 
-/** The Provider for the Remote at `root`, reached through `client`. */
-export function createDropboxProvider(client: DropboxClient, root: string): Provider {
+/**
+ * The Provider for the Remote at `root`, reached through `client`, with
+ * no request or response body larger than the Per-request limit as
+ * `transfers` gives it now.
+ */
+export function createDropboxProvider(client: DropboxClient, root: string, transfers: DropboxTransfers): Provider {
+	const rules: TransferRules = { limit: transfers.requestLimit(), wait: transfers.wait };
 	/** The App-Folder path of a Remote path. */
 	const full = (path: RemotePath): string => `${root}/${path}`;
 
@@ -68,19 +78,13 @@ export function createDropboxProvider(client: DropboxClient, root: string): Prov
 			return { entries: remoteEntries(root, await listFolder(client, root, true)) };
 		},
 
-		async read(path) {
-			const result = await client.download({ path: full(path) });
-			if (result.ok) return result.data;
-			throw lookupFailure("download", result.error);
+		read(path) {
+			return downloadFile(client, full(path), rules);
 		},
 
 		async write(path, data, precondition): Promise<RemoteFile> {
-			const result = await client.upload(
-				{ path: full(path), mode: writeMode(precondition), autorename: false, strict_conflict: true },
-				data,
-			);
-			if (!result.ok) throw uploadFailure(result.error);
-			const { rev, size } = result.value as { rev: string; size: number };
+			const commit = { path: full(path), mode: writeMode(precondition), autorename: false, strict_conflict: true };
+			const { rev, size } = await uploadFile(client, commit, data, rules);
 			return { kind: "file", path, revision: rev, size };
 		},
 
@@ -141,10 +145,8 @@ function remoteEntries(root: string, listed: readonly Metadata[]): RemoteEntry[]
 		const path = pathOf(entry.path_lower, entry);
 		if (entry[".tag"] === "folder") entries.push({ kind: "folder", path });
 		else if (entry[".tag"] === "file") {
-			if (entry.rev === undefined || entry.size === undefined) {
-				throw new ProviderError({ category: "permanent" }, `list_folder: a file without rev or size: ${entry.path_lower}`);
-			}
-			entries.push({ kind: "file", path, revision: entry.rev, size: entry.size });
+			const { rev, size } = fileRevision(entry, "list_folder");
+			entries.push({ kind: "file", path, revision: rev, size });
 		}
 	}
 	return entries;
@@ -165,15 +167,6 @@ function writeMode(precondition: Precondition | undefined): unknown {
 		case "revision":
 			return { ".tag": "update", update: precondition.revision };
 	}
-}
-
-/** The failure for an `upload` route error. */
-function uploadFailure(error: Tagged): ProviderError {
-	if (error[".tag"] === "path") {
-		return new ProviderError(writeFailure(error.reason as Tagged | undefined), summary(error));
-	}
-	if (error[".tag"] === "payload_too_large") return new ProviderError({ category: "tooLarge" }, summary(error));
-	return routeFailure("upload", error);
 }
 
 /**

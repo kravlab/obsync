@@ -28,6 +28,13 @@ export const en = {
 	syncNow: "Sync now",
 	/** Settings row description of Sync now. */
 	settingsSyncNow: "Upload this device's new and changed files, then download those from other devices.",
+	/** Settings row of this device's Per-request limit. */
+	settingsRequestLimit: "Per-request limit (MiB)",
+	/** Settings row description of the Per-request limit. */
+	settingsRequestLimitDescription:
+		"Larger files move in parts of this size, from 1 to 19 MiB. Lower it if the app closes while syncing large files.",
+	/** The typed Per-request limit is not one. */
+	settingsRequestLimitInvalid: "Enter a whole number from 1 to 19.",
 
 	/** Title of the connect window. */
 	connectTitle: "Connect to Dropbox",
