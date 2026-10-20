@@ -32,7 +32,7 @@ The notice popping up in Obsidian is checked by hand.
 - [x] 3. Engine: conflicts by content kind, JSON Base, Conflict copies, the notice through `UiPort` (seam 2).
 - [x] 4. Shell: notice text EN/RU (seam 3), wiring in `main.ts`.
 - [x] 5. Full test run, typecheck, lint, build with a stand-in key.
-- [ ] 6. Code review, commit, ticket closed. Review done 2026-10-20; the chosen fixes are below.
+- [x] 6. Code review, commit, ticket closed. Review done 2026-10-20; the chosen fixes are below.
 
 ## Review fixes
 
