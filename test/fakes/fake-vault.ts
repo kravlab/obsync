@@ -33,6 +33,8 @@ export class FakeVault implements LocalVault {
 	private readonly typed = new Map<VaultPath, number>();
 	/** Hooks to run once, just before the engine's next write to each path takes effect. */
 	private readonly beforeWrite = new Map<VaultPath, () => Promise<void>>();
+	/** Hooks to run once, just after the engine's next write to each path took effect. */
+	private readonly afterWrite = new Map<VaultPath, () => Promise<void>>();
 	private readonly clock: Clock;
 	readonly configDir: string;
 
@@ -74,6 +76,14 @@ export class FakeVault implements LocalVault {
 		this.beforeWrite.set(path, hook);
 	}
 
+	/**
+	 * Runs `hook` once, just after the engine's next write to `path` took
+	 * effect: the user saving again before the sync records the file.
+	 */
+	afterNextWrite(path: VaultPath, hook: () => Promise<void>): void {
+		this.afterWrite.set(path, hook);
+	}
+
 	read(path: VaultPath): Promise<ArrayBuffer> {
 		const stored = this.entries.get(path);
 		if (stored?.kind !== "file") return Promise.reject(missing(path));
@@ -83,6 +93,7 @@ export class FakeVault implements LocalVault {
 	async write(path: VaultPath, data: ArrayBuffer): Promise<void> {
 		await this.runBeforeWrite(path);
 		await this.store(path, data);
+		await this.runAfterWrite(path);
 	}
 
 	async replace(path: VaultPath, expected: ArrayBuffer, data: ArrayBuffer): Promise<boolean> {
@@ -90,7 +101,28 @@ export class FakeVault implements LocalVault {
 		const stored = this.entries.get(path);
 		if (stored?.kind !== "file" || !sameBytes(stored.data, expected)) return false;
 		await this.store(path, data);
+		await this.runAfterWrite(path);
 		return true;
+	}
+
+	/**
+	 * Rewrites the file at `path` with `data` but keeps its modification
+	 * time, as a file system with coarse timestamps or a tool that restores
+	 * mtimes would: a change that size and mtime alone cannot see.
+	 */
+	writeKeepingMtime(path: VaultPath, data: ArrayBuffer): Promise<void> {
+		const previous = this.entries.get(path);
+		if (previous?.kind !== "file") return Promise.reject(missing(path));
+		this.entries.set(path, { kind: "file", data: data.slice(0), mtime: previous.mtime });
+		this.emit({ kind: "modified", path });
+		return Promise.resolve();
+	}
+
+	/** Runs and forgets the hook waiting for the end of a write to `path`, if any. */
+	private async runAfterWrite(path: VaultPath): Promise<void> {
+		const hook = this.afterWrite.get(path);
+		this.afterWrite.delete(path);
+		if (hook) await hook();
 	}
 
 	/** Runs and forgets the hook waiting for a write to `path`, if any. */
@@ -100,12 +132,17 @@ export class FakeVault implements LocalVault {
 		if (hook) await hook();
 	}
 
-	/** Stores `data` at `path` and reports the change. */
+	/**
+	 * Stores `data` at `path` and reports the change. A rewrite advances
+	 * `mtime` by at least 1 ms when the clock has not moved.
+	 */
 	private store(path: VaultPath, data: ArrayBuffer): Promise<void> {
 		if (!this.isFolder(parentOf(path))) return Promise.reject(missing(parentOf(path)));
-		const existed = this.entries.has(path);
-		this.entries.set(path, { kind: "file", data: data.slice(0), mtime: this.clock.now() });
-		this.emit({ kind: existed ? "modified" : "created", path });
+		const previous = this.entries.get(path);
+		const now = this.clock.now();
+		const mtime = previous?.kind === "file" && now <= previous.mtime ? previous.mtime + 1 : now;
+		this.entries.set(path, { kind: "file", data: data.slice(0), mtime });
+		this.emit({ kind: previous ? "modified" : "created", path });
 		return Promise.resolve();
 	}
 

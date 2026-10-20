@@ -29,12 +29,70 @@ describe("Dropbox provider", () => {
 		expect(connector.providerId).toBe("dropbox");
 	});
 
-	it("reports conditional writes, case-insensitive names and the upload-session size limit", async () => {
+	it("reports conditional writes, the change feed, case-insensitive names and the upload-session size limit", async () => {
 		const { provider } = await setUp();
-		expect(provider.capabilities).toEqual({ conditionalWrite: true });
+		expect(provider.capabilities).toEqual({
+			conditionalWrite: true,
+			changeFeed: { changes: expect.any(Function) as unknown },
+		});
 		expect(provider.nameRules.caseInsensitive).toBe(true);
 		// 2^41 - 2^22 bytes (Dropbox API spec, upload_session/append:2).
 		expect(provider.maxFileSize).toBe(2_199_019_061_248);
+	});
+
+	it("pages through list_folder/continue in the change feed and leaves out entries outside the Remote", async () => {
+		const { account, dropbox, provider } = await setUp();
+		const { cursor } = await provider.list();
+		account.putFolder("/Other vault");
+		account.putFile("/Other vault/outside.md", bytes("out"), "rev90");
+		await provider.createFolder("Notes");
+		const first = await provider.write("Notes/a.md", bytes("a"));
+		const second = await provider.write("Notes/b.md", bytes("b"));
+		dropbox.listPageSize = 1;
+
+		const batch = await provider.capabilities.changeFeed!.changes(cursor!);
+		expect(batch.changes).toEqual([
+			{ kind: "folder", path: "Notes" },
+			{ kind: "file", path: "Notes/a.md", revision: first.revision, size: 1 },
+			{ kind: "file", path: "Notes/b.md", revision: second.revision, size: 1 },
+		]);
+	});
+
+	it("reports the change feed's entries in Dropbox's order, deletions included, for the engine to apply in turn", async () => {
+		const { dropbox, provider } = await setUp();
+		const meta = (tag: string, name: string, extra: Record<string, unknown> = {}) => ({
+			".tag": tag,
+			name: name.slice(name.lastIndexOf("/") + 1),
+			path_lower: `/my vault/${name.toLowerCase()}`,
+			path_display: `/My vault/${name}`,
+			...extra,
+		});
+		dropbox.interceptions.push(
+			json(200, {
+				entries: [
+					meta("deleted", "a"),
+					meta("folder", "a"),
+					meta("file", "a/new.md", { rev: "015a0000000001", size: 3 }),
+				],
+				cursor: "next",
+				has_more: false,
+			}),
+		);
+
+		const batch = await provider.capabilities.changeFeed!.changes("previous");
+
+		expect(batch.changes).toEqual([
+			{ kind: "deleted", path: "a" },
+			{ kind: "folder", path: "a" },
+			{ kind: "file", path: "a/new.md", revision: "015a0000000001", size: 3 },
+		]);
+	});
+
+	it("maps a cursor reset in the change feed to cursorLost", async () => {
+		const { dropbox, provider } = await setUp();
+		const { cursor } = await provider.list();
+		dropbox.interceptions.push(routeError("reset/", { ".tag": "reset" }));
+		await expectFailure(provider.capabilities.changeFeed!.changes(cursor!), "cursorLost");
 	});
 
 	it("takes each path segment's case from the entry's own name, not from path_display", async () => {

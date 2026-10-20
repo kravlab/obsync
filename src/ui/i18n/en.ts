@@ -13,6 +13,8 @@ export const en = {
 	statusSyncing: "Syncing…",
 	/** Sync status after a sync finished. */
 	statusSynced: "Synced",
+	/** Sync status when the Remote could not be reached; sync retries on its own. */
+	statusOffline: "Offline",
 	/** Sync status after a sync stopped on a failure. */
 	statusSyncFailed: "Sync failed",
 
@@ -26,8 +28,22 @@ export const en = {
 	disconnect: "Disconnect",
 	/** The command and button that sync this device at once. */
 	syncNow: "Sync now",
+	/** The command that lists the whole Remote instead of using the change feed. */
+	fullReconcile: "Full reconcile",
 	/** Settings row description of Sync now. */
 	settingsSyncNow: "Upload this device's new and changed files, then download those from other devices.",
+	/** Settings row of this device's post-edit pause. */
+	settingsEditPause: "Post-edit pause (seconds)",
+	/** Settings row description of the post-edit pause. */
+	settingsEditPauseDescription: "How long to wait after an edit before syncing, from 1 to 60 seconds.",
+	/** The typed post-edit pause is not one. */
+	settingsEditPauseInvalid: "Enter a whole number from 1 to 60.",
+	/** Settings row of this device's polling interval. */
+	settingsPollInterval: "Polling interval (seconds)",
+	/** Settings row description of the polling interval. */
+	settingsPollIntervalDescription: "How often to check for changes from other devices, from 10 to 3600 seconds.",
+	/** The typed polling interval is not one. */
+	settingsPollIntervalInvalid: "Enter a whole number from 10 to 3600.",
 	/** Settings row of this device's Per-request limit. */
 	settingsRequestLimit: "Per-request limit (MiB)",
 	/** Settings row description of the Per-request limit. */

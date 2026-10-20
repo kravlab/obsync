@@ -104,7 +104,8 @@ function createAccess(client: DropboxClient, transfers: DropboxTransfers): Accou
 
 	return {
 		async listRoots(marker: string): Promise<readonly RootCandidate[]> {
-			const folders = (await listFolder(client, "", false)).filter((entry) => entry[".tag"] === "folder");
+			const { entries } = await listFolder(client, "", false);
+			const folders = entries.filter((entry) => entry[".tag"] === "folder");
 			const roots: RootCandidate[] = [];
 			for (const folder of folders) {
 				roots.push({

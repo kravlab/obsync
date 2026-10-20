@@ -73,7 +73,7 @@ export interface LocalVault {
 	/**
 	 * When the user last typed into `path` in an editor, in ms since the
 	 * epoch as the engine's Clock counts, or null if not since the plugin
-	 * started. A note typed into within the typing pause is not written.
+	 * started. A note typed into within the post-edit pause is not written.
 	 */
 	lastTypedAt(path: VaultPath): number | null;
 	/**

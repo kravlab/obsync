@@ -143,6 +143,59 @@ export function describeProviderContract(
 		});
 	});
 
+	describe(`Provider contract: ${name}, change feed`, () => {
+		/** Opens a Remote, skipping the test if the provider lacks the Capability. */
+		async function openFeed(context: TestContext): Promise<Provider> {
+			const provider = await openEmptyRemote();
+			if (!provider.capabilities.changeFeed) context.skip();
+			return provider;
+		}
+
+		it("reports created, overwritten and deleted entries since the listing's cursor", async (context) => {
+			const provider = await openFeed(context);
+			const feed = provider.capabilities.changeFeed!;
+			await provider.write("kept.md", bytes("v1"));
+			await provider.write("gone.md", bytes("gone"));
+			const { cursor } = await provider.list();
+			expect(cursor).toEqual(expect.any(String));
+
+			const updated = await provider.write("kept.md", bytes("v2"));
+			const folder = await provider.createFolder("notes");
+			const added = await provider.write("notes/added.md", bytes("added"));
+			await provider.delete("gone.md");
+
+			const { changes } = await feed.changes(cursor!);
+			expect(changes).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ kind: "file", path: "kept.md", revision: updated.revision }),
+					expect.objectContaining({ kind: "folder", path: folder.path }),
+					expect.objectContaining({ kind: "file", path: "notes/added.md", revision: added.revision }),
+					{ kind: "deleted", path: "gone.md" },
+				]),
+			);
+			expect(changes).toHaveLength(4);
+		});
+
+		it("continues from the cursor the previous batch returned", async (context) => {
+			const provider = await openFeed(context);
+			const feed = provider.capabilities.changeFeed!;
+			const { cursor } = await provider.list();
+			await provider.write("one.md", bytes("1"));
+			const first = await feed.changes(cursor!);
+			const second = await provider.write("two.md", bytes("2"));
+
+			const next = await feed.changes(first.cursor);
+			expect(next.changes).toEqual([
+				expect.objectContaining({ kind: "file", path: "two.md", revision: second.revision }),
+			]);
+		});
+
+		it("fails an unknown cursor with cursorLost", async (context) => {
+			const provider = await openFeed(context);
+			await expectFailure(provider.capabilities.changeFeed!.changes("unknown-cursor"), "cursorLost");
+		});
+	});
+
 	describe(`Provider contract: ${name}, conditional write`, () => {
 		/** Opens a Remote, skipping the test if the provider lacks the Capability. */
 		async function openConditional(context: TestContext): Promise<Provider> {

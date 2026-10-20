@@ -4,10 +4,11 @@ import {
 	type DeviceStore,
 	type EnginePorts,
 	type ProviderConnector,
+	type RemoteFeed,
 	type SecretStore,
 	type UiPort,
 } from "../../src/engine/ports";
-import type { VaultPath } from "../../src/engine/local-vault";
+import type { LocalVault, VaultPath } from "../../src/engine/local-vault";
 import {
 	DEFAULT_REMOTE_SETTINGS,
 	METADATA_FOLDER,
@@ -16,10 +17,12 @@ import {
 } from "../../src/engine/remote-metadata";
 import type { Provider } from "../../src/engine/provider";
 import type { SyncStatus } from "../../src/engine/status";
+import { DEFAULT_SYNC_SCHEDULE, type SyncSchedule } from "../../src/engine/sync-schedule";
 import type { SnapshotEntry, SyncSnapshot } from "../../src/engine/sync-snapshot";
 import type { FakeProvider } from "./fake-provider";
 import type { FakeRemote } from "./fake-remote";
 import { FakeVault } from "./fake-vault";
+import { CrashPoints } from "./crash-points";
 import { ManualClock } from "./manual-clock";
 import { ManualScheduler } from "./manual-scheduler";
 
@@ -32,6 +35,8 @@ export class InMemoryDeviceStore implements DeviceStore {
 	readonly snapshot = new Map<VaultPath, SnapshotEntry>();
 	/** The Base of each text file, by vault path. */
 	readonly bases = new Map<VaultPath, ArrayBuffer>();
+	/** The Remote change-feed state from the last completed sync, if any. */
+	remoteFeed: RemoteFeed | null = null;
 
 	/** @param connection this device's Connection, or null for none */
 	constructor(public connection: Connection | null = null) {}
@@ -60,10 +65,24 @@ export class InMemoryDeviceStore implements DeviceStore {
 		return Promise.resolve(this.bases.get(path)?.slice(0) ?? null);
 	}
 
+	loadRemoteFeed(): Promise<RemoteFeed | null> {
+		return Promise.resolve(
+			this.remoteFeed === null
+				? null
+				: { cursor: this.remoteFeed.cursor, entries: [...this.remoteFeed.entries] },
+		);
+	}
+
+	saveRemoteFeed(feed: RemoteFeed | null): Promise<void> {
+		this.remoteFeed = feed === null ? null : { cursor: feed.cursor, entries: [...feed.entries] };
+		return Promise.resolve();
+	}
+
 	clear(): Promise<void> {
 		this.connection = null;
 		this.snapshot.clear();
 		this.bases.clear();
+		this.remoteFeed = null;
 		return Promise.resolve();
 	}
 }
@@ -102,6 +121,11 @@ export class RecordingUi implements UiPort {
 
 /** One simulated device: its fakes and the ports built from them. */
 export interface TestDevice {
+	/**
+	 * Where the device can crash: its provider's operations and the engine's
+	 * vault writes and Device store saves, counted together.
+	 */
+	readonly crash: CrashPoints;
 	/** The device's one Provider on the Remote, which tests steer (faults, crashes). */
 	readonly provider: FakeProvider;
 	readonly vault: FakeVault;
@@ -110,6 +134,8 @@ export interface TestDevice {
 	readonly clock: ManualClock;
 	readonly scheduler: ManualScheduler;
 	readonly ui: RecordingUi;
+	/** The device's schedule settings; tests may replace it at any time. */
+	schedule: SyncSchedule;
 	readonly ports: EnginePorts;
 }
 
@@ -126,12 +152,14 @@ export function createTestDevice(remote: FakeRemote): TestDevice {
 	const secretStore = new InMemorySecretStore();
 	const scheduler = new ManualScheduler(clock);
 	const ui = new RecordingUi();
-	const provider = remote.openProvider();
+	const crash = new CrashPoints();
+	const provider = remote.openProvider(crash);
 	const providers: ProviderConnector = {
 		providerId: TEST_PROVIDER_ID,
 		open: (): Promise<Provider> => Promise.resolve(provider),
 	};
-	return {
+	const device: TestDevice = {
+		crash,
 		provider,
 		vault,
 		deviceStore,
@@ -139,8 +167,19 @@ export function createTestDevice(remote: FakeRemote): TestDevice {
 		clock,
 		scheduler,
 		ui,
-		ports: { providers, vault, deviceStore, secretStore, clock, scheduler, ui },
+		schedule: DEFAULT_SYNC_SCHEDULE,
+		ports: {
+			providers,
+			vault: crashingVault(vault, crash),
+			deviceStore: crashingDeviceStore(deviceStore, crash),
+			secretStore,
+			clock,
+			scheduler,
+			ui,
+			schedule: () => device.schedule,
+		},
 	};
+	return device;
 }
 
 /**
@@ -162,4 +201,36 @@ export function connectTestDevice(remote: FakeRemote, name: string): TestDevice 
 	device.deviceStore.connection = { accountId: "account", remoteRoot: "", device: { id: `${name}-id`, name } };
 	device.secretStore.setSecret(providerSecretId(TEST_PROVIDER_ID), `${name}-secret`);
 	return device;
+}
+
+/** `vault` as the engine sees it, each write a step the device can crash at. */
+function crashingVault(vault: FakeVault, crash: CrashPoints): LocalVault {
+	return {
+		configDir: vault.configDir,
+		list: () => vault.list(),
+		stat: (path) => vault.stat(path),
+		read: (path) => vault.read(path),
+		write: (path, data) => crash.step(`vault write ${path}`, () => vault.write(path, data)),
+		replace: (path, expected, data) => crash.step(`vault replace ${path}`, () => vault.replace(path, expected, data)),
+		createFolder: (path) => crash.step(`vault createFolder ${path}`, () => vault.createFolder(path)),
+		trash: (path) => crash.step(`vault trash ${path}`, () => vault.trash(path)),
+		rename: (from, to) => crash.step(`vault rename ${from}`, () => vault.rename(from, to)),
+		lastTypedAt: (path) => vault.lastTypedAt(path),
+		onChange: (listener) => vault.onChange(listener),
+	};
+}
+
+/** `store` as the engine sees it, each save a step the device can crash at. */
+function crashingDeviceStore(store: InMemoryDeviceStore, crash: CrashPoints): DeviceStore {
+	return {
+		loadConnection: () => store.loadConnection(),
+		saveConnection: (connection) => crash.step("save Connection", () => store.saveConnection(connection)),
+		loadSnapshot: () => store.loadSnapshot(),
+		saveSnapshotEntry: (path, entry, base) =>
+			crash.step(`save snapshot entry ${path}`, () => store.saveSnapshotEntry(path, entry, base)),
+		loadBase: (path) => store.loadBase(path),
+		loadRemoteFeed: () => store.loadRemoteFeed(),
+		saveRemoteFeed: (feed) => crash.step("save Remote feed", () => store.saveRemoteFeed(feed)),
+		clear: () => crash.step("clear Device store", () => store.clear()),
+	};
 }

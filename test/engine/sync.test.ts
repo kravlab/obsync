@@ -150,6 +150,7 @@ describe("syncing changed files", () => {
 			kind: "file",
 			revision: stored?.kind === "file" ? stored.revision : undefined,
 			hash: expect.any(String) as unknown,
+			stat: { size: 2, mtime: 1 },
 		});
 	});
 
@@ -357,7 +358,7 @@ describe("concurrent changes and interruptions", () => {
 		expect(await vaultText(laptop, "note.md")).toBe(merged);
 	});
 
-	it("does not overwrite a vault file edited while its Remote version downloads", async () => {
+	it("does not overwrite a vault file edited while its Remote version downloads, merging the two instead", async () => {
 		const { laptop, phone } = await syncedPair("v1");
 		await laptop.vault.write("note.md", bytes("v2 from laptop"));
 		await syncNow(laptop);
@@ -365,7 +366,9 @@ describe("concurrent changes and interruptions", () => {
 
 		await syncNow(phone);
 
-		expect(await vaultText(phone, "note.md")).toBe("typed meanwhile");
+		expect(await vaultText(phone, "note.md")).toBe(
+			"<<<<<<< Phone\ntyped meanwhile\n=======\nv2 from laptop\n>>>>>>> Remote\n",
+		);
 	});
 
 	it("completes on the next sync what a crash cut off, with nothing lost or doubled", async () => {
@@ -423,11 +426,15 @@ describe("sync status and runs", () => {
 		expect(mirror(remote)).toEqual([]);
 	});
 
-	it("shows Sync failed when the Remote cannot be reached, and Synced once it can", async () => {
+	it("shows Offline when the Remote cannot be reached, Sync failed on a permanent failure, and Synced once it recovers", async () => {
 		const remote = new FakeRemote();
 		const laptop = connectTestDevice(remote, "Laptop");
 		laptop.provider.failNext("list", { category: "transient" });
 
+		await syncNow(laptop);
+		expect(laptop.ui.lastStatus).toEqual({ state: "offline" });
+
+		laptop.provider.failNext("list", { category: "permanent" });
 		await syncNow(laptop);
 		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed" });
 

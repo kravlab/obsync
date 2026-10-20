@@ -20,7 +20,7 @@
  *   would need a folder where a file is.
  */
 import type { VaultEntry, VaultPath } from "./local-vault";
-import { ancestorsOf, foldersDownTo, isWithin, nameOf, parentOf } from "./paths";
+import { ancestorsOf, foldersDownTo, isWithin, nameOf, parentOf, pathKey } from "./paths";
 import type { RemoteEntry, RemotePath } from "./provider";
 import { METADATA_FOLDER } from "./remote-metadata";
 
@@ -48,7 +48,7 @@ export function syncListing(
 	{ configDir, caseInsensitive }: ListingRules,
 ): SyncListing {
 	/** The key paths are matched by. */
-	const key = (path: string): string => (caseInsensitive ? path.toLowerCase() : path);
+	const key = (path: string): string => pathKey(path, caseInsensitive);
 	/** Whether `path` lies in a folder that is not synced. */
 	const excluded = (path: string): boolean =>
 		isWithin(key(path), key(METADATA_FOLDER)) || isWithin(key(path), key(configDir));

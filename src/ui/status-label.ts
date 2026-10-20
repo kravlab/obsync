@@ -16,6 +16,8 @@ export function statusLabel(status: SyncStatus, strings: Strings): string {
 			return strings.statusSyncing;
 		case "synced":
 			return strings.statusSynced;
+		case "offline":
+			return strings.statusOffline;
 		case "syncFailed":
 			return strings.statusSyncFailed;
 	}

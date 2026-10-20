@@ -22,6 +22,14 @@ describe("FakeVault", () => {
 		expect(await vault.stat("note.md")).toMatchObject({ mtime: 1_500 });
 	});
 
+	it("advances the modification time when a file is rewritten without the clock moving", async () => {
+		const clock = new ManualClock(1_000);
+		const vault = new FakeVault({ clock });
+		await vault.write("note.md", bytes("one"));
+		await vault.write("note.md", bytes("two"));
+		expect(await vault.stat("note.md")).toMatchObject({ mtime: 1_001 });
+	});
+
 	it("returns null from stat for a missing path", async () => {
 		expect(await new FakeVault().stat("missing.md")).toBeNull();
 	});

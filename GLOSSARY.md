@@ -71,3 +71,23 @@ _Avoid_: Sync state, manifest, index
 **Per-request limit**:
 The most file content a device lets a provider move in one request to or from its service; larger files move in parts. Each device sets its own.
 _Avoid_: Chunk size, request size limit, part size
+
+**Post-edit pause**:
+The quiet time a device waits after the last edit before it syncs; the note being typed in is not written by a sync until it has passed.
+_Avoid_: Typing pause, debounce, delay
+
+**Polling interval**:
+How often a device checks the Remote for changes while Obsidian is open.
+_Avoid_: Refresh rate, poll period
+
+**Change feed**:
+A provider's report of what changed on the Remote since a point it marked, which a device reads instead of listing the whole Remote.
+_Avoid_: Delta, change log, journal (a Device journal is something else)
+
+**Full reconcile**:
+A sync that lists the whole Remote instead of reading the change feed.
+_Avoid_: Full sync, rescan
+
+**Offline**:
+The state of a device that cannot reach the Remote: it retries by itself, with growing waits, and shows no notices.
+_Avoid_: Disconnected (that is "Not connected"), sync error

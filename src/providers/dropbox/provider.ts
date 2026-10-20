@@ -16,6 +16,8 @@
 import type { Connection, ProviderConnector } from "../../engine/ports";
 import {
 	ProviderError,
+	type Change,
+	type ChangeBatch,
 	type Listing,
 	type NameRules,
 	type Precondition,
@@ -28,7 +30,7 @@ import { DropboxClient } from "./client";
 import type { DropboxOptions, DropboxTransfers } from "./options";
 import { WRITE_RETRY_AFTER_MS, writeFailure, type Tagged } from "./errors";
 import { downloadFile, uploadFile, type TransferRules } from "./transfers";
-import { fileRevision, listFolder, routeFailure, summary, writeErrorOf, type Metadata } from "./routes";
+import { fileRevision, listFolder, listFolderContinue, routeFailure, summary, writeErrorOf, type Metadata } from "./routes";
 
 /**
  * The largest file this provider accepts: the most an upload session
@@ -70,12 +72,21 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 	const full = (path: RemotePath): string => `${root}/${path}`;
 
 	return {
-		capabilities: { conditionalWrite: true },
+		capabilities: {
+			conditionalWrite: true,
+			changeFeed: {
+				async changes(cursor: string): Promise<ChangeBatch> {
+					const batch = await listFolderContinue(client, cursor);
+					return { changes: remoteChanges(root, batch.entries, "list_folder/continue"), cursor: batch.cursor };
+				},
+			},
+		},
 		nameRules: NAME_RULES,
 		maxFileSize: MAX_FILE_SIZE,
 
 		async list(): Promise<Listing> {
-			return { entries: remoteEntries(root, await listFolder(client, root, true)) };
+			const batch = await listFolder(client, root, true);
+			return { entries: remoteEntries(root, batch.entries), cursor: batch.cursor };
 		},
 
 		read(path) {
@@ -111,16 +122,28 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 }
 
 /**
- * The listing entries below `root`, by Remote path. `path_display` has
- * the right case only in its last component, so each path is rebuilt from
- * the entries' own `name`s along `path_lower`; the root itself, entries
- * outside it and deleted entries are left out. A file without its `rev`
- * or `size` is a response this provider cannot trust: it fails the
- * listing as `permanent`.
+ * The present entries below `root`, by Remote path: the changes of a full
+ * listing with any `deleted` entries left out.
  */
 function remoteEntries(root: string, listed: readonly Metadata[]): RemoteEntry[] {
+	return remoteChanges(root, listed, "list_folder").filter((change): change is RemoteEntry => change.kind !== "deleted");
+}
+
+/**
+ * The changes below `root`, by Remote path, from `route`. `path_display`
+ * has the right case only in its last component, so each path is rebuilt
+ * from the entries' own `name`s along `path_lower`; the root itself and
+ * entries outside it are left out. The changes keep Dropbox's order, a
+ * path appearing as often as Dropbox reports it, since each entry is to
+ * be applied in turn. A file without its `rev` or `size` is a response
+ * this provider cannot trust: it fails as `permanent`.
+ */
+function remoteChanges(root: string, listed: readonly Metadata[], route: string): Change[] {
 	const rootLower = root.toLowerCase();
-	const byLower = new Map(listed.map((entry) => [entry.path_lower, entry] as const));
+	const byLower = new Map<string, Metadata>();
+	for (const entry of listed) {
+		byLower.set(entry.path_lower, entry);
+	}
 	const paths = new Map<string, RemotePath>([[rootLower, ""]]);
 
 	/** The Remote path of the entry at `lower`, from its ancestors' names. */
@@ -129,7 +152,7 @@ function remoteEntries(root: string, listed: readonly Metadata[]): RemoteEntry[]
 		if (known !== undefined) return known;
 		const parentLower = lower.slice(0, lower.lastIndexOf("/"));
 		const parent = byLower.get(parentLower);
-		// A parent missing from the listing keeps its displayed name.
+		// A parent missing from the batch keeps its displayed name.
 		const parentPath =
 			parent === undefined
 				? entry.path_display.slice(root.length + 1, entry.path_display.lastIndexOf("/"))
@@ -139,17 +162,19 @@ function remoteEntries(root: string, listed: readonly Metadata[]): RemoteEntry[]
 		return path;
 	}
 
-	const entries: RemoteEntry[] = [];
+	const changes: Change[] = [];
 	for (const entry of listed) {
-		if (!entry.path_lower.startsWith(`${rootLower}/`) || entry[".tag"] === "deleted") continue;
-		const path = pathOf(entry.path_lower, entry);
-		if (entry[".tag"] === "folder") entries.push({ kind: "folder", path });
+		const lower = entry.path_lower;
+		if (!lower.startsWith(`${rootLower}/`)) continue;
+		const path = pathOf(lower, entry);
+		if (entry[".tag"] === "deleted") changes.push({ kind: "deleted", path });
+		else if (entry[".tag"] === "folder") changes.push({ kind: "folder", path });
 		else if (entry[".tag"] === "file") {
-			const { rev, size } = fileRevision(entry, "list_folder");
-			entries.push({ kind: "file", path, revision: rev, size });
+			const { rev, size } = fileRevision(entry, route);
+			changes.push({ kind: "file", path, revision: rev, size });
 		}
 	}
-	return entries;
+	return changes;
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { App } from "obsidian";
 import type { VaultPath } from "../engine/local-vault";
-import type { Connection, DeviceStore } from "../engine/ports";
+import type { Connection, DeviceStore, RemoteFeed } from "../engine/ports";
+import type { RemoteEntry } from "../engine/provider";
 import type { SnapshotEntry, SyncSnapshot } from "../engine/sync-snapshot";
 
 /** The localStorage key of this vault's Connection. */
@@ -17,16 +18,22 @@ const SNAPSHOT_FORMAT_VERSION = 1;
 
 /**
  * The snapshot database's IndexedDB schema version: 1 held the entries
- * only, 2 adds the Bases. A database of version 1 is upgraded in place,
- * keeping its entries.
+ * only, 2 added the Bases, 3 adds the Remote change-feed state. An older
+ * database is upgraded in place, keeping its existing stores.
  */
-const SNAPSHOT_SCHEMA_VERSION = 2;
+const SNAPSHOT_SCHEMA_VERSION = 3;
 
 /** The object store holding one snapshot entry per vault path. */
 const ENTRIES = "entries";
 
 /** The object store holding the Base of each text file, by vault path. */
 const BASES = "bases";
+
+/** The object store holding the Remote change-feed state. */
+const FEED = "feed";
+
+/** The one key in `FEED` holding the current Remote change-feed state. */
+const CURRENT_FEED_KEY = "current";
 
 /**
  * The Device store on this device only, never in `data.json` or the
@@ -100,6 +107,26 @@ export class ObsidianDeviceStore implements DeviceStore {
 		return stored instanceof ArrayBuffer ? stored : null;
 	}
 
+	async loadRemoteFeed(): Promise<RemoteFeed | null> {
+		const name = this.databaseName();
+		if (name === null) return null;
+		const request = (await this.open(name)).transaction(FEED, "readonly").objectStore(FEED).get(CURRENT_FEED_KEY);
+		const stored = await new Promise<unknown>((resolve, reject) => {
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error ?? new Error("Remote feed read failed"));
+		});
+		return parseRemoteFeed(stored);
+	}
+
+	async saveRemoteFeed(feed: RemoteFeed | null): Promise<void> {
+		const name = this.databaseName() ?? this.newDatabase();
+		const transaction = (await this.open(name)).transaction(FEED, "readwrite");
+		const store = transaction.objectStore(FEED);
+		if (feed === null) store.delete(CURRENT_FEED_KEY);
+		else store.put(feed, CURRENT_FEED_KEY);
+		await completion(transaction);
+	}
+
 	async clear(): Promise<void> {
 		this.app.saveLocalStorage(CONNECTION_KEY, null);
 		const stored = this.storedDatabase();
@@ -145,10 +172,10 @@ export class ObsidianDeviceStore implements DeviceStore {
 
 	/**
 	 * Opens the database `name`, once, creating the object stores it lacks:
-	 * both on first use, the Bases' when upgrading from schema version 1.
-	 * An upgrade another connection blocks fails instead of waiting, and
-	 * this connection closes when another one needs to upgrade, so neither
-	 * side hangs.
+	 * all three on first use, the newer ones when upgrading from an older
+	 * schema version. An upgrade another connection blocks fails instead of
+	 * waiting, and this connection closes when another one needs to upgrade,
+	 * so neither side hangs.
 	 */
 	private open(name: string): Promise<IDBDatabase> {
 		if (this.database?.name !== name) {
@@ -156,7 +183,7 @@ export class ObsidianDeviceStore implements DeviceStore {
 				const request = indexedDB.open(name, SNAPSHOT_SCHEMA_VERSION);
 				request.onupgradeneeded = () => {
 					const database = request.result;
-					for (const store of [ENTRIES, BASES]) {
+					for (const store of [ENTRIES, BASES, FEED]) {
 						if (!database.objectStoreNames.contains(store)) database.createObjectStore(store);
 					}
 				};
@@ -219,9 +246,33 @@ function parseConnection(stored: unknown): Connection | null {
 function parseEntry(stored: unknown): SnapshotEntry | null {
 	if (!isRecord(stored)) return null;
 	if (stored.kind === "folder") return { kind: "folder" };
-	const { kind, revision, hash } = stored;
+	const { kind, revision, hash, stat } = stored;
 	if (kind !== "file" || typeof revision !== "string" || typeof hash !== "string") return null;
-	return { kind, revision, hash };
+	// An entry without a valid stat stays usable: its file is hashed again on the next sync.
+	const valid = isRecord(stat) && typeof stat.size === "number" && typeof stat.mtime === "number";
+	return valid ? { kind, revision, hash, stat: { size: stat.size as number, mtime: stat.mtime as number } } : { kind, revision, hash };
+}
+
+/** The Remote feed state in a stored record, or null if it holds no valid one. */
+function parseRemoteFeed(stored: unknown): RemoteFeed | null {
+	if (!isRecord(stored) || typeof stored.cursor !== "string" || !Array.isArray(stored.entries)) return null;
+	const entries: RemoteEntry[] = [];
+	for (const item of stored.entries) {
+		const entry = parseRemoteEntry(item);
+		if (entry === null) return null;
+		entries.push(entry);
+	}
+	return { cursor: stored.cursor, entries };
+}
+
+/** One listed Remote entry in a stored feed record, or null if invalid. */
+function parseRemoteEntry(stored: unknown): RemoteEntry | null {
+	if (!isRecord(stored) || typeof stored.path !== "string") return null;
+	if (stored.kind === "folder") return { kind: "folder", path: stored.path };
+	if (stored.kind === "file" && typeof stored.revision === "string" && typeof stored.size === "number") {
+		return { kind: "file", path: stored.path, revision: stored.revision, size: stored.size };
+	}
+	return null;
 }
 
 /** Whether `value` is a non-null object, whose fields can be read. */

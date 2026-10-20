@@ -49,20 +49,44 @@ interface ListPage {
 	readonly has_more: boolean;
 }
 
+/** Every entry a `list_folder` or `list_folder/continue` run yielded, and the cursor after the last page. */
+export interface FolderBatch {
+	/** The entries of every page, in Dropbox's order. */
+	readonly entries: readonly Metadata[];
+	/** The cursor after the last page, where `list_folder/continue` picks up. */
+	readonly cursor: string;
+}
+
 /**
  * Every entry `list_folder` gives for `path` ("" for the App Folder),
- * following `has_more`. A missing folder is `notFound`; a cursor Dropbox
- * reset while paging (`reset`) is `cursorLost`.
+ * following `has_more`, and the cursor after the last page. A missing
+ * folder is `notFound`; a cursor Dropbox reset while paging (`reset`) is
+ * `cursorLost`.
  */
-export async function listFolder(client: DropboxClient, path: string, recursive: boolean): Promise<Metadata[]> {
-	const entries: Metadata[] = [];
-	let page = listPage(await client.rpc("files/list_folder", { path, recursive }), "list_folder");
-	entries.push(...page.entries);
+export async function listFolder(client: DropboxClient, path: string, recursive: boolean): Promise<FolderBatch> {
+	const first = listPage(await client.rpc("files/list_folder", { path, recursive }), "list_folder");
+	return followPages(client, first);
+}
+
+/**
+ * Every entry `list_folder/continue` gives from `cursor`, following
+ * `has_more`, and the cursor after the last page. A cursor Dropbox no
+ * longer knows (`reset`) is `cursorLost`.
+ */
+export async function listFolderContinue(client: DropboxClient, cursor: string): Promise<FolderBatch> {
+	const first = listPage(await client.rpc("files/list_folder/continue", { cursor }), "list_folder/continue");
+	return followPages(client, first);
+}
+
+/** Collects `first` and every page following its `has_more`. */
+async function followPages(client: DropboxClient, first: ListPage): Promise<FolderBatch> {
+	const entries: Metadata[] = [...first.entries];
+	let page = first;
 	while (page.has_more) {
 		page = listPage(await client.rpc("files/list_folder/continue", { cursor: page.cursor }), "list_folder/continue");
 		entries.push(...page.entries);
 	}
-	return entries;
+	return { entries, cursor: page.cursor };
 }
 
 /** A `list_folder` page, or the route's error thrown as a ProviderError. */

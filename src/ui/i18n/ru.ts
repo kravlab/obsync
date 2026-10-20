@@ -6,6 +6,7 @@ export const ru: Strings = {
 	statusConnected: "Подключено",
 	statusSyncing: "Синхронизация…",
 	statusSynced: "Синхронизировано",
+	statusOffline: "Офлайн",
 	statusSyncFailed: "Ошибка синхронизации",
 
 	settingsDropbox: "Dropbox",
@@ -14,7 +15,14 @@ export const ru: Strings = {
 	connect: "Подключить",
 	disconnect: "Отключить",
 	syncNow: "Синхронизировать сейчас",
+	fullReconcile: "Полная сверка",
 	settingsSyncNow: "Выгрузить новые и изменённые файлы этого устройства, затем загрузить файлы других устройств.",
+	settingsEditPause: "Пауза после правки (с)",
+	settingsEditPauseDescription: "Сколько секунд ждать после правки перед синхронизацией, от 1 до 60.",
+	settingsEditPauseInvalid: "Введите целое число от 1 до 60.",
+	settingsPollInterval: "Интервал опроса (с)",
+	settingsPollIntervalDescription: "Как часто проверять изменения с других устройств, от 10 до 3600 секунд.",
+	settingsPollIntervalInvalid: "Введите целое число от 10 до 3600.",
 	settingsRequestLimit: "Предел на запрос (МиБ)",
 	settingsRequestLimitDescription:
 		"Файлы крупнее передаются частями такого размера, от 1 до 19 МиБ. Уменьшите его, если приложение закрывается при синхронизации больших файлов.",

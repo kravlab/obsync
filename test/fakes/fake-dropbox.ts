@@ -77,6 +77,8 @@ export class FakeDropbox {
 	private lastIssued = 0;
 	/** Upload sessions not finished yet, by session id. */
 	private readonly sessions = new Map<string, FakeSession>();
+	/** Cursors issued by `list_folder` and `list_folder/continue`. */
+	private readonly cursors = new Map<string, FolderCursor>();
 
 	/**
 	 * @param appKey the app key the plugin must present as `client_id`
@@ -267,26 +269,38 @@ export class FakeDropbox {
 			return routeError("path/not_found/", { ".tag": "path", path: { ".tag": "not_found" } });
 		}
 		const recursive = arg.recursive ?? false;
-		return this.listPage(account.children(arg.path, recursive), 0, [arg.path, recursive]);
+		return this.listPage({
+			account,
+			path: arg.path,
+			recursive,
+			entries: account.children(arg.path, recursive),
+			offset: 0,
+			position: account.changePosition(),
+		});
 	}
 
-	/** `files/list_folder/continue`: the page a cursor points at. */
+	/**
+	 * `files/list_folder/continue`: the next page of an unfinished listing,
+	 * or the changes since the previous batch finished; `reset` for an
+	 * unknown cursor.
+	 */
 	private listFolderContinue(account: FakeDropboxAccount, arg: { cursor: string }): HttpResponse {
-		const [path, recursive, offset] = JSON.parse(arg.cursor) as [string, boolean, number];
-		return this.listPage(account.children(path, recursive), offset, [path, recursive]);
+		const saved = this.cursors.get(arg.cursor);
+		if (!saved || saved.account !== account) return routeError("reset/", { ".tag": "reset" });
+		if (saved.offset < saved.entries.length) return this.listPage(saved);
+		const { entries, position } = account.changesSince(saved.path, saved.recursive, saved.position);
+		return this.listPage({ ...saved, entries, offset: 0, position });
 	}
 
-	/** One page of `entries` from `offset`, with a cursor for the rest. */
-	private listPage(
-		entries: readonly Record<string, unknown>[],
-		offset: number,
-		folder: readonly [string, boolean],
-	): HttpResponse {
-		const end = offset + this.listPageSize;
+	/** Serves one page of `state.entries` from `state.offset`, issuing the cursor after it. */
+	private listPage(state: FolderCursor): HttpResponse {
+		const end = state.offset + this.listPageSize;
+		const cursor = `cursor-${this.next()}`;
+		this.cursors.set(cursor, { ...state, offset: Math.min(end, state.entries.length) });
 		return json(200, {
-			entries: entries.slice(offset, end),
-			cursor: JSON.stringify([...folder, Math.min(end, entries.length)]),
-			has_more: end < entries.length,
+			entries: state.entries.slice(state.offset, end),
+			cursor,
+			has_more: end < state.entries.length,
 		});
 	}
 
@@ -512,6 +526,16 @@ interface FakeSession {
 	readonly data: Uint8Array[];
 }
 
+/** What a `list_folder` cursor points at. */
+interface FolderCursor {
+	readonly account: FakeDropboxAccount;
+	readonly path: string;
+	readonly recursive: boolean;
+	readonly entries: readonly Record<string, unknown>[];
+	readonly offset: number;
+	readonly position: number;
+}
+
 /** The bytes an upload session holds so far. */
 function sessionLength(session: FakeSession): number {
 	return session.data.reduce((total, chunk) => total + chunk.byteLength, 0);
@@ -568,6 +592,8 @@ export class FakeDropboxAccount {
 	private readonly entries = new Map<string, FakeDropboxEntry>();
 	/** Every file revision ever stored, by `rev`, as Dropbox keeps file history. */
 	private readonly revisions = new Map<string, FakeDropboxFile>();
+	/** Paths in the order they changed; a cursor records a position in it. */
+	private readonly changeLog: string[] = [];
 	private lastId = 0;
 
 	/** @param accountId what `get_current_account` reports */
@@ -576,7 +602,10 @@ export class FakeDropboxAccount {
 	/** Creates a folder at `path` ("/Name/..."), with any missing parents. */
 	putFolder(path: string): void {
 		this.putParents(path);
-		if (!this.get(path)) this.entries.set(path.toLowerCase(), { kind: "folder", path, id: this.nextId() });
+		if (!this.get(path)) {
+			this.entries.set(path.toLowerCase(), { kind: "folder", path, id: this.nextId() });
+			this.changeLog.push(path);
+		}
 	}
 
 	/** Creates or replaces the file at `path`, with any missing parents. */
@@ -587,6 +616,7 @@ export class FakeDropboxAccount {
 		const file: FakeDropboxFile = { kind: "file", path: stored, id, data, rev };
 		this.entries.set(path.toLowerCase(), file);
 		this.revisions.set(rev, file);
+		this.changeLog.push(stored);
 	}
 
 	/**
@@ -600,8 +630,11 @@ export class FakeDropboxAccount {
 	/** Removes the entry at `path` and everything inside it. */
 	remove(path: string): void {
 		const lower = path.toLowerCase();
-		for (const key of [...this.entries.keys()]) {
-			if (key === lower || key.startsWith(`${lower}/`)) this.entries.delete(key);
+		for (const [key, entry] of [...this.entries]) {
+			if (key === lower || key.startsWith(`${lower}/`)) {
+				this.entries.delete(key);
+				this.changeLog.push(entry.path);
+			}
 		}
 	}
 
@@ -623,6 +656,36 @@ export class FakeDropboxAccount {
 			.filter((key) => key.startsWith(prefix) && (recursive || !key.slice(prefix.length).includes("/")))
 			.sort()
 			.map((key) => this.metadata(key));
+	}
+
+	/** The current end of the change log. */
+	changePosition(): number {
+		return this.changeLog.length;
+	}
+
+	/**
+	 * Metadata of the entries under `path` changed since `position` in the
+	 * change log, once per entry in order of first change, and the position
+	 * after them.
+	 */
+	changesSince(
+		path: string,
+		recursive: boolean,
+		position: number,
+	): { readonly entries: Record<string, unknown>[]; readonly position: number } {
+		const prefix = `${path.toLowerCase()}/`;
+		const lastLogged = new Map<string, string>();
+		for (const logged of this.changeLog.slice(position)) {
+			const key = logged.toLowerCase();
+			if (key.startsWith(prefix) && (recursive || !key.slice(prefix.length).includes("/"))) {
+				lastLogged.set(key, logged);
+			}
+		}
+		const entries = [...lastLogged].map(([key, logged]) => {
+			const entry = this.entries.get(key);
+			return entry ? metadataOf(entry) : deletedMetadataOf(logged);
+		});
+		return { entries, position: this.changeLog.length };
 	}
 
 	/** The Dropbox metadata of the entry at `path`, tagged like `Metadata`. */
@@ -656,6 +719,16 @@ function metadataOf(entry: FakeDropboxEntry): Record<string, unknown> {
 	return entry.kind === "folder"
 		? { ".tag": "folder", ...common }
 		: { ".tag": "file", ...common, rev: entry.rev, size: entry.data.byteLength };
+}
+
+/** The Dropbox `DeletedMetadata` of an entry deleted at `path`. */
+function deletedMetadataOf(path: string): Record<string, unknown> {
+	return {
+		".tag": "deleted",
+		name: path.slice(path.lastIndexOf("/") + 1),
+		path_lower: path.toLowerCase(),
+		path_display: path,
+	};
 }
 
 /** Marks a request body that is not valid JSON. */

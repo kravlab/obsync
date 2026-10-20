@@ -176,7 +176,7 @@ describe("what is not merged", () => {
 		expect([...new Uint8Array(await phone.vault.read("note.md"))]).toEqual([0x6f, 0xff, 0x0a]);
 	});
 
-	it("leaves the note being typed in until the typing pause has passed", async () => {
+	it("leaves the note being typed in until the post-edit pause has passed", async () => {
 		const { remote, laptop, phone } = await syncedPair("one\nkeep\ntwo\n");
 		await laptop.vault.write("note.md", bytes("ONE\nkeep\ntwo\n"));
 		await syncNow(laptop);
@@ -193,7 +193,7 @@ describe("what is not merged", () => {
 		expect(remoteText(remote, "note.md")).toBe("ONE\nkeep\nTWO\n");
 	});
 
-	it("does not download into the note being typed in until the typing pause has passed", async () => {
+	it("does not download into the note being typed in until the post-edit pause has passed", async () => {
 		const { laptop, phone } = await syncedPair("one\n");
 		await phone.vault.typeInto("note.md", bytes("one\n"));
 		await laptop.vault.write("note.md", bytes("two\n"));
@@ -210,7 +210,7 @@ describe("what is not merged", () => {
 
 
 describe("edits made at the last moment", () => {
-	it("does not overwrite a note edited just before a download is written into it", async () => {
+	it("does not overwrite a note edited just before a download is written into it, merging the two instead", async () => {
 		const { laptop, phone } = await syncedPair("one\n");
 		await laptop.vault.write("note.md", bytes("two\n"));
 		await syncNow(laptop);
@@ -218,7 +218,7 @@ describe("edits made at the last moment", () => {
 
 		await syncNow(phone);
 
-		expect(await vaultText(phone, "note.md")).toBe("typed meanwhile\n");
+		expect(await vaultText(phone, "note.md")).toBe("<<<<<<< Phone\ntyped meanwhile\n=======\ntwo\n>>>>>>> Remote\n");
 	});
 
 	it("does not overwrite a note edited just before a merge is written into it", async () => {

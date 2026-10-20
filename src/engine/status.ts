@@ -11,14 +11,18 @@ import type { Connection } from "./ports";
  * - `syncing`: a sync is running.
  * - `synced`: the last sync finished. Until text merge exists, files
  *   changed on both sides stay as they are and do not stop this state.
- * - `syncFailed`: the last sync stopped on a failure; the next one starts
- *   over. It stands in for Offline and Reconnect needed until those exist.
+ * - `offline`: the last sync could not reach the Remote (`transient`); it
+ *   retries with growing backoff and on the next trigger.
+ * - `syncFailed`: the last sync stopped on a failure that is not
+ *   `transient`; the next one starts over. It stands in for Reconnect
+ *   needed until that exists.
  */
 export type SyncStatus =
 	| { readonly state: "notConnected" }
 	| { readonly state: "connected" }
 	| { readonly state: "syncing" }
 	| { readonly state: "synced" }
+	| { readonly state: "offline" }
 	| { readonly state: "syncFailed" };
 
 /** The status a device shows for its Connection, or for having none. */

@@ -4,8 +4,9 @@
  * supply fakes; the engine never imports Obsidian.
  */
 import type { LocalVault, VaultPath } from "./local-vault";
-import type { Provider } from "./provider";
+import type { Provider, RemoteEntry } from "./provider";
 import type { SyncStatus } from "./status";
+import type { SyncSchedule } from "./sync-schedule";
 import type { SnapshotEntry, SyncSnapshot } from "./sync-snapshot";
 
 /**
@@ -47,8 +48,21 @@ export interface ProviderConnector {
 }
 
 /**
+ * The Remote's known listing and the change-feed cursor at that point,
+ * kept on this device so the next sync can ask for changes since the
+ * cursor instead of listing the whole Remote.
+ */
+export interface RemoteFeed {
+	/** Where the provider's change feed continues from. */
+	readonly cursor: string;
+	/** Every entry of the Remote as of `cursor`, as a full listing would give them. */
+	readonly entries: readonly RemoteEntry[];
+}
+
+/**
  * Per-device state that never syncs: never in `data.json` or the vault.
- * It holds the Connection, the Sync snapshot and the Base of each text file.
+ * It holds the Connection, the Sync snapshot, the Base of each text file,
+ * and the Remote change-feed state.
  */
 export interface DeviceStore {
 	/** Returns this device's Connection, or null if it has none. */
@@ -68,8 +82,19 @@ export interface DeviceStore {
 	/** Returns the Base recorded for `path`, or null if there is none. */
 	loadBase(path: VaultPath): Promise<ArrayBuffer | null>;
 	/**
+	 * Returns the Remote feed state from the last completed sync, or null
+	 * when none was saved or it is unreadable.
+	 */
+	loadRemoteFeed(): Promise<RemoteFeed | null>;
+	/**
+	 * Stores the Remote feed state from a completed sync, or removes it
+	 * when `feed` is null.
+	 */
+	saveRemoteFeed(feed: RemoteFeed | null): Promise<void>;
+	/**
 	 * Erases everything this device keeps for its Connection: the
-	 * Connection itself, the Sync snapshot and every Base.
+	 * Connection itself, the Sync snapshot, every Base, and the Remote feed
+	 * state.
 	 */
 	clear(): Promise<void>;
 }
@@ -125,4 +150,6 @@ export interface EnginePorts {
 	readonly clock: Clock;
 	readonly scheduler: Scheduler;
 	readonly ui: UiPort;
+	/** This device's current schedule settings, read each time they are needed. */
+	readonly schedule: () => SyncSchedule;
 }

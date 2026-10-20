@@ -13,6 +13,7 @@ import {
 	type RemoteContent,
 } from "../../src/engine/provider";
 import { toRemoteFile, type FakeRemote, type StoredFile } from "./fake-remote";
+import { CrashPoints } from "./crash-points";
 import { parentOf } from "../../src/engine/paths";
 
 /** The operations a FakeProvider counts and can inject faults into. */
@@ -26,15 +27,7 @@ export type FakeOperation =
 	| "moveFile"
 	| "moveFolder";
 
-/**
- * Thrown in place of a result when a test makes the device "crash": the
- * app was killed between two steps. It is not a ProviderError, so no
- * engine code may treat it as a provider failure; the test drops the
- * engine and starts a new one over the same stores.
- */
-export class SimulatedCrash extends Error {
-	override readonly name = "SimulatedCrash";
-}
+export { SimulatedCrash } from "./crash-points";
 
 /**
  * One device's Provider on a FakeRemote. It stores whole buffers in memory,
@@ -61,12 +54,16 @@ export class FakeProvider implements Provider {
 	private readonly hooks = new Map<FakeOperation, (() => Promise<void>)[]>();
 	/** Hooks to run once, before the next read of each path. */
 	private readonly readHooks = new Map<RemotePath, () => Promise<void>>();
-	/** Operations started so far on this device. */
-	private operationCount = 0;
-	private crash: { readonly at: number; readonly when: "before" | "after" } | undefined;
 
 	/** @param remote the Remote this device syncs */
-	constructor(private readonly remote: FakeRemote) {
+	/**
+	 * @param remote the Remote this device's provider reaches
+	 * @param crashPoints the device's crash points, shared with its vault and Device store
+	 */
+	constructor(
+		private readonly remote: FakeRemote,
+		private readonly crashPoints: CrashPoints = new CrashPoints(),
+	) {
 		const { service } = remote;
 		this.nameRules = remote.nameRules;
 		this.maxFileSize = remote.maxFileSize;
@@ -105,14 +102,14 @@ export class FakeProvider implements Provider {
 		this.readHooks.set(path, hook);
 	}
 
-	/** Makes the `n`th operation from now throw SimulatedCrash, undone. */
+	/** Makes the `n`th step of this device from now throw SimulatedCrash, undone. */
 	crashBefore(n: number): void {
-		this.crash = { at: this.operationCount + n, when: "before" };
+		this.crashPoints.crashBefore(n);
 	}
 
-	/** Makes the `n`th operation from now take effect, then throw SimulatedCrash. */
+	/** Makes the `n`th step of this device from now take effect, then throw SimulatedCrash. */
 	crashAfter(n: number): void {
-		this.crash = { at: this.operationCount + n, when: "after" };
+		this.crashPoints.crashAfter(n);
 	}
 
 	list(): Promise<Listing> {
@@ -205,17 +202,14 @@ export class FakeProvider implements Provider {
 	 * operation itself (`effect`, which throws its own errors
 	 * synchronously), then a crash after it.
 	 */
-	private async run<T>(operation: FakeOperation, effect: () => Promise<T>): Promise<T> {
-		this.operationCount += 1;
-		const crashesHere = this.crash?.at === this.operationCount ? this.crash.when : undefined;
-		if (crashesHere === "before") throw new SimulatedCrash(`crash before ${operation}`);
-		const hook = this.hooks.get(operation)?.shift();
-		if (hook) await hook();
-		const failure = this.failures.get(operation)?.shift();
-		if (failure) throw new ProviderError(failure, `injected ${failure.category} on ${operation}`);
-		const result = await effect();
-		if (crashesHere === "after") throw new SimulatedCrash(`crash after ${operation}`);
-		return result;
+	private run<T>(operation: FakeOperation, effect: () => Promise<T>): Promise<T> {
+		return this.crashPoints.step(operation, async () => {
+			const hook = this.hooks.get(operation)?.shift();
+			if (hook) await hook();
+			const failure = this.failures.get(operation)?.shift();
+			if (failure) throw new ProviderError(failure, `injected ${failure.category} on ${operation}`);
+			return effect();
+		});
 	}
 
 	/** Throws `nameNotRepresentable` if the service cannot store `path`. */

@@ -29,3 +29,17 @@ export function foldersDownTo(path: string): string[] {
 export function nameOf(path: string): string {
 	return path.slice(path.lastIndexOf("/") + 1);
 }
+
+/**
+ * The key `path` is matched by: folded with `toLowerCase` on a
+ * case-insensitive provider, as Dropbox's `path_lower` is taken to fold
+ * ordinary names, else the path itself.
+ */
+export function pathKey(path: string, caseInsensitive: boolean): string {
+	return caseInsensitive ? path.toLowerCase() : path;
+}
+
+/** Orders paths by code unit, so every folder comes before what it holds. */
+export function comparePaths(a: string, b: string): number {
+	return a < b ? -1 : a > b ? 1 : 0;
+}

@@ -1,6 +1,7 @@
 import type { Change, ChangeBatch, NameRules, RemoteEntry, RemoteFile, RemotePath } from "../../src/engine/provider";
 import { nameOf, parentOf } from "../../src/engine/paths";
 import { FakeProvider } from "./fake-provider";
+import type { CrashPoints } from "./crash-points";
 
 /** A file as the fake service stores it. */
 export interface StoredFile {
@@ -63,9 +64,9 @@ export class FakeRemote {
 		this.maxFileSize = service.maxFileSize ?? Number.MAX_SAFE_INTEGER;
 	}
 
-	/** Opens a provider on this Remote, as one device would. */
-	openProvider(): FakeProvider {
-		return new FakeProvider(this);
+	/** Opens a provider on this Remote, as one device would, counting its operations among `crashPoints`. */
+	openProvider(crashPoints?: CrashPoints): FakeProvider {
+		return new FakeProvider(this, crashPoints);
 	}
 
 	/** Returns the entry at `path`, if any. */
@@ -83,6 +84,19 @@ export class FakeRemote {
 		const storedPath = this.entries.get(key)?.path ?? this.storedPathOf(path);
 		this.entries.set(key, { path: storedPath, entry });
 		this.changeLog.push(storedPath);
+	}
+
+	/**
+	 * Replaces the folder at `path` and everything inside it with `entry`,
+	 * logging only `path`: the one entry Dropbox's feed reports when a file
+	 * replaces a folder, leaving the folder's children to be inferred.
+	 */
+	replaceFolder(path: RemotePath, entry: StoredEntry): void {
+		const prefix = `${this.key(path)}/`;
+		for (const key of [...this.entries.keys()]) {
+			if (key.startsWith(prefix)) this.entries.delete(key);
+		}
+		this.put(path, entry);
 	}
 
 	/** Removes the entry at `path` and logs it. */

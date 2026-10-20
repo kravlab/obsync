@@ -1,7 +1,8 @@
-import { createSyncEngine } from "../../src/engine/engine";
+import { createSyncEngine, type SyncEngine } from "../../src/engine/engine";
 import { isWithin } from "../../src/engine/paths";
 import type { RemoteEntry } from "../../src/engine/provider";
 import { METADATA_FOLDER } from "../../src/engine/remote-metadata";
+import { editPauseOf, pollIntervalOf } from "../../src/engine/sync-schedule";
 import { FakeRemote } from "../fakes/fake-remote";
 import { connectTestDevice, type TestDevice } from "../fakes/test-device";
 import { bytes, text } from "./bytes";
@@ -37,4 +38,27 @@ export async function syncedPair(content: string): Promise<{ remote: FakeRemote;
 	await syncNow(laptop);
 	await syncNow(phone);
 	return { remote, laptop, phone };
+}
+
+/** Sets `device`'s post-edit pause and polling interval, in seconds. */
+export function setSchedule(device: TestDevice, editPauseSeconds: number, pollSeconds: number): void {
+	const editPause = editPauseOf(editPauseSeconds);
+	const pollInterval = pollIntervalOf(pollSeconds);
+	if (editPause === null || pollInterval === null) throw new Error("a schedule the settings do not take");
+	device.schedule = { editPause, pollInterval };
+}
+
+/**
+ * Starts `device`'s engine, runs `body` with it once the vault-open sync
+ * has settled, and stops it afterwards, also when `body` fails.
+ */
+export async function withStartedEngine(device: TestDevice, body: (engine: SyncEngine) => Promise<void>): Promise<void> {
+	const engine = createSyncEngine(device.ports);
+	const started = engine.start();
+	try {
+		await started.opened;
+		await body(engine);
+	} finally {
+		started.stop();
+	}
 }

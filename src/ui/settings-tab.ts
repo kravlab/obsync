@@ -1,10 +1,38 @@
 import { Notice, PluginSettingTab, Setting, requireApiVersion, type App, type Plugin, type SettingDefinitionItem } from "obsidian";
 import type { ConnectionService } from "../engine/connection";
 import type { DeviceIdentity } from "../engine/ports";
-import type { ObsidianRequestLimitStore } from "../obsidian/request-limit-store";
 import { parseRequestLimit } from "../engine/request-limit";
+import { parseEditPause, parsePollInterval } from "../engine/sync-schedule";
+import type { ObsidianRequestLimitStore } from "../obsidian/request-limit-store";
+import type { ObsidianScheduleStore } from "../obsidian/schedule-store";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
+
+/** A number setting of the tab: what its row says and how a typed value is kept. */
+interface NumberField {
+	readonly name: string;
+	readonly description: string;
+	/** What the row says instead while the typed value is not one the setting takes. */
+	readonly invalid: string;
+	/** The stored value, as the field shows it. */
+	readonly current: () => number;
+	/** Stores the typed value if the setting takes it; returns whether it did. */
+	readonly save: (typed: string) => boolean;
+}
+
+/**
+ * Draws `field` into `row`: a text field holding the stored value, saved
+ * as it is typed. While the typed value is not one the setting takes, the
+ * stored one stays and the row says why, without a notice per keystroke.
+ */
+function drawNumberField(row: Setting, field: NumberField): void {
+	row.setName(field.name).setDesc(field.description);
+	row.addText((text) =>
+		text.setValue(String(field.current())).onChange((typed) => {
+			row.setDesc(field.save(typed) ? field.description : field.invalid);
+		}),
+	);
+}
 
 /** One row of the tab: its name, what it says and what its button does. */
 interface Row {
@@ -36,6 +64,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	 * @param openConnect opens the connect window
 	 * @param syncNow starts a sync of this device
 	 * @param requestLimit keeps this device's Per-request limit
+	 * @param schedule keeps this device's post-edit pause and polling interval
 	 */
 	constructor(
 		app: App,
@@ -45,6 +74,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 		private readonly openConnect: () => void,
 		private readonly syncNow: () => void,
 		private readonly requestLimit: ObsidianRequestLimitStore,
+		private readonly schedule: ObsidianScheduleStore,
 	) {
 		super(app, plugin);
 	}
@@ -57,15 +87,14 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	}
 
 	override getSettingDefinitions(): SettingDefinitionItem[] {
-		const { strings } = this;
 		return [
 			// A declarative action row runs when clicked, so it is named by what it does.
 			...this.rows().map((row) => ({ name: row.button, desc: row.description, action: row.action })),
-			{
-				name: strings.settingsRequestLimit,
-				desc: strings.settingsRequestLimitDescription,
-				render: (setting) => this.drawRequestLimit(setting),
-			},
+			...this.numberFields().map((field) => ({
+				name: field.name,
+				desc: field.description,
+				render: (setting: Setting) => drawNumberField(setting, field),
+			})),
 		];
 	}
 
@@ -82,25 +111,47 @@ export class ObsyncSettingTab extends PluginSettingTab {
 				.setDesc(row.description)
 				.addButton((button) => button.setButtonText(row.button).onClick(row.action));
 		}
-		this.drawRequestLimit(new Setting(this.containerEl));
+		for (const field of this.numberFields()) drawNumberField(new Setting(this.containerEl), field);
 	}
 
-	/**
-	 * Draws the Per-request limit into `row`: a field holding the stored
-	 * limit in MiB, saved as it is typed. While the typed value is not a
-	 * limit, the stored one stays and the row says why, without a notice
-	 * per keystroke.
-	 */
-	private drawRequestLimit(row: Setting): void {
-		const { strings } = this;
-		row.setName(strings.settingsRequestLimit).setDesc(strings.settingsRequestLimitDescription);
-		row.addText((text) =>
-			text.setValue(String(this.requestLimit.load().mebibytes)).onChange((typed) => {
-				const limit = parseRequestLimit(typed);
-				if (limit !== null) this.requestLimit.save(limit);
-				row.setDesc(limit === null ? strings.settingsRequestLimitInvalid : strings.settingsRequestLimitDescription);
-			}),
-		);
+	/** This device's number settings: the post-edit pause, the polling interval and the Per-request limit. */
+	private numberFields(): NumberField[] {
+		const { strings, schedule, requestLimit } = this;
+		return [
+			{
+				name: strings.settingsEditPause,
+				description: strings.settingsEditPauseDescription,
+				invalid: strings.settingsEditPauseInvalid,
+				current: () => schedule.load().editPause.seconds,
+				save: (typed) => {
+					const editPause = parseEditPause(typed);
+					if (editPause !== null) schedule.save({ ...schedule.load(), editPause });
+					return editPause !== null;
+				},
+			},
+			{
+				name: strings.settingsPollInterval,
+				description: strings.settingsPollIntervalDescription,
+				invalid: strings.settingsPollIntervalInvalid,
+				current: () => schedule.load().pollInterval.seconds,
+				save: (typed) => {
+					const pollInterval = parsePollInterval(typed);
+					if (pollInterval !== null) schedule.save({ ...schedule.load(), pollInterval });
+					return pollInterval !== null;
+				},
+			},
+			{
+				name: strings.settingsRequestLimit,
+				description: strings.settingsRequestLimitDescription,
+				invalid: strings.settingsRequestLimitInvalid,
+				current: () => requestLimit.load().mebibytes,
+				save: (typed) => {
+					const limit = parseRequestLimit(typed);
+					if (limit !== null) requestLimit.save(limit);
+					return limit !== null;
+				},
+			},
+		];
 	}
 
 	/** The rows for the Connection as read last: Connect, or Disconnect and Sync now. */

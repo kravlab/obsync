@@ -1,4 +1,4 @@
-import { MarkdownView, TFile, TFolder, type App, type Editor, type TAbstractFile } from "obsidian";
+import { MarkdownView, TFile, TFolder, type App, type Component, type Editor, type TAbstractFile } from "obsidian";
 import type { LocalVault, VaultChangeHint, VaultEntry, VaultPath } from "../engine/local-vault";
 import { commonEnds } from "../engine/common-ends";
 import { isWithin } from "../engine/paths";
@@ -34,7 +34,14 @@ export class ObsidianLocalVault implements LocalVault {
 	private writingEditor = false;
 
 	/** @param app the Obsidian app whose vault this is */
-	constructor(private readonly app: App) {
+	/**
+	 * @param app the Obsidian app whose vault this is
+	 * @param owner the component, the plugin, whose unload also removes every change listener
+	 */
+	constructor(
+		private readonly app: App,
+		private readonly owner: Component,
+	) {
 		this.configDir = app.vault.configDir;
 	}
 
@@ -145,6 +152,8 @@ export class ObsidianLocalVault implements LocalVault {
 			vault.on("delete", (file) => listener({ kind: "deleted", path: file.path })),
 			vault.on("rename", (file, oldPath) => listener({ kind: "renamed", path: file.path, oldPath })),
 		];
+		// Removed with the plugin too, should the returned function never be called.
+		for (const ref of refs) this.owner.registerEvent(ref);
 		return () => {
 			for (const ref of refs) vault.offref(ref);
 		};
