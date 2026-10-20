@@ -185,6 +185,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				settings,
 				device: connection.device,
 				clock,
+				ui,
 				reconcile: run.kind === "reconcile",
 				editPauseMs: schedule().editPause.ms,
 			});

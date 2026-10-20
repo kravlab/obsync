@@ -169,40 +169,6 @@ describe("syncing changed files", () => {
 		});
 	});
 
-	it("leaves a file that is not text, edited on both devices, as it is on both sides", async () => {
-		const remote = new FakeRemote();
-		const laptop = connectTestDevice(remote, "Laptop");
-		const phone = connectTestDevice(remote, "Phone");
-		await laptop.vault.write("photo.png", bytes("v1"));
-		await syncNow(laptop);
-		await syncNow(phone);
-		await laptop.vault.write("photo.png", bytes("laptop's edit"));
-		await syncNow(laptop);
-		await phone.vault.write("photo.png", bytes("phone's edit"));
-
-		await syncNow(phone);
-		await syncNow(laptop);
-
-		expect(remoteText(remote, "photo.png")).toBe("laptop's edit");
-		expect(await vaultText(phone, "photo.png")).toBe("phone's edit");
-		expect(phone.ui.lastStatus).toEqual({ state: "synced" });
-	});
-
-	it("leaves a file that is not text, created on both devices with different content, as it is on both sides", async () => {
-		const remote = new FakeRemote();
-		const laptop = connectTestDevice(remote, "Laptop");
-		const phone = connectTestDevice(remote, "Phone");
-		await laptop.vault.write("photo.png", bytes("laptop's"));
-		await phone.vault.write("photo.png", bytes("phone's"));
-
-		await syncNow(laptop);
-		await syncNow(phone);
-
-		expect(remoteText(remote, "photo.png")).toBe("laptop's");
-		expect(await vaultText(phone, "photo.png")).toBe("phone's");
-		expect(phone.deviceStore.snapshot.has("photo.png")).toBe(false);
-	});
-
 	it("matches paths without case on a case-insensitive provider, keeping each device's case", async () => {
 		const remote = new FakeRemote({ nameRules: { caseInsensitive: true } });
 		const laptop = connectTestDevice(remote, "Laptop");

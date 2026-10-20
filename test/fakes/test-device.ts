@@ -9,6 +9,7 @@ import {
 	type UiPort,
 } from "../../src/engine/ports";
 import type { LocalVault, VaultPath } from "../../src/engine/local-vault";
+import type { SyncNotice } from "../../src/engine/notices";
 import {
 	DEFAULT_REMOTE_SETTINGS,
 	METADATA_FOLDER,
@@ -108,6 +109,8 @@ export class InMemorySecretStore implements SecretStore {
 export class RecordingUi implements UiPort {
 	/** Every status shown, oldest first. */
 	readonly statuses: SyncStatus[] = [];
+	/** Every notice shown, oldest first. */
+	readonly notices: SyncNotice[] = [];
 
 	/** The status shown last, or undefined if none was. */
 	get lastStatus(): SyncStatus | undefined {
@@ -116,6 +119,11 @@ export class RecordingUi implements UiPort {
 
 	showStatus(status: SyncStatus): void {
 		this.statuses.push(status);
+	}
+
+	/** Records `notice` instead of showing it. */
+	showNotice(notice: SyncNotice): void {
+		this.notices.push(notice);
 	}
 }
 

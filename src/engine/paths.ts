@@ -31,6 +31,16 @@ export function nameOf(path: string): string {
 }
 
 /**
+ * A file's own name split at its last dot, which goes with the extension.
+ * A name without a dot, or whose only dot starts it (`.hidden`), has the
+ * extension "".
+ */
+export function splitName(name: string): { readonly stem: string; readonly extension: string } {
+	const dot = name.lastIndexOf(".");
+	return dot > 0 ? { stem: name.slice(0, dot), extension: name.slice(dot) } : { stem: name, extension: "" };
+}
+
+/**
  * The key `path` is matched by: folded with `toLowerCase` on a
  * case-insensitive provider, as Dropbox's `path_lower` is taken to fold
  * ordinary names, else the path itself.

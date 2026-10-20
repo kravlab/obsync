@@ -15,11 +15,15 @@
  *   upload on condition that R still has S's revision; a new revision
  *   with the same content, or edits on both sides to the same content,
  *   only update S.
- * - a text file changed on both sides to different content, or created on
- *   both without S: merged (text-merge.ts), against the Base when it is
- *   the true one, else 2-way; an upload refused by its precondition reads
- *   R again and merges the same way. The merged bytes go to both sides,
- *   then S and the Base are recorded.
+ * - a text or JSON file changed on both sides to different content, or
+ *   created on both without S: merged (text-merge.ts), against the Base
+ *   when it is the true one, else 2-way; an upload refused by its
+ *   precondition reads R again and merges the same way. The merged bytes
+ *   go to both sides, then S and the Base are recorded.
+ * - a file that cannot be merged so (not text, not UTF-8, or JSON whose
+ *   merge wrote Conflict blocks or does not parse): L becomes a Conflict
+ *   copy next to it (conflict-copy.ts), uploaded and announced, and R
+ *   takes the name on both sides. No clock decides between them.
  *
  * A vault file typed into within the post-edit pause is not written by this
  * sync; a later one writes it.
@@ -27,16 +31,16 @@
  * Which paths take part, and their vault paths on a case-insensitive
  * provider, is settled by `syncListing` first.
  *
- * Everything else is left as it is on both sides: a file that is not
- * text changed on both to different content (Conflict copies come later),
- * a path missing on one side while S has it (deletions come later), and a
- * file and a folder at one path. A merged upload refused by its
- * precondition is left too; the next sync merges again.
+ * Everything else is left as it is on both sides: a path missing on one
+ * side while S has it (deletions come later), and a file and a folder at
+ * one path. A merged upload refused by its precondition is left too; the
+ * next sync merges again.
  */
+import { conflictCopyPath } from "./conflict-copy";
 import { contentHash } from "./content-hash";
 import type { LocalVault, VaultFile, VaultPath } from "./local-vault";
 import { comparePaths, foldersDownTo, parentOf, pathKey } from "./paths";
-import type { Clock, DeviceIdentity, DeviceStore, RemoteFeed } from "./ports";
+import type { Clock, DeviceIdentity, DeviceStore, RemoteFeed, UiPort } from "./ports";
 import {
 	isFailure,
 	type Change,
@@ -71,8 +75,10 @@ export interface SyncRun {
 	readonly settings: RemoteSettings;
 	/** This device, whose name labels its side of a Conflict block. */
 	readonly device: DeviceIdentity;
-	/** Tells when the post-edit pause has passed. */
+	/** Tells when the post-edit pause has passed, and names Conflict copies. */
 	readonly clock: Clock;
+	/** Where Conflict copies are announced. */
+	readonly ui: UiPort;
 	/** When true, lists the Remote in full instead of using the change feed. */
 	readonly reconcile: boolean;
 	/** The post-edit pause in milliseconds, which holds back writes to the note being typed in. */
@@ -99,6 +105,7 @@ export async function runSync({
 	settings,
 	device,
 	clock,
+	ui,
 	reconcile,
 	editPauseMs,
 }: SyncRun): Promise<SyncRunResult> {
@@ -136,13 +143,13 @@ export async function runSync({
 	/**
 	 * Records the file `path`, now `synced.data` with `hash` on both sides
 	 * and `synced.revision` on the Remote; the data is its Base if it is
-	 * text. `stat` is the vault file's stat taken before it was read with
+	 * text or JSON in UTF-8, the files that merge. `stat` is the vault file's stat taken before it was read with
 	 * that content; without one, after the engine wrote the file itself,
 	 * the next sync hashes it again, so an edit saved meanwhile is found.
 	 */
 	async function recordFile(path: VaultPath, synced: RemoteContent, hash: string, stat?: VaultFileStat): Promise<void> {
 		const { data, revision } = synced;
-		const base = contentKindOf(path, settings) === "text" && decodeUtf8(data) !== null ? data : null;
+		const base = contentKindOf(path, settings) !== "other" && decodeUtf8(data) !== null ? data : null;
 		await record(path, { kind: "file", revision, hash, ...(stat === undefined ? {} : { stat }) }, base);
 	}
 
@@ -159,24 +166,35 @@ export async function runSync({
 	}
 
 	/**
-	 * Merges the vault file at `path` with `remoteVersion`, against the
-	 * Base when `synced` has a true one, and brings both sides to the
-	 * result: the Remote on condition that it still has `remoteVersion`, the vault
-	 * if it still holds what was merged and is not being typed into. Then
-	 * records the result. Anything that is not text is left alone.
+	 * Resolves the vault file at `path` changed both here and on the Remote
+	 * to `remoteVersion`, unless it is being typed into. The same content
+	 * on both sides is only recorded. Otherwise it is merged, against the
+	 * Base when `synced` has a true one, and both sides are brought to the
+	 * result: the Remote on condition that it still has `remoteVersion`,
+	 * the vault if it still holds what was merged and is not being typed
+	 * into. Then the result is recorded. What cannot be merged gets a
+	 * Conflict copy (`keepConflictCopy`).
 	 */
 	async function merge(path: VaultPath, remoteVersion: RemoteContent, synced: SnapshotEntry | undefined): Promise<void> {
-		if (contentKindOf(path, settings) !== "text" || pausedForTyping(path)) return;
+		if (pausedForTyping(path)) return;
 		const before = await vault.stat(path);
 		if (before?.kind !== "file") return;
 		const localData = await vault.read(path);
 		const localHash = await contentHash(localData);
-		const base = synced?.kind === "file" ? await trueBase(path, synced.hash) : null;
-		const merged = mergeText({ base, local: localData, remote: remoteVersion.data }, { local: device.name, remote: REMOTE_LABEL });
-		if (merged === null) return;
+		const remoteHash = await contentHash(remoteVersion.data);
+		const unchanged = { size: before.size, mtime: before.mtime };
+		if (remoteHash === localHash) {
+			await recordFile(path, remoteVersion, localHash, unchanged);
+			return;
+		}
+		const merged = await mergedContent(path, localData, remoteVersion.data, synced);
+		if (merged === null) {
+			await keepConflictCopy(path, localData, localHash, remoteVersion, remoteHash);
+			return;
+		}
 		const hash = await contentHash(merged);
 		let { revision } = remoteVersion;
-		if (hash !== (await contentHash(remoteVersion.data))) {
+		if (hash !== remoteHash) {
 			const written = await writeRemote(path, merged, { kind: "revision", revision });
 			if (written === undefined) return;
 			remote.set(path, written);
@@ -185,8 +203,88 @@ export async function runSync({
 		if (hash !== localHash && (pausedForTyping(path) || !(await vault.replace(path, localData, merged)))) {
 			return;
 		}
-		const unwritten = hash === localHash ? { size: before.size, mtime: before.mtime } : undefined;
-		await recordFile(path, { data: merged, revision }, hash, unwritten);
+		await recordFile(path, { data: merged, revision }, hash, hash === localHash ? unchanged : undefined);
+	}
+
+	/**
+	 * The merge of `localData` and `remoteData`, the two versions of the
+	 * file `path`, against the Base when `synced` has a true one; null when
+	 * they cannot be merged: a file that is not text, a version that is not
+	 * UTF-8, or a JSON file whose merge wrote Conflict blocks or does not
+	 * parse.
+	 */
+	async function mergedContent(
+		path: VaultPath,
+		localData: ArrayBuffer,
+		remoteData: ArrayBuffer,
+		synced: SnapshotEntry | undefined,
+	): Promise<ArrayBuffer | null> {
+		const kind = contentKindOf(path, settings);
+		if (kind === "other") return null;
+		const base = synced?.kind === "file" ? await trueBase(path, synced.hash) : null;
+		const merged = mergeText({ base, local: localData, remote: remoteData }, { local: device.name, remote: REMOTE_LABEL });
+		if (merged === null) return null;
+		if (kind === "json" && (merged.conflicted || !parsesAsJson(merged.data))) return null;
+		return merged.data;
+	}
+
+	/**
+	 * Keeps `localData`, this device's version of `path` with `localHash`,
+	 * as a Conflict copy next to it, and puts `remoteVersion`, with
+	 * `remoteHash`, under the name: no clock decides between them. The copy
+	 * is written to the vault and uploaded on condition that its name is
+	 * free on the Remote; a name taken there since the listing moves the
+	 * vault copy to the next number and tries again, which ends since each
+	 * refusal means one more entry is taken. The copy is then recorded and
+	 * announced, and the vault file takes the Remote version if it still
+	 * holds `localData` and is not being typed into, and is recorded. Cut
+	 * off in between, the next sync finds the conflict again and makes
+	 * another copy, so nothing is lost.
+	 */
+	async function keepConflictCopy(
+		path: VaultPath,
+		localData: ArrayBuffer,
+		localHash: string,
+		remoteVersion: RemoteContent,
+		remoteHash: string,
+	): Promise<void> {
+		const time = clock.now();
+		let copy = await freeCopyPath(path, time, 1);
+		await vault.write(copy.path, localData);
+		let written = await writeRemote(copy.path, localData, { kind: "absent" });
+		while (written === undefined) {
+			const next = await freeCopyPath(path, time, copy.number + 1);
+			await vault.rename(copy.path, next.path);
+			copy = next;
+			written = await writeRemote(copy.path, localData, { kind: "absent" });
+		}
+		remote.set(copy.path, written);
+		await recordFile(copy.path, { data: localData, revision: written.revision }, localHash);
+		ui.showNotice({ kind: "conflictCopyCreated", path, copyPath: copy.path });
+		if (pausedForTyping(path) || !(await vault.replace(path, localData, remoteVersion.data))) return;
+		// The listing's revision is older when another device wrote `path` since: this one is now synced.
+		remote.set(path, { kind: "file", path, revision: remoteVersion.revision, size: remoteVersion.data.byteLength });
+		await recordFile(path, remoteVersion, remoteHash);
+	}
+
+	/**
+	 * The first Conflict copy path for `path`, by this device at `time`,
+	 * numbered `from` or higher, that is free in the vault and on the
+	 * Remote as listed; the first copy has no number, the next ones 2, 3, ….
+	 */
+	async function freeCopyPath(
+		path: VaultPath,
+		time: number,
+		from: number,
+	): Promise<{ readonly path: VaultPath; readonly number: number }> {
+		const { caseInsensitive } = provider.nameRules;
+		const remoteKeys = new Set([...remote.keys()].map((listed) => pathKey(listed, caseInsensitive)));
+		for (let number = from; ; number += 1) {
+			const candidate = conflictCopyPath(path, device.name, time, number);
+			if (!remoteKeys.has(pathKey(candidate, caseInsensitive)) && (await vault.stat(candidate)) === null) {
+				return { path: candidate, number };
+			}
+		}
 	}
 
 	/** Creates `path` and the folders above it on the Remote where missing. */
@@ -445,4 +543,16 @@ function sortedForUpload(files: readonly VaultFile[], settings: RemoteSettings):
 /** `entries` ordered by path, so every folder comes before what it holds. */
 function sortedByPath<T extends { readonly path: string }>(entries: readonly T[]): T[] {
 	return [...entries].sort((a, b) => comparePaths(a.path, b.path));
+}
+
+/** Whether `data` is UTF-8 text that parses as JSON. */
+function parsesAsJson(data: ArrayBuffer): boolean {
+	const decoded = decodeUtf8(data);
+	if (decoded === null) return false;
+	try {
+		JSON.parse(decoded);
+		return true;
+	} catch {
+		return false;
+	}
 }

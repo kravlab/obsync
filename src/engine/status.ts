@@ -9,8 +9,8 @@ import type { Connection } from "./ports";
  * - `connected`: the device has a Connection and has not synced since the
  *   plugin started.
  * - `syncing`: a sync is running.
- * - `synced`: the last sync finished. Until text merge exists, files
- *   changed on both sides stay as they are and do not stop this state.
+ * - `synced`: the last sync finished. Conflict blocks and Conflict
+ *   copies it left do not stop this state.
  * - `offline`: the last sync could not reach the Remote (`transient`); it
  *   retries with growing backoff and on the next trigger.
  * - `syncFailed`: the last sync stopped on a failure that is not

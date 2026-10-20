@@ -80,4 +80,6 @@ export const ru: Strings = {
 	noticeDisconnected: "Dropbox отключён.",
 	noticeDisconnectedRevokeFailed:
 		"Dropbox отключён, но отозвать доступ не удалось: Dropbox недоступен. Удалите приложение из подключённых приложений в настройках Dropbox.",
+	noticeConflictCopyCreated:
+		"{file} изменён и на другом устройстве, объединить версии не удалось. Версия этого устройства сохранена как {copy}.",
 };

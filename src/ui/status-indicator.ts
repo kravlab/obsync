@@ -1,14 +1,17 @@
 import { Notice, Platform, setTooltip, type Plugin } from "obsidian";
+import type { SyncNotice } from "../engine/notices";
 import type { UiPort } from "../engine/ports";
 import type { SyncStatus } from "../engine/status";
 import type { Strings } from "./i18n/strings";
+import { noticeText } from "./notice-text";
 import { statusLabel } from "./status-label";
 
 /**
  * Shows the sync status where the platform has room for it: a status bar
  * item on desktop, a ribbon icon on mobile, which has no status bar. A
  * click on either shows the status in a notice until the Sync window
- * exists. It is the shell's UI port: the engine reports each status here.
+ * exists. It is the shell's UI port: the engine reports each status here,
+ * and each sync notice, shown as an Obsidian notice.
  */
 export class StatusIndicator implements UiPort {
 	private label: string;
@@ -53,6 +56,11 @@ export class StatusIndicator implements UiPort {
 	showStatus(status: SyncStatus): void {
 		this.label = statusLabel(status, this.strings);
 		this.render();
+	}
+
+	/** Shows `notice` as an Obsidian notice, in the user's language. */
+	showNotice(notice: SyncNotice): void {
+		new Notice(noticeText(notice, this.strings));
 	}
 
 	/**

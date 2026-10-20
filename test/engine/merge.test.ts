@@ -163,19 +163,6 @@ describe("merging without a true Base", () => {
 });
 
 describe("what is not merged", () => {
-	it("leaves a note that is not UTF-8, edited on both devices, as it is on both sides", async () => {
-		const { remote, laptop, phone } = await syncedPair("one\n");
-		const notUtf8 = new Uint8Array([0x6f, 0xff, 0x0a]).buffer;
-		await laptop.vault.write("note.md", bytes("laptop's\n"));
-		await phone.vault.write("note.md", notUtf8);
-
-		await syncNow(laptop);
-		await syncNow(phone);
-
-		expect(remoteText(remote, "note.md")).toBe("laptop's\n");
-		expect([...new Uint8Array(await phone.vault.read("note.md"))]).toEqual([0x6f, 0xff, 0x0a]);
-	});
-
 	it("leaves the note being typed in until the post-edit pause has passed", async () => {
 		const { remote, laptop, phone } = await syncedPair("one\nkeep\ntwo\n");
 		await laptop.vault.write("note.md", bytes("ONE\nkeep\ntwo\n"));
@@ -235,7 +222,7 @@ describe("edits made at the last moment", () => {
 });
 
 describe("JSON files", () => {
-	it("never writes markers into a JSON file, even when its extension is in the text-extension list", async () => {
+	it("makes a Conflict copy of a JSON file instead of markers, even when its extension is in the text-extension list", async () => {
 		const remote = new FakeRemote();
 		remote.put(METADATA_FOLDER, { kind: "folder" });
 		remote.put(SETTINGS_PATH, {
@@ -245,6 +232,7 @@ describe("JSON files", () => {
 		});
 		const laptop = connectTestDevice(remote, "Laptop");
 		const phone = connectTestDevice(remote, "Phone");
+		phone.clock.advance(new Date(2026, 9, 20, 14, 30).getTime());
 		await laptop.vault.write("board.canvas", bytes('{"nodes":[]}\n'));
 		await syncNow(laptop);
 		await syncNow(phone);
@@ -255,6 +243,7 @@ describe("JSON files", () => {
 		await syncNow(phone);
 
 		expect(remoteText(remote, "board.canvas")).toBe('{"nodes":["laptop"]}\n');
-		expect(await vaultText(phone, "board.canvas")).toBe('{"nodes":["phone"]}\n');
+		expect(await vaultText(phone, "board.canvas")).toBe('{"nodes":["laptop"]}\n');
+		expect(remoteText(remote, "board (conflict Phone 2026-10-20 1430).canvas")).toBe('{"nodes":["phone"]}\n');
 	});
 });

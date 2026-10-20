@@ -33,13 +33,24 @@ export interface ConflictLabels {
 	readonly remote: string;
 }
 
+/** The result of a text merge. */
+export interface MergedText {
+	/** The merged bytes for both sides. */
+	readonly data: ArrayBuffer;
+	/**
+	 * Whether the merge wrote a Conflict block. Old markers merged as plain
+	 * lines do not count: a JSON file is merged cleanly only without one.
+	 */
+	readonly conflicted: boolean;
+}
+
 /**
  * Merges the versions of a text file into the bytes for both sides,
  * labelling any Conflict block with `labels`; null, merging nothing, when
  * a version is not UTF-8. Old
  * markers in the versions are plain lines, so blocks may nest.
  */
-export function mergeText(versions: TextVersions, labels: ConflictLabels): ArrayBuffer | null {
+export function mergeText(versions: TextVersions, labels: ConflictLabels): MergedText | null {
 	const localText = normalised(versions.local);
 	const remoteText = normalised(versions.remote);
 	const baseText = versions.base === null ? undefined : normalised(versions.base);
@@ -48,11 +59,16 @@ export function mergeText(versions: TextVersions, labels: ConflictLabels): Array
 	const remote = linesOf(remoteText);
 	const base = baseText === undefined ? null : linesOf(baseText);
 	const merged: string[] = [];
+	let conflicted = false;
 	for (const region of regions(base, local, remote)) {
-		if ("same" in region) merged.push(...region.same);
-		else merged.push(...conflictBlock(region.local, region.remote, labels));
+		if ("same" in region) {
+			merged.push(...region.same);
+		} else {
+			merged.push(...conflictBlock(region.local, region.remote, labels));
+			conflicted = true;
+		}
 	}
-	return inStyleOf(versions.local, merged.join(""));
+	return { data: inStyleOf(versions.local, merged.join("")), conflicted };
 }
 
 /** `data` as text with LF line endings and no byte-order mark, or null if it is not UTF-8. */

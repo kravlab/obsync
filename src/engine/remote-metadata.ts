@@ -9,7 +9,7 @@
  * - `devices/<Device ID>.json`: one record per device, written only by it.
  */
 import type { VaultPath } from "./local-vault";
-import { nameOf } from "./paths";
+import { nameOf, splitName } from "./paths";
 import type { DeviceIdentity } from "./ports";
 import { isFailure, type Provider, type RemotePath } from "./provider";
 import { decodeUtf8 } from "./utf8";
@@ -67,9 +67,7 @@ const JSON_EXTENSIONS: readonly string[] = ["json", "canvas"];
  * be UTF-8, which only the content tells.
  */
 export function contentKindOf(path: VaultPath, settings: RemoteSettings): "text" | "json" | "other" {
-	const name = nameOf(path);
-	const dot = name.lastIndexOf(".");
-	const extension = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+	const extension = splitName(nameOf(path)).extension.slice(1).toLowerCase();
 	if (JSON_EXTENSIONS.includes(extension)) return "json";
 	return settings.textExtensions.some((listed) => listed.toLowerCase() === extension) ? "text" : "other";
 }

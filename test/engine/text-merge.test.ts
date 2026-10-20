@@ -13,8 +13,31 @@ function merge(base: string | null, local: string, remote: string): string {
 	);
 	if (merged === null) throw new Error("not merged as text");
 	// ignoreBOM keeps a byte-order mark in the text, where the tests can see it.
-	return new TextDecoder("utf-8", { ignoreBOM: true }).decode(merged);
+	return new TextDecoder("utf-8", { ignoreBOM: true }).decode(merged.data);
 }
+
+/** Whether merging the texts writes a Conflict block. */
+function conflicted(base: string | null, local: string, remote: string): boolean | undefined {
+	return mergeText({ base: base === null ? null : bytes(base), local: bytes(local), remote: bytes(remote) }, LABELS)
+		?.conflicted;
+}
+
+describe("whether a text merge wrote Conflict blocks", () => {
+	it("reports a clean merge, with a Base or between identical versions without one, as not conflicted", () => {
+		expect(conflicted("one\ntwo\nthree\n", "ONE\ntwo\nthree\n", "one\ntwo\nTHREE\n")).toBe(false);
+		expect(conflicted(null, "same\n", "same\n")).toBe(false);
+	});
+
+	it("reports overlapping edits, or differing versions without a Base, as conflicted", () => {
+		expect(conflicted("one\ntwo\n", "one\nmine\n", "one\ntheirs\n")).toBe(true);
+		expect(conflicted(null, "mine\n", "theirs\n")).toBe(true);
+	});
+
+	it("reports old markers merged as plain lines as not conflicted", () => {
+		const old = "<<<<<<< Phone\nx\n=======\ny\n>>>>>>> Remote\n";
+		expect(conflicted(old, `${old}added\n`, old)).toBe(false);
+	});
+});
 
 describe("text merge with a Base", () => {
 	it("merges edits to different lines without a Conflict block", () => {

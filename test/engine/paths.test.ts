@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ancestorsOf, foldersDownTo, isWithin, nameOf, parentOf } from "../../src/engine/paths";
+import { ancestorsOf, foldersDownTo, isWithin, nameOf, parentOf, splitName } from "../../src/engine/paths";
 
 describe("parentOf", () => {
 	it("gives the folder holding a nested path", () => {
@@ -49,5 +49,23 @@ describe("isWithin", () => {
 
 	it("does not hold for a sibling that only shares the prefix", () => {
 		expect(isWithin(".obsync-notes/a.md", ".obsync")).toBe(false);
+	});
+});
+
+describe("splitName", () => {
+	it("splits a name at its last dot, the dot going with the extension", () => {
+		expect(splitName("archive.tar.gz")).toEqual({ stem: "archive.tar", extension: ".gz" });
+	});
+
+	it("gives a name without a dot no extension", () => {
+		expect(splitName("LICENSE")).toEqual({ stem: "LICENSE", extension: "" });
+	});
+
+	it("takes a name whose only dot starts it as having no extension", () => {
+		expect(splitName(".hidden")).toEqual({ stem: ".hidden", extension: "" });
+	});
+
+	it("keeps a trailing dot as an empty extension", () => {
+		expect(splitName("draft.")).toEqual({ stem: "draft", extension: "." });
 	});
 });

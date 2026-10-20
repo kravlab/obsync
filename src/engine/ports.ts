@@ -4,6 +4,7 @@
  * supply fakes; the engine never imports Obsidian.
  */
 import type { LocalVault, VaultPath } from "./local-vault";
+import type { SyncNotice } from "./notices";
 import type { Provider, RemoteEntry } from "./provider";
 import type { SyncStatus } from "./status";
 import type { SyncSchedule } from "./sync-schedule";
@@ -133,12 +134,14 @@ export interface Scheduler {
 }
 
 /**
- * The engine's calls into the UI. Prompts and notices arrive with the
- * tickets that raise them; prompts will be awaited for the user's answer.
+ * The engine's calls into the UI. Prompts arrive with the tickets that
+ * raise them and will be awaited for the user's answer.
  */
 export interface UiPort {
 	/** Shows the current sync status. */
 	showStatus(status: SyncStatus): void;
+	/** Tells the user `notice` once, without waiting for an answer. */
+	showNotice(notice: SyncNotice): void;
 }
 
 /** Everything the engine is built from. */

@@ -136,6 +136,9 @@ export const en = {
 	/** Disconnected, but the login could not be revoked, e.g. offline. */
 	noticeDisconnectedRevokeFailed:
 		"Disconnected, but Dropbox could not be reached to revoke access. Remove the app from the connected apps in your Dropbox settings.",
+	/** A file changed on two devices could not be merged; `{file}` and `{copy}` are vault paths. */
+	noticeConflictCopyCreated:
+		"{file} changed on another device too and could not be merged. This device's version is kept as {copy}.",
 } as const;
 
 /** The shape every language's string table must have: the keys of `en`. */
