@@ -30,6 +30,41 @@ export const en = {
 	syncNow: "Sync now",
 	/** The command that lists the whole Remote instead of using the change feed. */
 	fullReconcile: "Full reconcile",
+
+	/** Conflict block action keeping one side; `{label}` is the name in its marker. */
+	conflictKeep: "Keep {label}",
+	/** Conflict block action keeping the first side, whose marker has no name. */
+	conflictKeepFirst: "Keep first version",
+	/** Conflict block action keeping the second side, whose marker has no name. */
+	conflictKeepSecond: "Keep second version",
+	/** Name of a Conflict block's first side when its marker has none. */
+	conflictFirstVersion: "First version",
+	/** Name of a Conflict block's second side when its marker has none. */
+	conflictSecondVersion: "Second version",
+	/** Conflict block action keeping both sides in order. */
+	conflictKeepBoth: "Keep both",
+	/** Conflict block action opening the hand-edit dialog. */
+	conflictEdit: "Edit…",
+	/** Title of the hand-edit dialog. */
+	conflictEditTitle: "Resolve conflict",
+	/** What the hand-edit dialog's text field is for. */
+	conflictEditDescription: "Combine the two versions here; saving replaces the whole conflict with this text.",
+	/** Button saving the hand edit. */
+	save: "Save",
+	/** Button closing the hand-edit dialog without a change. */
+	cancel: "Cancel",
+	/** Notice when the conflict changed while the hand-edit dialog was open; the dialog stays open. */
+	conflictChanged: "This conflict changed in the meantime. Copy your text, close this window and try again.",
+	/** Heading of a Conflict block in reading view. */
+	conflictUnresolved: "Unresolved conflict",
+	/** Reading view hint below the heading. */
+	conflictUnresolvedHint: "Switch to editing view to resolve it.",
+	/** Command moving to the next Conflict block. */
+	nextConflict: "Next conflict",
+	/** Command moving to the previous Conflict block. */
+	previousConflict: "Previous conflict",
+	/** Notice when the note has no Conflict blocks. */
+	noConflicts: "This note has no conflicts.",
 	/** Settings row description of Sync now. */
 	settingsSyncNow: "Upload this device's new and changed files, then download those from other devices.",
 	/** Settings row of this device's post-edit pause. */

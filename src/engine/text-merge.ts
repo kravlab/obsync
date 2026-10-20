@@ -12,6 +12,7 @@
  */
 import { diff3Merge, diffComm } from "node-diff3";
 import { commonEnds } from "./common-ends";
+import { LOCAL_MARKER, REMOTE_MARKER, SEPARATOR_MARKER } from "./conflict-blocks";
 import { decodeUtf8, hasByteOrderMark } from "./utf8";
 
 /** The versions of one text file a merge takes, as bytes. */
@@ -107,7 +108,13 @@ function middleRegions(base: string[] | null, local: string[], remote: string[])
  * line.
  */
 function conflictBlock(local: readonly string[], remote: readonly string[], labels: ConflictLabels): string[] {
-	return [`<<<<<<< ${labels.local}\n`, ...closed(local), "=======\n", ...closed(remote), `>>>>>>> ${labels.remote}\n`];
+	return [
+		`${LOCAL_MARKER} ${labels.local}\n`,
+		...closed(local),
+		`${SEPARATOR_MARKER}\n`,
+		...closed(remote),
+		`${REMOTE_MARKER} ${labels.remote}\n`,
+	];
 }
 
 /** `lines` with a line break added to the last one if it has none. */

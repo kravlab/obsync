@@ -5,3 +5,105 @@
 .obsync-message:not(:empty) {
 	color: var(--text-error);
 }
+
+/* Conflict blocks in the editor: markers stay visible but quiet, each
+   side gets a light tint of its own, and a row of actions sits above. */
+.obsync-conflict-marker {
+	color: var(--text-muted);
+}
+
+.obsync-conflict-local {
+	background-color: var(--background-modifier-hover);
+}
+
+.obsync-conflict-remote {
+	background-color: var(--background-secondary);
+}
+
+/* A block nested in a side keeps the outer tint and marks its own sides
+   with a bar at the start of the line. */
+.obsync-conflict-nested-local {
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+.obsync-conflict-nested-remote {
+	box-shadow: inset 3px 0 0 var(--text-muted);
+}
+
+/* Marker and side lines show the note's text as it is: Markdown read
+   across the markers, such as a line above ======= becoming a heading,
+   is undone on these lines and everything in them. */
+.obsync-conflict-marker,
+.obsync-conflict-marker *,
+.obsync-conflict-local,
+.obsync-conflict-local *,
+.obsync-conflict-remote,
+.obsync-conflict-remote * {
+	font-size: var(--font-text-size);
+	font-weight: var(--font-normal);
+	line-height: var(--line-height-normal);
+	text-decoration: none;
+}
+
+.obsync-conflict-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) 0;
+	font-size: var(--font-ui-small);
+}
+
+/* On a phone the actions are buttons big enough to tap. */
+.obsync-conflict-actions.obsync-phone button {
+	min-height: 44px;
+	flex: 1 1 40%;
+}
+
+/* The Edit… dialog: both sides above the field that combines them. */
+.obsync-conflict-edit-sides {
+	display: grid;
+	gap: var(--size-4-2);
+}
+
+.obsync-conflict-edit-side {
+	padding: var(--size-4-2);
+	border-radius: var(--radius-m);
+}
+
+.obsync-conflict-edit-side pre {
+	margin: 0;
+	white-space: pre-wrap;
+}
+
+.obsync-conflict-edit-text {
+	width: 100%;
+	min-height: 10em;
+}
+
+/* A Conflict block in reading view: both sides, no buttons. */
+.obsync-conflict-panel {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-2) var(--size-4-4);
+	margin: var(--size-4-2) 0;
+}
+
+.obsync-conflict-panel-title {
+	font-weight: var(--font-semibold);
+}
+
+.obsync-conflict-panel-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.obsync-conflict-panel-side {
+	margin-top: var(--size-4-2);
+	padding: 0 var(--size-4-2);
+	border-radius: var(--radius-m);
+}
+
+.obsync-conflict-panel-label {
+	color: var(--text-accent);
+	font-size: var(--font-ui-small);
+}

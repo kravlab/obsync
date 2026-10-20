@@ -1,4 +1,4 @@
-import { Plugin, getLanguage, requestUrl } from "obsidian";
+import { Platform, Plugin, getLanguage, requestUrl } from "obsidian";
 import { createConnectionService } from "./engine/connection";
 import { createSyncEngine } from "./engine/engine";
 import type { Scheduler } from "./engine/ports";
@@ -11,8 +11,12 @@ import { DROPBOX_APP_KEY } from "./providers/dropbox/app-key";
 import { createDropboxConnectStep } from "./providers/dropbox/connect-step";
 import type { DropboxOptions } from "./providers/dropbox/options";
 import { createDropboxConnector } from "./providers/dropbox/provider";
+import { moveToConflict } from "./ui/conflict-commands";
+import { conflictDecorations } from "./ui/conflict-decorations";
+import { ConflictEditModal } from "./ui/conflict-edit-modal";
+import { conflictReadingView } from "./ui/conflict-reading-view";
 import { ConnectModal } from "./ui/connect-modal";
-import { selectStrings } from "./ui/i18n/strings";
+import { selectStrings, type Strings } from "./ui/i18n/strings";
 import { ObsyncSettingTab } from "./ui/settings-tab";
 import { StatusIndicator } from "./ui/status-indicator";
 
@@ -84,6 +88,7 @@ export default class ObsyncPlugin extends Plugin {
 		};
 		this.addCommand({ id: "sync-now", name: strings.syncNow, callback: syncNow });
 		this.addCommand({ id: "full-reconcile", name: strings.fullReconcile, callback: fullReconcile });
+		this.addConflictResolution(strings);
 		this.app.workspace.onLayoutReady(() => {
 			// Nothing syncs before the vault's files are all loaded.
 			const started = engine.start();
@@ -116,6 +121,32 @@ export default class ObsyncPlugin extends Plugin {
 		this.addSettingTab(settingTab);
 		await connection.showStatus();
 		await settingTab.reload();
+	}
+
+	/**
+	 * Adds the ways to resolve Conflict blocks (spec, "Architecture and
+	 * modules"): the action rows in the editor, the panels in reading view,
+	 * and the "Next conflict" and "Previous conflict" commands.
+	 */
+	private addConflictResolution(strings: Strings): void {
+		this.registerEditorExtension(
+			conflictDecorations({
+				strings,
+				isPhone: Platform.isPhone,
+				editBlock: (block, apply) => new ConflictEditModal(this.app, strings, block, apply).open(),
+			}),
+		);
+		this.registerMarkdownPostProcessor(conflictReadingView(this.app, strings));
+		this.addCommand({
+			id: "next-conflict",
+			name: strings.nextConflict,
+			editorCallback: (editor) => moveToConflict(editor, "next", strings),
+		});
+		this.addCommand({
+			id: "previous-conflict",
+			name: strings.previousConflict,
+			editorCallback: (editor) => moveToConflict(editor, "previous", strings),
+		});
 	}
 
 	/**
