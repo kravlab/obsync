@@ -14,7 +14,7 @@ A sync interrupted by backgrounding, a lost network or closing Obsidian finishes
 
 **Blocked by:** 03 (Two-way sync of new and changed files).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The triggers are wired: vault open after `onLayoutReady`; the post-edit pause; polling; `visibilitychange` → `visible`; `online`. `hidden` is not relied on. The pause and polling intervals are settings.
 - [ ] At most one sync runs per device; triggers that fire during a sync collapse into one follow-up.
@@ -23,3 +23,7 @@ A sync interrupted by backgrounding, a lost network or closing Obsidian finishes
 - [ ] Order of work: local uploads first, small text before large attachments, then downloads.
 - [ ] There is no persisted queue. Engine tests that crash between any two steps show the next sync completing the work with no loss.
 - [ ] Offline gives backoff retries, an "Offline" state, and no repeated notices.
+
+## Comments
+
+- 2026-10-20: Implemented in commit `9ef23bd` (feat(sync): sync on its own and survive being cut off) on `feat/sync-triggers`; plan: `.scratch/vault-sync-impl/plans/05-sync-triggers.md`. Ticket closed. Still to check by hand in Obsidian on desktop, Android and iOS: the `visibilitychange` and `online` triggers, the settings rows, and the snapshot database upgrade with the change-feed store.
