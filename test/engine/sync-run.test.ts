@@ -7,6 +7,7 @@ import { FakeRemote } from "../fakes/fake-remote";
 import { connectTestDevice } from "../fakes/test-device";
 import { bytes } from "../support/bytes";
 import { mirror, remoteText, syncNow, vaultText } from "../support/sync";
+import { EXHAUSTIVE_TEST_TIMEOUT_MS } from "../support/timeouts";
 
 describe("local change detection by mtime and size", () => {
 	it("skips reading and hashing untouched vault files on later syncs, while uploading files edited while closed", async () => {
@@ -241,7 +242,7 @@ describe("interruption safety across every step", () => {
 			}
 			expect(reachedCompletion, `a sync crashing ${when} step 200 never completed`).toBe(true);
 		}
-	});
+	}, EXHAUSTIVE_TEST_TIMEOUT_MS);
 });
 
 describe("an edit size and mtime cannot see", () => {

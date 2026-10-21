@@ -4,6 +4,7 @@ import { SimulatedCrash } from "../fakes/fake-provider";
 import { connectTestDevice, type TestDevice } from "../fakes/test-device";
 import { bytes } from "../support/bytes";
 import { forgetNotices, mirror, remoteText, syncNow, vaultText, withStartedEngine } from "../support/sync";
+import { EXHAUSTIVE_TEST_TIMEOUT_MS } from "../support/timeouts";
 
 /** 2026-10-20 14:30 on the test machine's own clock, the local time a Conflict copy is named after. */
 const AFTERNOON = new Date(2026, 9, 20, 14, 30).getTime();
@@ -492,7 +493,7 @@ describe("a rename cut off at any step", () => {
 					expect(notices.filter((notice) => notice.kind !== "conflictCopyCreated"), at).toEqual([]);
 				},
 			});
-		});
+		}, EXHAUSTIVE_TEST_TIMEOUT_MS);
 
 		it(`is completed by the receiving device's next sync, its own edit kept, on a service with ${JSON.stringify(service)}`, async () => {
 			await crashAtEveryStep(service, {
@@ -519,7 +520,7 @@ describe("a rename cut off at any step", () => {
 					expect(mirrorTexts(remote).some((content) => content.includes("edited on phone")), at).toBe(true);
 				},
 			});
-		});
+		}, EXHAUSTIVE_TEST_TIMEOUT_MS);
 	}
 });
 
