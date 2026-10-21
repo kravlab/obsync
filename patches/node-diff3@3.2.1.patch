@@ -1,0 +1,125 @@
+diff --git a/dist/diff3.cjs b/dist/diff3.cjs
+index 1a4ab71832f2564414657e96029c49f20520c8e7..f19b02ae496475665a8ac537e8abcfe47c38b214 100644
+--- a/dist/diff3.cjs
++++ b/dist/diff3.cjs
+@@ -71,12 +71,22 @@ function LCS(buffer1, buffer2) {
+     let r = 0;
+     let c = candidates[0];
+     for (const j of buffer2indices) {
+-      let s;
+-      for (s = r;s < candidates.length; s++) {
+-        if (candidates[s].buffer2index < j && (s === candidates.length - 1 || candidates[s + 1].buffer2index > j)) {
+-          break;
++      // The candidates from r on are sorted by buffer2index: find the last one
++      // before j in halves, then require the next one to be after j, as the
++      // scan this replaces did (node-diff3 issue #84).
++      let s = candidates.length;
++      for (let low = r, high = candidates.length - 1; low <= high; ) {
++        const mid = (low + high) >> 1;
++        if (candidates[mid].buffer2index < j) {
++          s = mid;
++          low = mid + 1;
++        } else {
++          high = mid - 1;
+         }
+       }
++      if (s < candidates.length - 1 && candidates[s + 1].buffer2index <= j) {
++        s = candidates.length;
++      }
+       if (s < candidates.length) {
+         const newCandidate = { buffer1index: i, buffer2index: j, chain: candidates[s] };
+         if (r === candidates.length) {
+diff --git a/dist/diff3.iife.js b/dist/diff3.iife.js
+index 3d1ac26746a03d24bc21f15e5b0eb2810bc4ed54..bfe61f248b69002c739603ec3c26a24baed78291 100644
+--- a/dist/diff3.iife.js
++++ b/dist/diff3.iife.js
+@@ -48,12 +48,22 @@
+       let r = 0;
+       let c = candidates[0];
+       for (const j of buffer2indices) {
+-        let s;
+-        for (s = r;s < candidates.length; s++) {
+-          if (candidates[s].buffer2index < j && (s === candidates.length - 1 || candidates[s + 1].buffer2index > j)) {
+-            break;
+-          }
++        // The candidates from r on are sorted by buffer2index: find the last one
++      // before j in halves, then require the next one to be after j, as the
++      // scan this replaces did (node-diff3 issue #84).
++      let s = candidates.length;
++      for (let low = r, high = candidates.length - 1; low <= high; ) {
++        const mid = (low + high) >> 1;
++        if (candidates[mid].buffer2index < j) {
++          s = mid;
++          low = mid + 1;
++        } else {
++          high = mid - 1;
+         }
++      }
++      if (s < candidates.length - 1 && candidates[s + 1].buffer2index <= j) {
++        s = candidates.length;
++      }
+         if (s < candidates.length) {
+           const newCandidate = { buffer1index: i, buffer2index: j, chain: candidates[s] };
+           if (r === candidates.length) {
+diff --git a/dist/diff3.mjs b/dist/diff3.mjs
+index 8df4f85ce7b621bf0ea8981086fae61d90e5357b..bed81e47ee697c006615c9fa817b7b947c9a4d5e 100644
+--- a/dist/diff3.mjs
++++ b/dist/diff3.mjs
+@@ -17,12 +17,22 @@ function LCS(buffer1, buffer2) {
+     let r = 0;
+     let c = candidates[0];
+     for (const j of buffer2indices) {
+-      let s;
+-      for (s = r;s < candidates.length; s++) {
+-        if (candidates[s].buffer2index < j && (s === candidates.length - 1 || candidates[s + 1].buffer2index > j)) {
+-          break;
++      // The candidates from r on are sorted by buffer2index: find the last one
++      // before j in halves, then require the next one to be after j, as the
++      // scan this replaces did (node-diff3 issue #84).
++      let s = candidates.length;
++      for (let low = r, high = candidates.length - 1; low <= high; ) {
++        const mid = (low + high) >> 1;
++        if (candidates[mid].buffer2index < j) {
++          s = mid;
++          low = mid + 1;
++        } else {
++          high = mid - 1;
+         }
+       }
++      if (s < candidates.length - 1 && candidates[s + 1].buffer2index <= j) {
++        s = candidates.length;
++      }
+       if (s < candidates.length) {
+         const newCandidate = { buffer1index: i, buffer2index: j, chain: candidates[s] };
+         if (r === candidates.length) {
+diff --git a/src/diff3.mjs b/src/diff3.mjs
+index 7b43ba56eaf242444384ce940da3cef944761922..fc3692634cdc3cd55a52224011da0b46e578d854 100644
+--- a/src/diff3.mjs
++++ b/src/diff3.mjs
+@@ -45,12 +45,22 @@ function LCS(buffer1, buffer2) {
+     let c = candidates[0];
+ 
+     for (const j of buffer2indices) {
+-      let s;
+-      for (s = r; s < candidates.length; s++) {
+-        if ((candidates[s].buffer2index < j) && ((s === candidates.length - 1) || (candidates[s + 1].buffer2index > j))) {
+-          break;
++      // The candidates from r on are sorted by buffer2index: find the last one
++      // before j in halves, then require the next one to be after j, as the
++      // scan this replaces did (node-diff3 issue #84).
++      let s = candidates.length;
++      for (let low = r, high = candidates.length - 1; low <= high; ) {
++        const mid = (low + high) >> 1;
++        if (candidates[mid].buffer2index < j) {
++          s = mid;
++          low = mid + 1;
++        } else {
++          high = mid - 1;
+         }
+       }
++      if (s < candidates.length - 1 && candidates[s + 1].buffer2index <= j) {
++        s = candidates.length;
++      }
+ 
+       if (s < candidates.length) {
+         const newCandidate = { buffer1index: i, buffer2index: j, chain: candidates[s] };

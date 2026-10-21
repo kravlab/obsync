@@ -162,6 +162,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  node-diff3@3.2.1: 6e95b7ab724889c4e83099e5471effafe5fe2eac5cc1931e79332d4dd6365e32
+
 importers:
 
   .:
@@ -171,7 +174,7 @@ importers:
         version: 7.0.12
       node-diff3:
         specifier: 3.2.1
-        version: 3.2.1
+        version: 3.2.1(patch_hash=6e95b7ab724889c4e83099e5471effafe5fe2eac5cc1931e79332d4dd6365e32)
     devDependencies:
       '@codemirror/state':
         specifier: 6.7.6
@@ -3362,7 +3365,7 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
-  node-diff3@3.2.1: {}
+  node-diff3@3.2.1(patch_hash=6e95b7ab724889c4e83099e5471effafe5fe2eac5cc1931e79332d4dd6365e32): {}
 
   node-exports-info@1.6.2:
     dependencies:

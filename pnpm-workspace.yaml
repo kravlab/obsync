@@ -3,3 +3,5 @@ allowBuilds:
   # esbuild's postinstall checks that its platform binary
   # (@esbuild/<platform>) is installed and runs.
   esbuild: true
+patchedDependencies:
+  node-diff3@3.2.1: patches/node-diff3@3.2.1.patch

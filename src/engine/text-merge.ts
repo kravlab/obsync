@@ -95,9 +95,10 @@ type Region = { readonly same: readonly string[] } | { readonly local: readonly 
 /**
  * The regions of a 3-way merge against `base`, or of a 2-way merge
  * without one. The lines every version shares at its start and end are
- * kept out of the diff, whose cost grows about with the square of the
- * lines it compares (node-diff3 issue #84): edits close together in a long
- * note stay fast.
+ * kept out of the diff, so edits close together in a long note diff only
+ * the lines between them. node-diff3 is patched (patches/) to search its
+ * LCS candidates in halves instead of one by one, which made the diff
+ * about quadratic (node-diff3 issue #84): edits far apart stay fast too.
  */
 function regions(base: string[] | null, local: string[], remote: string[]): Region[] {
 	const { head, tail } = commonEnds(base === null ? [local, remote] : [local, base, remote]);

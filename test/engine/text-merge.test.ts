@@ -125,6 +125,19 @@ describe("text merge of a long note", () => {
 		expect(merged.ms).toBeLessThan(1000);
 	});
 
+	it("merges edits at both ends of a 20,000-line note within a second", () => {
+		const base = note(20_000);
+		const merged = timed(
+			base,
+			base.map((line, index) => (index === 10 ? "mine\n" : line)),
+			base.map((line, index) => (index === 19_990 ? "theirs\n" : line)),
+		);
+		expect(merged.text).not.toContain("<<<<<<<");
+		expect(merged.text.split("\n")[10]).toBe("mine");
+		expect(merged.text.split("\n")[19_990]).toBe("theirs");
+		expect(merged.ms).toBeLessThan(1000);
+	});
+
 	it("merges nearby edits in a 20,000-line note within a second", () => {
 		const base = note(20_000);
 		const merged = timed(
