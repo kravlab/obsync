@@ -26,6 +26,11 @@
  *   merge wrote Conflict blocks or does not parse): L becomes a Conflict
  *   copy next to it (conflict-copy.ts), uploaded and announced, and R
  *   takes the name on both sides. No clock decides between them.
+ * - a configuration file (configuration.ts) is merged only cleanly, never
+ *   with Conflict blocks; otherwise R wins and L is kept in the
+ *   configuration conflict store, restorable, so no stray copy lands in
+ *   the configuration folder. A rename onto a taken configuration path
+ *   keeps L the same way.
  *
  * - S with L or R gone (deletions.ts): a file deleted here and unchanged
  *   on the Remote is deleted there on condition of S's revision; a file
@@ -55,11 +60,17 @@
  * A vault file typed into within the post-edit pause is not written or
  * trashed by this sync; a later one does it.
  *
+ * The first change this sync makes in the configuration folder tells the
+ * user, once, to restart Obsidian to apply it.
+ *
  * Which paths take part (the Synced file scope rules), and their vault
  * paths on a case-insensitive provider, is settled by `syncListing` first;
  * a path it leaves out is never taken for a deleted one. The provider is
- * reached through the Remote's name policy (name-policy.ts), so the sync
- * works in vault paths only. An upload the provider refuses for its name
+ * reached through the Remote's name policy (name-policy.ts) and the one
+ * Remote name of the configuration folder (configuration.ts), so the sync
+ * works in vault paths only. Snapshot entries of configuration categories
+ * this device has off are forgotten first, so a category turned on again
+ * syncs as a union. An upload the provider refuses for its name
  * or size is skipped and reported instead of stopping the sync.
  *
  * Everything else is left as it is on both sides: a file and a folder at
@@ -67,14 +78,15 @@
  * upload refused by its precondition is left too; the next sync merges
  * again.
  */
+import { configurationCategoriesOf, withConfigurationFolder, type ConfigurationCategories, type ConfigurationLayout } from "./configuration";
 import { conflictCopyPath } from "./conflict-copy";
 import { contentHash } from "./content-hash";
 import { guardReason, type DeletionGuardSettings } from "./deletion-guard";
 import { findDeletions } from "./deletions";
 import { ignoreList } from "./ignore-list";
-import type { LocalVault, VaultEntry, VaultFile, VaultPath } from "./local-vault";
-import { comparePaths, foldersDownTo, parentOf, pathKey } from "./paths";
-import type { Clock, DeviceIdentity, DeviceStore, RemoteFeed, UiPort } from "./ports";
+import { ensureVaultFolder as createVaultFolders, withVaultWrites, type LocalVault, type VaultEntry, type VaultFile, type VaultPath } from "./local-vault";
+import { comparePaths, foldersDownTo, isWithin, parentOf, pathKey } from "./paths";
+import type { Clock, ConfigurationConflictStore, DeviceIdentity, DeviceStore, RemoteFeed, UiPort } from "./ports";
 import {
 	isFailure,
 	type Change,
@@ -116,6 +128,8 @@ export interface SyncRun {
 	readonly vault: LocalVault;
 	/** Holds the Sync snapshot, the Bases and the Remote feed state. */
 	readonly deviceStore: DeviceStore;
+	/** Keeps this device's versions of configuration files the Remote's won over. */
+	readonly configurationConflicts: ConfigurationConflictStore;
 	/** The shared Remote settings, read at the start of this sync. */
 	readonly settings: RemoteSettings;
 	/** This device, whose name labels its side of a Conflict block. */
@@ -130,14 +144,28 @@ export interface SyncRun {
 	readonly editPauseMs: number;
 	/** This device's Deletion guard thresholds. */
 	readonly guard: DeletionGuardSettings;
+	/** Where the configuration folder is, and which of its categories this device syncs now. */
+	readonly configuration: SyncedConfiguration;
 	/** The vault's renames since the last completed sync, in order: hints for finding renames. */
 	readonly renameHints: readonly VaultRename[];
+	/**
+	 * Ids of kept configuration versions the user chose to restore ("Restore
+	 * local"), written back before anything is listed, so this sync uploads
+	 * each as an edit made here.
+	 */
+	readonly restores: readonly string[];
 	/**
 	 * Present when this is a First sync: the device has no Sync snapshot,
 	 * and entries left from a First sync cut off earlier are ignored, so it
 	 * only adds and merges.
 	 */
 	readonly firstSync?: FirstSyncRun;
+}
+
+/** The configuration folder as one sync takes it (configuration.ts). */
+export interface SyncedConfiguration {
+	readonly layout: ConfigurationLayout;
+	readonly categories: ConfigurationCategories;
 }
 
 /** What a First sync needs besides an ordinary sync. */
@@ -182,8 +210,9 @@ export interface SyncRunResult {
  */
 export async function runSync({
 	provider: storedAs,
-	vault,
+	vault: unwatchedVault,
 	deviceStore,
+	configurationConflicts,
 	settings,
 	device,
 	clock,
@@ -191,12 +220,34 @@ export async function runSync({
 	reconcile,
 	editPauseMs,
 	guard,
+	configuration,
 	renameHints,
+	restores,
 	firstSync,
 }: SyncRun): Promise<SyncRunResult> {
 	// A First sync is a union: entries left from one cut off earlier must not turn into renames or deletions.
 	const snapshot = new Map(firstSync === undefined ? await deviceStore.loadSnapshot() : []);
-	const codec = pathCodec(storedAs.nameRules, settings.namePolicy);
+	/** Whether `path` lies in the configuration folder, whose conflicts the Remote wins. */
+	const inConfiguration = (path: VaultPath): boolean => isWithin(path, configuration.layout.configDir);
+	let configurationChanged = false;
+	const vault = watchingConfiguration(unwatchedVault, inConfiguration, () => {
+		if (configurationChanged) return;
+		configurationChanged = true;
+		ui.showNotice({ kind: "configurationChanged" });
+	});
+	/** Whether the entry of `kind` at `path` in the configuration folder syncs now; null outside it. */
+	const configurationSyncs = (path: VaultPath, kind: VaultEntry["kind"]): boolean | null =>
+		configurationCategoriesOf(path, kind, configuration.layout)?.some((category) => configuration.categories[category]) ?? null;
+	// A category turned off leaves the snapshot, so turning it on again is a union for its files, as a First sync is.
+	for (const [path, entry] of snapshot) {
+		if (configurationSyncs(path, entry.kind) !== false) continue;
+		await deviceStore.removeSnapshotEntry(path);
+		snapshot.delete(path);
+	}
+	// The user's own choice, not another device's change: no restart notice.
+	for (const id of restores) await restoreKept(unwatchedVault, configurationConflicts, id);
+	const { caseInsensitive } = storedAs.nameRules;
+	const codec = withConfigurationFolder(pathCodec(storedAs.nameRules, settings.namePolicy), configuration.layout.configDir, caseInsensitive);
 	// From here on every provider call takes and gives vault paths.
 	const provider = namedProvider(storedAs, codec);
 	const previousFeed = await deviceStore.loadRemoteFeed();
@@ -205,7 +256,7 @@ export async function runSync({
 		await vault.list(),
 		listed.entries,
 		{
-			configDir: vault.configDir,
+			configuration: configurationSyncs,
 			caseInsensitive: provider.nameRules.caseInsensitive,
 			ignore: ignoreList(settings.ignoreList, provider.nameRules.caseInsensitive),
 			storable: (path) => codec.toRemote(path) !== null,
@@ -322,7 +373,8 @@ export async function runSync({
 		}
 		const mergeResult = await mergedContent(path, localData, remoteVersion.data, synced);
 		if (mergeResult === null) {
-			await keepConflictCopy(path, localData, localHash, remoteVersion, remoteHash);
+			if (inConfiguration(path)) await keepRemoteConfiguration(path, localData, remoteVersion, remoteHash);
+			else await keepConflictCopy(path, localData, localHash, remoteVersion, remoteHash);
 			return;
 		}
 		const merged = mergeResult.data;
@@ -346,8 +398,9 @@ export async function runSync({
 	 * file `path`, against the Base when `synced` has a true one; null when
 	 * they cannot be merged: a file that is not text, a version that is not
 	 * UTF-8, a JSON file whose merge wrote Conflict blocks or does not
-	 * parse, or any file created on both sides in a First sync started with
-	 * "keep Remote". `conflicted` tells whether it holds Conflict blocks.
+	 * parse, a configuration file whose merge wrote them, or any other file
+	 * created on both sides in a First sync started with "keep Remote".
+	 * `conflicted` tells whether it holds Conflict blocks.
 	 */
 	async function mergedContent(
 		path: VaultPath,
@@ -356,11 +409,13 @@ export async function runSync({
 		synced: SnapshotEntry | undefined,
 	): Promise<{ readonly data: ArrayBuffer; readonly conflicted: boolean } | null> {
 		const kind = contentKindOf(path, settings);
-		if (kind === "other" || (keepRemote && synced === undefined)) return null;
+		const configurationFile = inConfiguration(path);
+		if (kind === "other" || (keepRemote && synced === undefined && !configurationFile)) return null;
 		const base = synced?.kind === "file" ? await trueBase(path, synced.hash) : null;
 		const merged = mergeText({ base, local: localData, remote: remoteData }, { local: device.name, remote: REMOTE_LABEL });
 		if (merged === null) return null;
-		if (kind === "json" && (merged.conflicted || !parsesAsJson(merged.data))) return null;
+		if ((kind === "json" || configurationFile) && merged.conflicted) return null;
+		if (kind === "json" && !parsesAsJson(merged.data)) return null;
 		return merged;
 	}
 
@@ -405,6 +460,39 @@ export async function runSync({
 	}
 
 	/**
+	 * Resolves a configuration conflict on `path`, unless it is being typed
+	 * into: keeps `localData`, this device's version, in the configuration
+	 * conflict store, then puts `remoteVersion`, with `remoteHash`, in its
+	 * place if the file still holds `localData`, and records it. The pause
+	 * is checked before keeping, so a sync that must leave the file keeps
+	 * no version of it. Kept before the replace, so a sync cut off in
+	 * between loses nothing: the next one finds the conflict again and
+	 * keeps the version once more.
+	 */
+	async function keepRemoteConfiguration(
+		path: VaultPath,
+		localData: ArrayBuffer,
+		remoteVersion: RemoteContent,
+		remoteHash: string,
+	): Promise<void> {
+		if (pausedForTyping(path)) return;
+		await configurationConflicts.keep(path, localData, clock.now());
+		if (!(await vault.replace(path, localData, remoteVersion.data))) return;
+		setRemoteFile(path, remoteVersion);
+		await recordFile(path, remoteVersion, remoteHash);
+	}
+
+	/**
+	 * Keeps the vault file `path`, in the way of the Remote's file at that
+	 * configuration path, in the configuration conflict store and moves it
+	 * to the trash, so the Remote's file can take the path.
+	 */
+	async function keepLocalConfiguration(path: VaultPath): Promise<void> {
+		await configurationConflicts.keep(path, await vault.read(path), clock.now());
+		await vault.trash(path);
+	}
+
+	/**
 	 * The first Conflict copy path for `path`, by this device at `time`,
 	 * numbered `from` or higher, that is free in the vault and on the
 	 * Remote as listed; the first copy has no number, the next ones 2, 3, ….
@@ -433,11 +521,7 @@ export async function runSync({
 	}
 
 	/** Creates `path` and the folders above it in the vault where missing. */
-	async function ensureVaultFolder(path: VaultPath): Promise<void> {
-		for (const folder of foldersDownTo(path)) {
-			if ((await vault.stat(folder)) === null) await vault.createFolder(folder);
-		}
-	}
+	const ensureVaultFolder = (path: VaultPath): Promise<void> => createVaultFolders(vault, path);
 
 	/** Writes to the Remote; undefined when the precondition no longer holds. */
 	async function writeRemote(
@@ -835,12 +919,18 @@ export async function runSync({
 			if (there === undefined) toUpload.push(entry.path);
 			else if (there.kind !== "file") continue;
 			else if (await sameContent(entry.path, there)) identical.push(entry.path);
-			else differing.push({ path: entry.path, outcome: contentKindOf(entry.path, settings) === "text" ? "merged" : "conflictCopy" });
+			else differing.push({ path: entry.path, outcome: differingOutcome(entry.path) });
 		}
 		for (const entry of sortedByPath([...remote.values()])) {
 			if (entry.kind === "file" && !localEntries.has(entry.path)) toDownload.push(entry.path);
 		}
 		return { toDownload, toUpload, identical, differing };
+	}
+
+	/** What the default handling of a First sync does to the file `path` when both sides hold it differently. */
+	function differingOutcome(path: VaultPath): DifferingOutcome {
+		if (inConfiguration(path)) return "remoteKept";
+		return contentKindOf(path, settings) === "text" ? "merged" : "conflictCopy";
 	}
 
 	/** Whether the vault file `path` holds what the Remote file `there` does. */
@@ -914,6 +1004,8 @@ export async function runSync({
 		ensureRemoteFolder,
 		ensureVaultFolder,
 		conflictCopyPath: async (path) => (await freeCopyPath(path, clock.now(), 1)).path,
+		inConfiguration,
+		keepLocalConfiguration,
 		unchangedHere,
 		forget,
 	});
@@ -951,6 +1043,40 @@ export async function runSync({
 	return firstSync === undefined
 		? { nextPostEditPauseMs, skipped: skipped() }
 		: { nextPostEditPauseMs, firstSync: tally, skipped: skipped() };
+}
+
+/**
+ * Writes the kept configuration version `id` back over its file in
+ * `vault`, creating its folders where missing, then takes it out of
+ * `store`; a version no longer kept does nothing.
+ */
+async function restoreKept(vault: LocalVault, store: ConfigurationConflictStore, id: string): Promise<void> {
+	const kept = (await store.list()).find((version) => version.id === id);
+	const data = kept === undefined ? null : await store.read(id);
+	if (kept === undefined || data === null) return;
+	await createVaultFolders(vault, parentOf(kept.path));
+	await vault.write(kept.path, data);
+	await store.remove(id);
+}
+
+/**
+ * `vault` calling `changed` after each write, successful replace, trash or
+ * rename that touches a path `inConfiguration` says is in the
+ * configuration folder; reading and creating folders change no setting.
+ */
+function watchingConfiguration(vault: LocalVault, inConfiguration: (path: VaultPath) => boolean, changed: () => void): LocalVault {
+	/** Calls `changed` once `done` settles, if any of `paths` is in the configuration folder. */
+	async function noting<T>(paths: readonly VaultPath[], done: Promise<T>, happened: (result: T) => boolean = () => true): Promise<T> {
+		const result = await done;
+		if (happened(result) && paths.some(inConfiguration)) changed();
+		return result;
+	}
+	return withVaultWrites(vault, {
+		write: (path, data) => noting([path], vault.write(path, data)),
+		replace: (path, expected, data) => noting([path], vault.replace(path, expected, data), (replaced) => replaced),
+		trash: (path) => noting([path], vault.trash(path)),
+		rename: (from, to) => noting([from, to], vault.rename(from, to)),
+	});
 }
 
 /**

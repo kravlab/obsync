@@ -1,13 +1,16 @@
 import {
 	providerSecretId,
+	type ConfigurationConflictStore,
 	type Connection,
 	type DeviceStore,
+	type KeptConfiguration,
 	type EnginePorts,
 	type ProviderConnector,
 	type RemoteFeed,
 	type SecretStore,
 	type UiPort,
 } from "../../src/engine/ports";
+import { DEFAULT_CONFIGURATION_CATEGORIES, type ConfigurationCategories } from "../../src/engine/configuration";
 import { DEFAULT_DELETION_GUARD, type DeletionAnswer, type DeletionGuardSettings, type DeletionPrompt } from "../../src/engine/deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "../../src/engine/first-sync";
 import type { LocalVault, VaultPath } from "../../src/engine/local-vault";
@@ -131,6 +134,35 @@ export class InMemoryDeviceStore implements DeviceStore {
 	}
 }
 
+/** A configuration conflict store in memory; ids count up from `kept-1`. */
+export class InMemoryConfigurationConflicts implements ConfigurationConflictStore {
+	/** Every kept version with its bytes, oldest first. */
+	private readonly kept: { readonly version: KeptConfiguration; readonly data: ArrayBuffer }[] = [];
+	private nextId = 1;
+
+	keep(path: VaultPath, data: ArrayBuffer, keptAt: number): Promise<KeptConfiguration> {
+		const version = { id: `kept-${this.nextId}`, path, keptAt };
+		this.nextId += 1;
+		this.kept.push({ version, data: data.slice(0) });
+		return Promise.resolve(version);
+	}
+
+	/** Newest first: by time kept, the later kept first among the same time. */
+	list(): Promise<readonly KeptConfiguration[]> {
+		return Promise.resolve(this.kept.map(({ version }) => version).reverse().sort((a, b) => b.keptAt - a.keptAt));
+	}
+
+	read(id: string): Promise<ArrayBuffer | null> {
+		return Promise.resolve(this.kept.find(({ version }) => version.id === id)?.data.slice(0) ?? null);
+	}
+
+	remove(id: string): Promise<void> {
+		const index = this.kept.findIndex(({ version }) => version.id === id);
+		if (index !== -1) this.kept.splice(index, 1);
+		return Promise.resolve();
+	}
+}
+
 /** A Secret store in memory. */
 export class InMemorySecretStore implements SecretStore {
 	private readonly secrets = new Map<string, string>();
@@ -166,6 +198,8 @@ export class RecordingUi implements UiPort {
 	readonly firstSyncAnswers: FirstSyncAnswer[] = [];
 	/** Every skipped-files list shown, oldest first. */
 	readonly skippedLists: (readonly SkippedFile[])[] = [];
+	/** Every list of kept configuration versions shown, oldest first. */
+	readonly configurationConflictLists: (readonly KeptConfiguration[])[] = [];
 
 	/** The status shown last, or undefined if none was. */
 	get lastStatus(): SyncStatus | undefined {
@@ -184,6 +218,16 @@ export class RecordingUi implements UiPort {
 	/** Records `files` instead of showing them. */
 	showSkipped(files: readonly SkippedFile[]): void {
 		this.skippedLists.push(files);
+	}
+
+	/** The list of kept configuration versions shown last, or undefined if none was. */
+	get lastConfigurationConflicts(): readonly KeptConfiguration[] | undefined {
+		return this.configurationConflictLists[this.configurationConflictLists.length - 1];
+	}
+
+	/** Records `kept` instead of showing it. */
+	showConfigurationConflicts(kept: readonly KeptConfiguration[]): void {
+		this.configurationConflictLists.push(kept);
 	}
 
 	/** Records `notice` instead of showing it. */
@@ -219,6 +263,7 @@ export interface TestDevice {
 	readonly vault: FakeVault;
 	readonly deviceStore: InMemoryDeviceStore;
 	readonly secretStore: InMemorySecretStore;
+	readonly configurationConflicts: InMemoryConfigurationConflicts;
 	readonly clock: ManualClock;
 	readonly scheduler: ManualScheduler;
 	readonly ui: RecordingUi;
@@ -226,20 +271,34 @@ export interface TestDevice {
 	schedule: SyncSchedule;
 	/** The device's Deletion guard thresholds; tests may replace them at any time. */
 	deletionGuard: DeletionGuardSettings;
+	/** The configuration categories the device syncs, none at first; tests may replace them at any time. */
+	configurationCategories: ConfigurationCategories;
+	/** This plugin's own folder in the device's configuration folder. */
+	readonly pluginDir: string;
 	readonly ports: EnginePorts;
+}
+
+/** How a test device is set up. */
+export interface TestDeviceOptions {
+	/** The vault's configuration folder; FakeVault's default when absent. */
+	readonly configDir?: string;
 }
 
 /**
  * Builds a device whose provider opens on `remote`, always as the same
  * FakeProvider, so faults a test injects reach the engine. Several devices
  * built on one FakeRemote sync the same Remote. The device has no
- * Connection; `connectTestDevice` gives it one.
+ * Connection; `connectTestDevice` gives it one. This plugin's folder is
+ * `plugins/obsync` in the configuration folder, as Obsidian installs it.
  */
-export function createTestDevice(remote: FakeRemote): TestDevice {
+export function createTestDevice(remote: FakeRemote, options: TestDeviceOptions = {}): TestDevice {
 	const clock = new ManualClock();
-	const vault = new FakeVault({ clock });
+	const vault = new FakeVault({ clock, ...(options.configDir === undefined ? {} : { configDir: options.configDir }) });
+	const pluginId = "obsync";
+	const pluginDir = `${vault.configDir}/plugins/${pluginId}`;
 	const deviceStore = new InMemoryDeviceStore();
 	const secretStore = new InMemorySecretStore();
+	const configurationConflicts = new InMemoryConfigurationConflicts();
 	const scheduler = new ManualScheduler(clock);
 	const ui = new RecordingUi();
 	const crash = new CrashPoints();
@@ -254,21 +313,28 @@ export function createTestDevice(remote: FakeRemote): TestDevice {
 		vault,
 		deviceStore,
 		secretStore,
+		configurationConflicts,
 		clock,
 		scheduler,
 		ui,
 		schedule: DEFAULT_SYNC_SCHEDULE,
 		deletionGuard: DEFAULT_DELETION_GUARD,
+		configurationCategories: DEFAULT_CONFIGURATION_CATEGORIES,
+		pluginDir,
 		ports: {
 			providers,
 			vault: crashingVault(vault, crash),
 			deviceStore: crashingDeviceStore(deviceStore, crash),
 			secretStore,
+			configurationConflicts: crashingConfigurationConflicts(configurationConflicts, crash),
 			clock,
 			scheduler,
 			ui,
 			schedule: () => device.schedule,
 			deletionGuard: () => device.deletionGuard,
+			configurationCategories: () => device.configurationCategories,
+			pluginDir,
+			pluginId,
 			newDeviceId: () => crypto.randomUUID(),
 		},
 	};
@@ -276,13 +342,13 @@ export function createTestDevice(remote: FakeRemote): TestDevice {
 }
 
 /**
- * Builds a device on `remote` as `createTestDevice` does, already
- * connected as the device named `name`, with its login secret stored. A
- * Remote without shared settings gets the defaults, as connecting writes
- * them.
+ * Builds a device on `remote` as `createTestDevice` does with `options`,
+ * already connected as the device named `name`, with its login secret
+ * stored. A Remote without shared settings gets the defaults, as
+ * connecting writes them.
  */
-export function connectTestDevice(remote: FakeRemote, name: string): TestDevice {
-	const device = createTestDevice(remote);
+export function connectTestDevice(remote: FakeRemote, name: string, options: TestDeviceOptions = {}): TestDevice {
+	const device = createTestDevice(remote, options);
 	if (remote.get(SETTINGS_PATH) === undefined) {
 		remote.put(METADATA_FOLDER, { kind: "folder" });
 		remote.put(SETTINGS_PATH, {
@@ -310,6 +376,16 @@ function crashingVault(vault: FakeVault, crash: CrashPoints): LocalVault {
 		rename: (from, to) => crash.step(`vault rename ${from}`, () => vault.rename(from, to)),
 		lastTypedAt: (path) => vault.lastTypedAt(path),
 		onChange: (listener) => vault.onChange(listener),
+	};
+}
+
+/** `store` as the engine sees it, each keep and removal a step the device can crash at. */
+function crashingConfigurationConflicts(store: InMemoryConfigurationConflicts, crash: CrashPoints): ConfigurationConflictStore {
+	return {
+		keep: (path, data, keptAt) => crash.step(`keep configuration ${path}`, () => store.keep(path, data, keptAt)),
+		list: () => store.list(),
+		read: (id) => store.read(id),
+		remove: (id) => crash.step(`remove kept configuration ${id}`, () => store.remove(id)),
 	};
 }
 

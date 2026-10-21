@@ -89,4 +89,12 @@ describe("noticeText", () => {
 			"Первая синхронизация завершена: скачано 3, загружено 2, с конфликтами для разрешения 1, копий конфликта 4.",
 		);
 	});
+
+	it("asks for a restart to apply settings that arrived, in English and Russian", () => {
+		const notice = { kind: "configurationChanged" } as const;
+		expect(noticeText(notice, selectStrings("en"))).toBe("Settings changed on another device. Restart Obsidian to apply them.");
+		expect(noticeText(notice, selectStrings("ru"))).toBe(
+			"Настройки изменились на другом устройстве. Перезапустите Obsidian, чтобы применить их.",
+		);
+	});
 });

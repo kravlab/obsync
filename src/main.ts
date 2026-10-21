@@ -1,7 +1,9 @@
-import { Platform, Plugin, getLanguage, requestUrl } from "obsidian";
+import { Notice, Platform, Plugin, getLanguage, requestUrl } from "obsidian";
 import { createConnectionService } from "./engine/connection";
 import { createSyncEngine } from "./engine/engine";
-import type { Scheduler } from "./engine/ports";
+import type { ConfigurationConflictStore, Scheduler } from "./engine/ports";
+import { ObsidianConfigurationCategoriesStore } from "./obsidian/configuration-categories-store";
+import { ObsidianConfigurationConflicts } from "./obsidian/configuration-conflict-store";
 import { ObsidianDeletionGuardStore } from "./obsidian/deletion-guard-store";
 import { ObsidianDeviceStore } from "./obsidian/device-store";
 import { ObsidianLocalVault } from "./obsidian/local-vault";
@@ -18,6 +20,7 @@ import { ConflictEditModal } from "./ui/conflict-edit-modal";
 import { conflictReadingView } from "./ui/conflict-reading-view";
 import { ConnectModal } from "./ui/connect-modal";
 import { selectStrings, type Strings } from "./ui/i18n/strings";
+import { RestoreConfigurationModal } from "./ui/restore-configuration-modal";
 import { ObsyncSettingTab } from "./ui/settings-tab";
 import { StatusIndicator } from "./ui/status-indicator";
 
@@ -29,15 +32,17 @@ export default class ObsyncPlugin extends Plugin {
 	/**
 	 * Called by Obsidian when the plugin is enabled or the app starts. Builds
 	 * the connection service and the sync engine over Dropbox and this
-	 * device's vault and stores, adds the status entry point, the "Sync now"
-	 * command and the settings tab, then shows the state of this device's
-	 * Connection. Strings follow Obsidian's language as read at load.
+	 * device's vault and stores, adds the status entry point, the "Sync now",
+	 * "Full reconcile" and "Restore local configuration" commands and the
+	 * settings tab, then shows the state of this device's Connection.
+	 * Strings follow Obsidian's language as read at load.
 	 */
 	override async onload(): Promise<void> {
 		const strings = selectStrings(getLanguage());
 		const requestLimit = new ObsidianRequestLimitStore(this.app);
 		const schedule = new ObsidianScheduleStore(this.app);
 		const deletionGuard = new ObsidianDeletionGuardStore(this.app);
+		const categories = new ObsidianConfigurationCategoriesStore(this.app);
 		const scheduler = this.scheduler();
 		const dropbox: DropboxOptions = {
 			appKey: DROPBOX_APP_KEY,
@@ -62,6 +67,14 @@ export default class ObsyncPlugin extends Plugin {
 			}),
 		);
 		const secretStore = new ObsidianSecretStore(this.app);
+		// Obsidian sets it for every plugin it loads; the typings leave it optional for manifests of plugins not loaded.
+		const pluginDir = this.manifest.dir;
+		if (pluginDir === undefined) throw new Error("obsync: Obsidian gave no folder for this plugin");
+		const configurationConflicts = new ObsidianConfigurationConflicts(
+			this.app.vault.adapter,
+			`${pluginDir}/configuration-conflicts`,
+			() => crypto.randomUUID(),
+		);
 		const ui = new StatusIndicator(this, strings);
 		const connection = createConnectionService({
 			connectStep: createDropboxConnectStep(dropbox),
@@ -76,11 +89,15 @@ export default class ObsyncPlugin extends Plugin {
 			vault,
 			deviceStore,
 			secretStore,
+			configurationConflicts,
 			clock: dropbox.clock,
 			scheduler,
 			ui,
 			schedule: () => schedule.load(),
 			deletionGuard: () => deletionGuard.load(),
+			configurationCategories: () => categories.load(),
+			pluginDir,
+			pluginId: this.manifest.id,
 			newDeviceId: () => crypto.randomUUID(),
 		});
 		// The engine shows Sync failed itself; an error reaching here is a
@@ -97,6 +114,15 @@ export default class ObsyncPlugin extends Plugin {
 		};
 		this.addCommand({ id: "sync-now", name: strings.syncNow, callback: syncNow });
 		this.addCommand({ id: "full-reconcile", name: strings.fullReconcile, callback: fullReconcile });
+		this.addCommand({
+			id: "restore-local-configuration",
+			name: strings.restoreConfiguration,
+			callback: () => {
+				this.openRestoreConfiguration(configurationConflicts, strings, (id) => engine.restoreConfiguration(id)).catch(
+					(error: unknown) => console.error("obsync: restore list failed", error),
+				);
+			},
+		});
 		this.addConflictResolution(strings);
 		this.app.workspace.onLayoutReady(() => {
 			// Nothing syncs before the vault's files are all loaded.
@@ -127,6 +153,7 @@ export default class ObsyncPlugin extends Plugin {
 			requestLimit,
 			schedule,
 			deletionGuard,
+			categories,
 		);
 		this.addSettingTab(settingTab);
 		await connection.showStatus();
@@ -157,6 +184,27 @@ export default class ObsyncPlugin extends Plugin {
 			name: strings.previousConflict,
 			editorCallback: (editor) => moveToConflict(editor, "previous", strings),
 		});
+	}
+
+	/**
+	 * Opens the list of local configuration versions kept on configuration
+	 * conflicts; picking one restores it with `restore`. With none kept, a
+	 * notice says so instead. A failed restore is a bug, logged for the bug
+	 * report.
+	 */
+	private async openRestoreConfiguration(
+		store: ConfigurationConflictStore,
+		strings: Strings,
+		restore: (id: string) => Promise<void>,
+	): Promise<void> {
+		const kept = await store.list();
+		if (kept.length === 0) {
+			new Notice(strings.noKeptConfiguration);
+			return;
+		}
+		new RestoreConfigurationModal(this.app, strings, kept, (version) => {
+			restore(version.id).catch((error: unknown) => console.error("obsync: restore failed", error));
+		}).open();
 	}
 
 	/**

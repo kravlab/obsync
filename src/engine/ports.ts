@@ -3,6 +3,7 @@
  * "Architecture and modules"). The shell supplies the real adapters, tests
  * supply fakes; the engine never imports Obsidian.
  */
+import type { ConfigurationCategories } from "./configuration";
 import type { DeletionAnswer, DeletionGuardSettings, DeletionPrompt } from "./deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "./first-sync";
 import type { LocalVault, VaultPath } from "./local-vault";
@@ -151,6 +152,36 @@ export interface SecretStore {
 	deleteSecret(id: string): void;
 }
 
+/**
+ * A local version of a configuration file that the Remote's version
+ * replaced in a configuration conflict, kept so the user can restore it
+ * (spec, "Synced file scope", configuration folder).
+ */
+export interface KeptConfiguration {
+	/** Names this kept version among all of them. */
+	readonly id: string;
+	/** The configuration file it is a version of, as a vault path. */
+	readonly path: VaultPath;
+	/** When it was kept, in ms since the epoch by the engine's Clock. */
+	readonly keptAt: number;
+}
+
+/**
+ * The local versions kept on configuration conflicts, on this device only
+ * and never synced: in the sync plugin's own folder. Every conflict keeps
+ * one, so a second conflict on a file does not replace the first.
+ */
+export interface ConfigurationConflictStore {
+	/** Keeps `data`, this device's version of `path`, as of `keptAt`; durable once the returned promise resolves. */
+	keep(path: VaultPath, data: ArrayBuffer, keptAt: number): Promise<KeptConfiguration>;
+	/** Every kept version, newest first. */
+	list(): Promise<readonly KeptConfiguration[]>;
+	/** The bytes of the kept version `id`, or null when none is kept under it. */
+	read(id: string): Promise<ArrayBuffer | null>;
+	/** Forgets the kept version `id`; an id not kept changes nothing. */
+	remove(id: string): Promise<void>;
+}
+
 /** The current time. */
 export interface Clock {
 	/** Milliseconds since the epoch. */
@@ -179,6 +210,11 @@ export interface UiPort {
 	 */
 	showSkipped(files: readonly SkippedFile[]): void;
 	/**
+	 * Shows the local versions kept on configuration conflicts, newest
+	 * first, which the user can restore; it replaces the list shown before.
+	 */
+	showConfigurationConflicts(kept: readonly KeptConfiguration[]): void;
+	/**
 	 * Asks the user what to do about the deletions the Deletion guard
 	 * stopped, with the list to review, and resolves with the answer; null
 	 * when the prompt was closed without one.
@@ -198,6 +234,7 @@ export interface EnginePorts {
 	readonly vault: LocalVault;
 	readonly deviceStore: DeviceStore;
 	readonly secretStore: SecretStore;
+	readonly configurationConflicts: ConfigurationConflictStore;
 	readonly clock: Clock;
 	readonly scheduler: Scheduler;
 	readonly ui: UiPort;
@@ -205,6 +242,12 @@ export interface EnginePorts {
 	readonly schedule: () => SyncSchedule;
 	/** This device's current Deletion guard thresholds, read at the start of each sync. */
 	readonly deletionGuard: () => DeletionGuardSettings;
+	/** The configuration categories this device syncs now, read at the start of each sync. */
+	readonly configurationCategories: () => ConfigurationCategories;
+	/** This plugin's own folder in the configuration folder (`manifest.dir`), which never syncs. */
+	readonly pluginDir: VaultPath;
+	/** This plugin's id (`manifest.id`): `plugins/<id>` in the configuration folder never syncs either. */
+	readonly pluginId: string;
 	/** Returns a new random Device ID, for registering again after the Sync snapshot was lost. */
 	readonly newDeviceId: () => string;
 }

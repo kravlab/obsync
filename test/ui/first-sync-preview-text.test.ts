@@ -10,6 +10,7 @@ const preview: FirstSyncPreview = {
 	differing: [
 		{ path: "d.md", outcome: "merged" },
 		{ path: "e.png", outcome: "conflictCopy" },
+		{ path: ".obsidian-mobile/app.json", outcome: "remoteKept" },
 	],
 };
 
@@ -20,11 +21,12 @@ describe("firstSyncPreviewText", () => {
 			toDownload: "To download from Dropbox: 2",
 			toUpload: "To upload to Dropbox: 1",
 			identical: "Already the same on both: 0",
-			differing: "Different on both: 2",
+			differing: "Different on both: 3",
 		});
 		expect(text.differingFiles).toEqual([
 			"d.md: Merged, every difference marked",
 			"e.png: This device's version kept as a conflict copy",
+			".obsidian-mobile/app.json: Dropbox version used, this device's kept to restore",
 		]);
 	});
 
@@ -34,11 +36,12 @@ describe("firstSyncPreviewText", () => {
 			toDownload: "Скачать из Dropbox: 2",
 			toUpload: "Загрузить в Dropbox: 1",
 			identical: "Уже одинаковые с обеих сторон: 0",
-			differing: "Различаются: 2",
+			differing: "Различаются: 3",
 		});
 		expect(text.differingFiles).toEqual([
 			"d.md: Будет объединён, каждое различие отмечено",
 			"e.png: Версия этого устройства сохранится как копия конфликта",
+			".obsidian-mobile/app.json: Будет взята версия из Dropbox, версия этого устройства сохранится для восстановления",
 		]);
 	});
 });

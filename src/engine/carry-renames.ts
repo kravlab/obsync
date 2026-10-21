@@ -16,9 +16,11 @@
  *   in other notes; the renaming device's own link updates arrive as
  *   ordinary edits.
  * - A new path taken on the other side by another file makes this side's
- *   file a Conflict copy first: the Remote's file keeps the path. One
- *   taken on the Remote after the listing defers the rename to the next
- *   sync, which finds it taken.
+ *   file a Conflict copy first: the Remote's file keeps the path. In the
+ *   configuration folder this side's file is kept in the configuration
+ *   conflict store instead and leaves the vault, so no copy lands there.
+ *   One taken on the Remote after the listing defers the rename to the
+ *   next sync, which finds it taken.
  * - Renamed differently on both sides, the vault takes the Remote's name;
  *   renamed on one side and deleted on the other, the entry is kept under
  *   its new name. The user is told of each.
@@ -65,6 +67,10 @@ export interface RenameSync {
 	ensureVaultFolder(path: VaultPath): Promise<void>;
 	/** A Conflict copy name for `path` by this device now, free in the vault and on the Remote. */
 	conflictCopyPath(path: VaultPath): Promise<VaultPath>;
+	/** Whether `path` lies in the configuration folder, where no Conflict copy is made. */
+	inConfiguration(path: VaultPath): boolean;
+	/** Keeps the vault file `path` as a configuration conflict's local version, and moves it to the trash. */
+	keepLocalConfiguration(path: VaultPath): Promise<void>;
 	/** Whether the vault file `file` still holds the content `synced` records. */
 	unchangedHere(file: VaultFile, synced: SyncedFile): Promise<boolean>;
 	/** Forgets `path` and its Base. */
@@ -167,7 +173,9 @@ export async function carryRenames(renames: Renames, sync: RenameSync): Promise<
 	 * `current` holds now, is this device's own copy from a move cut off
 	 * half way: only the old one is deleted. Any other file there keeps the
 	 * path, and the vault file becomes a Conflict copy next to it, which is
-	 * carried instead. A path taken, or a file gone, since the listing
+	 * carried instead; a configuration file is kept aside instead, and its
+	 * old Remote file is deleted unless another device edited it. A path
+	 * taken, or a file gone, since the listing
 	 * defers the rename to the next sync.
 	 */
 	async function moveRemoteFile(current: VaultPath, from: VaultPath, target: VaultPath): Promise<void> {
@@ -177,7 +185,15 @@ export async function carryRenames(renames: Renames, sync: RenameSync): Promise<
 		let to = target;
 		if (remote.has(to)) {
 			if (await completeCutOffCopy(current, from, to, synced, there.revision)) return;
-			to = await moveAsideInVault(to);
+			const aside = await moveAsideInVault(to);
+			if (aside === null) {
+				// Kept aside, the renamed file is gone here: its old Remote file goes as a delete
+				// would, only while it holds the synced content; an edit there downloads back.
+				await deleteRemoteCopied(current, there.revision === synced.revision ? synced.revision : undefined);
+				await sync.forget(from);
+				return;
+			}
+			to = aside;
 		}
 		await sync.ensureRemoteFolder(parentOf(to));
 		const fileMove = provider.capabilities.fileMove;
@@ -307,9 +323,16 @@ export async function carryRenames(renames: Renames, sync: RenameSync): Promise<
 	/**
 	 * Renames the new vault file `path`, in the way of a file the Remote
 	 * keeps there, to a Conflict copy name and tells the user; the copy is
-	 * uploaded as a new file. Returns the copy's path.
+	 * uploaded as a new file. Returns the copy's path. A configuration file
+	 * is kept in the configuration conflict store and leaves the vault
+	 * instead, unannounced: null.
 	 */
-	async function moveAsideInVault(path: VaultPath): Promise<VaultPath> {
+	async function moveAsideInVault(path: VaultPath): Promise<VaultPath | null> {
+		if (sync.inConfiguration(path)) {
+			await sync.keepLocalConfiguration(path);
+			walked.delete(path);
+			return null;
+		}
 		const copy = await sync.conflictCopyPath(path);
 		await vault.rename(path, copy);
 		moveInside(walked, path, copy);

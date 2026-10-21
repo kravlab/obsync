@@ -20,3 +20,7 @@ All three open a Sync window with Conflicts, Skipped and Activity tabs. Notices 
 - [ ] An `auth` error pauses sync on that device only, with one notice and a persistent "Reconnect needed" state. Reconnecting to the same account continues with a normal sync, not a First sync.
 - [ ] Modals have buttons at least 44 px tall on phones. All texts are in English and Russian.
 - [ ] Manual check on desktop, Android and iOS.
+
+## Comments
+
+- 2026-10-21, from ticket 13 (Configuration folder sync): the engine pushes the restorable configuration conflicts through `UiPort.showConfigurationConflicts` after every sync and every restore, newest first, and restores one with `SyncEngine.restoreConfiguration(id)`. Until the Conflicts tab exists, the status click notice counts them and the "Restore local configuration" command lists them. The restart notice is the `configurationChanged` kind of `SyncNotice`, shown once per sync; the activity log should keep it like the others.

@@ -14,9 +14,10 @@
  *
  * Left out on both sides, with everything inside them:
  * - hidden paths, any segment of which starts with a dot: the Metadata
- *   folder, `.git`, `.DS_Store` and the like, and the configuration
- *   folder, whatever its name, until its categories exist. They never
- *   sync and are not reported;
+ *   folder, `.git`, `.DS_Store` and the like. They never sync and are not
+ *   reported. The configuration folder, whatever its name, is the
+ *   exception: each entry in it syncs only while a category it belongs to
+ *   is on (configuration.ts), and is left out unreported otherwise;
  * - paths the shared ignore list matches (`ignored`);
  * - paths the provider cannot store under the Remote's name policy
  *   (`nameNotRepresentable`);
@@ -38,7 +39,7 @@
  */
 import type { IgnoreList } from "./ignore-list";
 import type { VaultEntry, VaultPath } from "./local-vault";
-import { ancestorsOf, comparePaths, foldersDownTo, isWithin, nameOf, parentOf, pathKey } from "./paths";
+import { ancestorsOf, comparePaths, foldersDownTo, nameOf, parentOf, pathKey } from "./paths";
 import type { RemoteEntry, RemotePath } from "./provider";
 
 /** Both sides of one sync, as listed and narrowed; Remote entries carry vault paths. */
@@ -64,8 +65,13 @@ export interface SkippedFile {
 
 /** What narrowing the listings depends on besides the listings: the Synced file scope rules. */
 export interface ListingRules {
-	/** The vault's configuration folder, which `Vault.configDir` does not promise starts with a dot. */
-	readonly configDir: VaultPath;
+	/**
+	 * Whether the entry of `kind` at `path` in the configuration folder
+	 * syncs, by this device's categories; null for a path outside it, which
+	 * the other rules decide. `Vault.configDir` does not promise the folder
+	 * starts with a dot, so it is asked before the hidden rule.
+	 */
+	readonly configuration: (path: VaultPath, kind: VaultEntry["kind"]) => boolean | null;
 	/** Whether the provider treats paths that differ only by case as one. */
 	readonly caseInsensitive: boolean;
 	/** The shared ignore list. */
@@ -92,11 +98,11 @@ export function syncListing(
 	/** The key paths are matched by. */
 	const key = (path: string): string => pathKey(path, caseInsensitive);
 
-	/** Whether `path` never syncs and is not reported: hidden, or in the configuration folder. */
-	const unsynced = (path: string): boolean => isHidden(path) || isWithin(key(path), key(rules.configDir));
+	/** Whether `entry` never syncs and is not reported: hidden, or in the configuration folder in no category that is on. */
+	const unsynced = (entry: VaultEntry | RemoteEntry): boolean => !(rules.configuration(entry.path, entry.kind) ?? !isHidden(entry.path));
 	/** Whether `entry` is a file above the size ceiling. */
 	const tooLarge = (entry: VaultEntry | RemoteEntry): boolean => entry.kind === "file" && entry.size > rules.sizeCeiling;
-	const visible = local.filter((entry) => !unsynced(entry.path));
+	const visible = local.filter((entry) => !unsynced(entry));
 	// A case variant above the ceiling never syncs, so it does not clash with one that can.
 	const syncableKeys = new Set(visible.filter((entry) => !tooLarge(entry)).map((entry) => key(entry.path)));
 	const shadowed = visible.filter((entry) => tooLarge(entry) && syncableKeys.has(key(entry.path)));
@@ -118,7 +124,7 @@ export function syncListing(
 		return parent === "" ? path : `${vaultPathOf(parent)}/${nameOf(path)}`;
 	};
 	const remoteKept = remote
-		.filter((entry) => !unsynced(entry.path))
+		.filter((entry) => !unsynced(entry))
 		.map((entry) => ({ ...entry, path: vaultPathOf(entry.path) }));
 
 	/** Why `entry` does not sync, or null when it does as far as it alone tells. */

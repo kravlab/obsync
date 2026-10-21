@@ -4,7 +4,7 @@
  * triggers and lifecycle"). The shell builds one per device with
  * `createSyncEngine`.
  */
-import type { LocalVault } from "./local-vault";
+import { withVaultWrites } from "./local-vault";
 import { isWithin, movedAlong } from "./paths";
 import type { VaultRename } from "./renames";
 import { providerSecretId, type EnginePorts, type Scheduler } from "./ports";
@@ -69,6 +69,17 @@ export interface SyncEngine {
 	 * its change feed ("Full reconcile").
 	 */
 	reconcile(): Promise<void>;
+	/**
+	 * "Restore local" of a configuration conflict: asks for a sync from the
+	 * user that, before it lists anything, writes the kept version `id`
+	 * back over its configuration file, creating its folders where missing,
+	 * and takes it off the list; the sync then uploads it as an edit made
+	 * here and shows the list left. Applied inside the sync, the restore
+	 * never overlaps one under way: it waits for the next. An id no longer
+	 * kept does nothing; one asked for while sync cannot run waits, in
+	 * memory, for the next sync that does.
+	 */
+	restoreConfiguration(id: string): Promise<void>;
 }
 
 /** A sync under way and what follows it. */
@@ -121,7 +132,22 @@ function heldStatus(hold: SyncHold): SyncStatus {
 
 /** Builds a sync engine over `ports`. */
 export function createSyncEngine(ports: EnginePorts): SyncEngine {
-	const { deviceStore, secretStore, providers, vault, clock, scheduler, ui, schedule, deletionGuard, newDeviceId } = ports;
+	const {
+		deviceStore,
+		secretStore,
+		configurationConflicts,
+		providers,
+		vault,
+		clock,
+		scheduler,
+		ui,
+		schedule,
+		deletionGuard,
+		configurationCategories,
+		pluginDir,
+		pluginId,
+		newDeviceId,
+	} = ports;
 	/** The sync running now, if any. */
 	let running: Run | undefined;
 	/** How many of the engine's own vault writes are under way; their change hints are not edits. */
@@ -136,6 +162,8 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 	 * order: hints for finding renames, in memory only.
 	 */
 	const renameHints: VaultRename[] = [];
+	/** The kept configuration versions the user chose to restore, in order, for the next sync to write back. */
+	const restores: string[] = [];
 	/** The engine's own vault renames under way: the rename events they cause are not the user's. */
 	const ownRenames: VaultRename[] = [];
 	let stopped = false;
@@ -155,31 +183,19 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 	}
 
 	/** `vault` with its writes marked as the engine's own, so they do not start the post-edit pause. */
-	const syncVault = new Proxy(vault, {
-		get(target, property, receiver) {
-			switch (property) {
-				case "write":
-					return (...args: Parameters<LocalVault["write"]>) => ownWrite(() => target.write(...args));
-				case "replace":
-					return (...args: Parameters<LocalVault["replace"]>) => ownWrite(() => target.replace(...args));
-				case "createFolder":
-					return (...args: Parameters<LocalVault["createFolder"]>) => ownWrite(() => target.createFolder(...args));
-				case "trash":
-					return (...args: Parameters<LocalVault["trash"]>) => ownWrite(() => target.trash(...args));
-				case "rename":
-					return async (from: string, to: string) => {
-						const own = { from, to };
-						ownRenames.push(own);
-						try {
-							await ownWrite(() => target.rename(from, to));
-						} finally {
-							ownRenames.splice(ownRenames.indexOf(own), 1);
-						}
-					};
+	const syncVault = withVaultWrites(vault, {
+		write: (path, data) => ownWrite(() => vault.write(path, data)),
+		replace: (path, expected, data) => ownWrite(() => vault.replace(path, expected, data)),
+		createFolder: (path) => ownWrite(() => vault.createFolder(path)),
+		trash: (path) => ownWrite(() => vault.trash(path)),
+		rename: async (from, to) => {
+			const own = { from, to };
+			ownRenames.push(own);
+			try {
+				await ownWrite(() => vault.rename(from, to));
+			} finally {
+				ownRenames.splice(ownRenames.indexOf(own), 1);
 			}
-			const value: unknown = Reflect.get(target, property, receiver);
-			// Methods run on the vault itself, which may keep state on `this`.
-			return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
 		},
 	});
 
@@ -231,11 +247,14 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				return;
 			}
 			run.listing = true;
+			// Restores asked for from now on are for the follow-up sync.
+			const restoring = [...restores];
 			const isFirstSync = !(await deviceStore.hasSnapshot());
 			const result = await runSync({
 				provider,
 				vault: syncVault,
 				deviceStore,
+				configurationConflicts,
 				settings,
 				device: connection.device,
 				clock,
@@ -243,11 +262,15 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				reconcile: run.kind === "reconcile",
 				editPauseMs: schedule().editPause.ms,
 				guard: deletionGuard(),
+				configuration: { layout: { configDir: vault.configDir, pluginDir, pluginId }, categories: configurationCategories() },
 				renameHints: hints,
+				restores: restoring,
 				...(isFirstSync ? { firstSync: { begin: () => beginFirstSync(deviceStore, provider, newDeviceId, clock) } } : {}),
 			});
 			backoffAttempt = 0;
+			restores.splice(0, restoring.length);
 			ui.showSkipped(result.skipped);
+			ui.showConfigurationConflicts(await configurationConflicts.list());
 			if (result.held !== undefined) {
 				// A sync the user asked for meanwhile runs next and asks again.
 				if (userRequests === userRequestsBefore) held = result.held;
@@ -353,6 +376,11 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 
 		reconcile(): Promise<void> {
 			return trigger("reconcile", "user");
+		},
+
+		restoreConfiguration(id: string): Promise<void> {
+			restores.push(id);
+			return trigger("sync", "user");
 		},
 	};
 }

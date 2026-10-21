@@ -27,6 +27,10 @@ import type { VaultPath } from "./local-vault";
  *   downloaded and uploaded, how many it merged with Conflict blocks left
  *   in them, and how many Conflict copies it made. It stands for every
  *   Conflict copy notice of that sync.
+ * - `configurationChanged`: a sync wrote, replaced, trashed or renamed
+ *   something in the configuration folder, so Obsidian must restart to
+ *   apply the settings that arrived; other plugins are not reloaded. It is
+ *   told once per sync, when the first such change is made.
  */
 export type SyncNotice =
 	| {
@@ -49,4 +53,5 @@ export type SyncNotice =
 			readonly path: VaultPath;
 			readonly deletedOn: "thisDevice" | "otherDevice";
 	  }
-	| ({ readonly kind: "firstSyncDone" } & Readonly<FirstSyncTally>);
+	| ({ readonly kind: "firstSyncDone" } & Readonly<FirstSyncTally>)
+	| { readonly kind: "configurationChanged" };

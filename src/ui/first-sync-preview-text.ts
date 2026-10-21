@@ -1,4 +1,4 @@
-import type { FirstSyncPreview } from "../engine/first-sync";
+import type { DifferingOutcome, FirstSyncPreview } from "../engine/first-sync";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
 
@@ -24,8 +24,18 @@ export function firstSyncPreviewText(preview: FirstSyncPreview, strings: Strings
 		toUpload: count(strings.firstSyncToUpload, preview.toUpload),
 		identical: count(strings.firstSyncIdentical, preview.identical),
 		differing: count(strings.firstSyncDiffering, preview.differing),
-		differingFiles: preview.differing.map(
-			({ path, outcome }) => `${path}: ${outcome === "merged" ? strings.firstSyncMerged : strings.firstSyncConflictCopy}`,
-		),
+		differingFiles: preview.differing.map(({ path, outcome }) => `${path}: ${outcomeText(outcome, strings)}`),
 	};
+}
+
+/** What happens to a differing file by default, in the user's language. */
+function outcomeText(outcome: DifferingOutcome, strings: Strings): string {
+	switch (outcome) {
+		case "merged":
+			return strings.firstSyncMerged;
+		case "conflictCopy":
+			return strings.firstSyncConflictCopy;
+		case "remoteKept":
+			return strings.firstSyncRemoteKept;
+	}
 }

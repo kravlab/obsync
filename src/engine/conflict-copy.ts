@@ -6,6 +6,7 @@
  * thing that marks a copy, so every device can list copies by it.
  */
 import type { VaultPath } from "./local-vault";
+import { localDateTime } from "./local-time";
 import { nameOf, parentOf, splitName } from "./paths";
 
 /**
@@ -48,8 +49,6 @@ export function isConflictCopy(path: VaultPath): boolean {
 
 /** `time` as `YYYY-MM-DD HHmm` in the local time zone. */
 function localTimestamp(time: number): string {
-	const date = new Date(time);
-	const pad = (value: number): string => String(value).padStart(2, "0");
-	const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-	return `${day} ${pad(date.getHours())}${pad(date.getMinutes())}`;
+	const { day, hours, minutes } = localDateTime(time);
+	return `${day} ${hours}${minutes}`;
 }

@@ -1,5 +1,6 @@
 import { createSyncEngine, type SyncEngine } from "../../src/engine/engine";
-import { isWithin } from "../../src/engine/paths";
+import { ensureVaultFolder } from "../../src/engine/local-vault";
+import { isWithin, parentOf } from "../../src/engine/paths";
 import type { RemoteEntry } from "../../src/engine/provider";
 import { METADATA_FOLDER } from "../../src/engine/remote-metadata";
 import { editPauseOf, pollIntervalOf } from "../../src/engine/sync-schedule";
@@ -25,6 +26,22 @@ export async function vaultText(device: TestDevice, path: string): Promise<strin
 /** The Remote's entries mirroring a vault: everything but the Metadata folder. */
 export function mirror(remote: FakeRemote): RemoteEntry[] {
 	return remote.list().filter((entry) => !isWithin(entry.path, METADATA_FOLDER));
+}
+
+/** Puts a file holding `content` on the Remote at `path`, with its folders, as a device or a person would. */
+export function putRemoteFile(remote: FakeRemote, path: string, content: string): void {
+	const segments = path.split("/");
+	for (let depth = 1; depth < segments.length; depth += 1) {
+		const folder = segments.slice(0, depth).join("/");
+		if (remote.get(folder) === undefined) remote.put(folder, { kind: "folder" });
+	}
+	remote.put(path, { kind: "file", data: bytes(content), revision: remote.nextRevision() });
+}
+
+/** Writes `content` to `path` in `device`'s vault, creating the folders above it. */
+export async function writeVaultFile(device: TestDevice, path: string, content: string): Promise<void> {
+	await ensureVaultFolder(device.vault, parentOf(path));
+	await device.vault.write(path, bytes(content));
 }
 
 /** The text of the Remote file at `path`. */

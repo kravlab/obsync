@@ -64,6 +64,7 @@ export const ru: Strings = {
 	firstSyncDiffering: "Различаются: {count}",
 	firstSyncMerged: "Будет объединён, каждое различие отмечено",
 	firstSyncConflictCopy: "Версия этого устройства сохранится как копия конфликта",
+	firstSyncRemoteKept: "Будет взята версия из Dropbox, версия этого устройства сохранится для восстановления",
 	firstSyncKeepRemote: "Взять версию из Dropbox для каждого различающегося файла",
 	firstSyncKeepRemoteDescription: "Версии этого устройства сохранятся как копии конфликта, и ни в одной заметке не появятся метки конфликта.",
 	firstSyncShowList: "Показать список",
@@ -125,6 +126,7 @@ export const ru: Strings = {
 	noticeRenamedDeletedThere: "{file} сохранён: он был удалён на другом устройстве, но переименован на этом.",
 	noticeFirstSyncDone:
 		"Первая синхронизация завершена: скачано {downloaded}, загружено {uploaded}, с конфликтами для разрешения {conflicted}, копий конфликта {copies}.",
+	noticeConfigurationChanged: "Настройки изменились на другом устройстве. Перезапустите Obsidian, чтобы применить их.",
 	firstSyncInProgress:
 		"{device} сейчас выполняет первую синхронизацию с этой папкой. Подключитесь, когда она закончится, чтобы конфликтов было меньше.",
 	connectAnyway: "Всё равно подключить",
@@ -135,4 +137,18 @@ export const ru: Strings = {
 	skippedCaseClash: "{file} отличается от имени другого файла только регистром",
 	skippedTooLarge: "{file} больше предельного размера",
 	skippedMore: "И ещё {count}",
+	restoreConfiguration: "Восстановить локальную конфигурацию",
+	keptConfigurationLine: "Сохранено локальных версий конфигурации: {count}; восстановить их можно командой «{command}»",
+	keptConfigurationItem: "{file}, сохранено {time}",
+	restoreConfigurationPlaceholder: "Выберите версию, которую вернуть",
+	noKeptConfiguration: "Сохранённых локальных версий конфигурации нет.",
+	settingsConfigurationHeading: "Папка конфигурации",
+	settingsCategorySettings: "Синхронизировать настройки и горячие клавиши",
+	settingsCategorySettingsDescription:
+		"Основные настройки этого устройства, горячие клавиши и настройки встроенных плагинов. Расположение панелей не синхронизируется никогда. Пришедшие настройки применяются после перезапуска.",
+	settingsCategoryThemes: "Синхронизировать темы и сниппеты",
+	settingsCategoryThemesDescription: "Темы, CSS-сниппеты и настройки оформления, которые их выбирают.",
+	settingsCategoryPlugins: "Синхронизировать плагины",
+	settingsCategoryPluginsDescription:
+		"Другие плагины с их настройками и список включённых плагинов. Внимание: настройки других плагинов могут содержать секреты, например ключи API или пароли, и они копируются в Dropbox.",
 };

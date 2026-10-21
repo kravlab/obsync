@@ -9,8 +9,13 @@ import type { Clock, DeviceStore } from "./ports";
 import type { Provider } from "./provider";
 import { writeDeviceRecord } from "./remote-metadata";
 
-/** What happens to a file the vault and the Remote both hold with different content. */
-export type DifferingOutcome = "merged" | "conflictCopy";
+/**
+ * What happens to a file the vault and the Remote both hold with different
+ * content: `merged`, `conflictCopy`, or `remoteKept` for a configuration
+ * file, whose Remote version takes its place while this device's is kept
+ * to restore.
+ */
+export type DifferingOutcome = "merged" | "conflictCopy" | "remoteKept";
 
 /**
  * What a First sync would do, file by file, as its preview shows it.
@@ -26,7 +31,8 @@ export interface FirstSyncPreview {
 	/**
 	 * Files both sides hold with different content, and what the default
 	 * handling does to each: a text file is merged, every difference a
-	 * Conflict block; anything else gets a Conflict copy.
+	 * Conflict block; a configuration file takes the Remote version, this
+	 * device's kept to restore; anything else gets a Conflict copy.
 	 */
 	readonly differing: readonly { readonly path: VaultPath; readonly outcome: DifferingOutcome }[];
 }

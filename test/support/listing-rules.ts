@@ -3,12 +3,12 @@ import type { ListingRules } from "../../src/engine/sync-listing";
 
 /**
  * Listing rules that leave out nothing but hidden paths and case clashes:
- * no ignore list, every name storable, no size ceiling, and a
- * configuration folder the tests never list.
+ * no ignore list, every name storable, no size ceiling, and no
+ * configuration folder.
  */
 export function listingRules(caseInsensitive: boolean): ListingRules {
 	return {
-		configDir: ".config",
+		configuration: () => null,
 		caseInsensitive,
 		ignore: ignoreList([], caseInsensitive),
 		storable: () => true,

@@ -21,6 +21,8 @@ export function noticeText(notice: SyncNotice, strings: Strings): string {
 				conflicted: String(notice.conflicted),
 				copies: String(notice.conflictCopies),
 			});
+		case "configurationChanged":
+			return strings.noticeConfigurationChanged;
 		case "renameBeatsDelete":
 			return fill(
 				notice.deletedOn === "thisDevice" ? strings.noticeRenamedDeletedHere : strings.noticeRenamedDeletedThere,

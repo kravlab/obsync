@@ -6,6 +6,7 @@
  * through the vault adapter: `adapter.trashSystem` / `trashLocal` and
  * `adapter.rename`.
  */
+import { foldersDownTo } from "./paths";
 
 /** A path relative to the vault root, as Obsidian names it. */
 export type VaultPath = string;
@@ -81,4 +82,29 @@ export interface LocalVault {
 	 * called.
 	 */
 	onChange(listener: (hint: VaultChangeHint) => void): () => void;
+}
+
+/** Creates the folder `path` in `vault`, and the folders above it, where missing. */
+export async function ensureVaultFolder(vault: LocalVault, path: VaultPath): Promise<void> {
+	for (const folder of foldersDownTo(path)) {
+		if ((await vault.stat(folder)) === null) await vault.createFolder(folder);
+	}
+}
+
+/** The LocalVault methods that change the vault. */
+export type VaultWrites = Pick<LocalVault, "write" | "replace" | "createFolder" | "trash" | "rename">;
+
+/**
+ * `vault` with the methods in `writes` in place of its own, for watching
+ * or marking what is written; every other member is the vault's, its
+ * methods running on the vault itself, which may keep state on `this`.
+ */
+export function withVaultWrites(vault: LocalVault, writes: Partial<VaultWrites>): LocalVault {
+	return new Proxy(vault, {
+		get(target, property, receiver) {
+			if (Object.prototype.hasOwnProperty.call(writes, property)) return writes[property as keyof VaultWrites];
+			const value: unknown = Reflect.get(target, property, receiver);
+			return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+		},
+	});
 }

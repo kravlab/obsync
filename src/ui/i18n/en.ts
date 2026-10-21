@@ -120,6 +120,8 @@ export const en = {
 	firstSyncMerged: "Merged, every difference marked",
 	/** First sync preview list: what happens to any other differing file. */
 	firstSyncConflictCopy: "This device's version kept as a conflict copy",
+	/** First sync preview list: what happens to a differing configuration file. */
+	firstSyncRemoteKept: "Dropbox version used, this device's kept to restore",
 	/** First sync preview: the bulk option for differing files. */
 	firstSyncKeepRemote: "Use the Dropbox version of every differing file",
 	/** First sync preview: what the bulk option does. */
@@ -220,6 +222,8 @@ export const en = {
 	/** A First sync completed; every placeholder is a number. */
 	noticeFirstSyncDone:
 		"First sync done: {downloaded} downloaded, {uploaded} uploaded, {conflicted} with conflicts to resolve, {copies} conflict copies.",
+	/** Configuration files arrived from another device; Obsidian applies them on restart. */
+	noticeConfigurationChanged: "Settings changed on another device. Restart Obsidian to apply them.",
 	/** Connect window: another device is doing its First sync with the chosen folder; `{device}` is its name. */
 	firstSyncInProgress:
 		"{device} is doing its first sync with this folder. Connect once it has finished, so fewer files conflict.",
@@ -237,6 +241,29 @@ export const en = {
 	skippedTooLarge: "{file} is larger than the size limit",
 	/** The last line of a shortened skipped list; `{count}` is how many files it leaves out. */
 	skippedMore: "And {count} more",
+	/** The command that restores a local configuration version kept on a configuration conflict. */
+	restoreConfiguration: "Restore local configuration",
+	/** The status notice's line on kept configuration versions; `{count}` is how many, `{command}` the restore command's name. */
+	keptConfigurationLine: "{count} local configuration versions kept; restore them with “{command}”",
+	/** The restore list's entry for a kept version; `{file}` is a vault path, `{time}` the local date and time. */
+	keptConfigurationItem: "{file}, kept {time}",
+	/** The restore list's placeholder. */
+	restoreConfigurationPlaceholder: "Choose the version to put back",
+	/** Notice when the restore command finds no kept version. */
+	noKeptConfiguration: "No local configuration versions are kept.",
+	/** Settings heading of the configuration categories. */
+	settingsConfigurationHeading: "Configuration folder",
+	/** Settings: the settings and hotkeys category. */
+	settingsCategorySettings: "Sync settings and hotkeys",
+	settingsCategorySettingsDescription:
+		"This device's main settings, hotkeys and core plugin settings. The workspace layout never syncs. Settings that arrive apply after a restart.",
+	/** Settings: the themes and snippets category. */
+	settingsCategoryThemes: "Sync themes and snippets",
+	settingsCategoryThemesDescription: "Themes, CSS snippets and the appearance settings that choose them.",
+	/** Settings: the plugins category, with the secrets warning. */
+	settingsCategoryPlugins: "Sync plugins",
+	settingsCategoryPluginsDescription:
+		"Other plugins with their settings and the list of enabled plugins. Warning: other plugins' settings may hold secrets such as API keys or passwords, and they are copied to Dropbox.",
 } as const;
 
 /** The shape every language's string table must have: the keys of `en`. */

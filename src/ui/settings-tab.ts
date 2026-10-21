@@ -1,9 +1,11 @@
 import { Notice, PluginSettingTab, Setting, requireApiVersion, type App, type Plugin, type SettingDefinitionItem } from "obsidian";
+import { CONFIGURATION_CATEGORIES, type ConfigurationCategory } from "../engine/configuration";
 import type { ConnectionService } from "../engine/connection";
 import { parseMaxDeletedFiles, parseMaxDeletedPercent } from "../engine/deletion-guard";
 import type { DeviceIdentity } from "../engine/ports";
 import { parseRequestLimit } from "../engine/request-limit";
 import { parseEditPause, parsePollInterval } from "../engine/sync-schedule";
+import type { ObsidianConfigurationCategoriesStore } from "../obsidian/configuration-categories-store";
 import type { ObsidianDeletionGuardStore } from "../obsidian/deletion-guard-store";
 import type { ObsidianRequestLimitStore } from "../obsidian/request-limit-store";
 import type { ObsidianScheduleStore } from "../obsidian/schedule-store";
@@ -36,6 +38,22 @@ function drawNumberField(row: Setting, field: NumberField): void {
 	);
 }
 
+/** An on/off setting of the tab: what its row says and how a change is kept. */
+interface ToggleField {
+	readonly name: string;
+	readonly description: string;
+	/** The stored value, as the toggle shows it. */
+	readonly current: () => boolean;
+	/** Stores the value the toggle was switched to. */
+	readonly save: (on: boolean) => void;
+}
+
+/** Draws `field` into `row`: a toggle showing the stored value, saved as it is switched. */
+function drawToggleField(row: Setting, field: ToggleField): void {
+	row.setName(field.name).setDesc(field.description);
+	row.addToggle((toggle) => toggle.setValue(field.current()).onChange(field.save));
+}
+
 /** One row of the tab: its name, what it says and what its button does. */
 interface Row {
 	readonly name: string;
@@ -46,9 +64,10 @@ interface Row {
 
 /**
  * The plugin's settings tab: this device's Connection, with Connect or
- * Disconnect, "Sync now" while connected, and this device's number
+ * Disconnect, "Sync now" while connected, this device's number
  * settings: the post-edit pause, the polling interval, the per-request
- * limit and the Deletion guard thresholds. It renders declaratively on
+ * limit and the Deletion guard thresholds, and, under their own heading,
+ * this device's configuration categories. It renders declaratively on
  * Obsidian 1.13 and later (`getSettingDefinitions`, also indexed for
  * settings search) and through `display` before that; both draw the same
  * rows.
@@ -69,6 +88,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	 * @param requestLimit keeps this device's Per-request limit
 	 * @param schedule keeps this device's post-edit pause and polling interval
 	 * @param deletionGuard keeps this device's Deletion guard thresholds
+	 * @param categories keeps this device's configuration categories
 	 */
 	constructor(
 		app: App,
@@ -80,6 +100,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 		private readonly requestLimit: ObsidianRequestLimitStore,
 		private readonly schedule: ObsidianScheduleStore,
 		private readonly deletionGuard: ObsidianDeletionGuardStore,
+		private readonly categories: ObsidianConfigurationCategoriesStore,
 	) {
 		super(app, plugin);
 	}
@@ -100,6 +121,15 @@ export class ObsyncSettingTab extends PluginSettingTab {
 				desc: field.description,
 				render: (setting: Setting) => drawNumberField(setting, field),
 			})),
+			{
+				type: "group",
+				heading: this.strings.settingsConfigurationHeading,
+				items: this.categoryFields().map((field) => ({
+					name: field.name,
+					desc: field.description,
+					render: (setting: Setting) => drawToggleField(setting, field),
+				})),
+			},
 		];
 	}
 
@@ -117,6 +147,31 @@ export class ObsyncSettingTab extends PluginSettingTab {
 				.addButton((button) => button.setButtonText(row.button).onClick(row.action));
 		}
 		for (const field of this.numberFields()) drawNumberField(new Setting(this.containerEl), field);
+		new Setting(this.containerEl).setName(this.strings.settingsConfigurationHeading).setHeading();
+		for (const field of this.categoryFields()) drawToggleField(new Setting(this.containerEl), field);
+	}
+
+	/**
+	 * This device's configuration categories, Plugins with the secrets
+	 * warning. Turning one on syncs at once, which brings its files
+	 * together as a union, a First sync for them; turning one off takes
+	 * them out of the next sync.
+	 */
+	private categoryFields(): ToggleField[] {
+		const { strings, categories } = this;
+		const text: Record<ConfigurationCategory, { readonly name: string; readonly description: string }> = {
+			settingsAndHotkeys: { name: strings.settingsCategorySettings, description: strings.settingsCategorySettingsDescription },
+			themesAndSnippets: { name: strings.settingsCategoryThemes, description: strings.settingsCategoryThemesDescription },
+			plugins: { name: strings.settingsCategoryPlugins, description: strings.settingsCategoryPluginsDescription },
+		};
+		return CONFIGURATION_CATEGORIES.map((category) => ({
+			...text[category],
+			current: () => categories.load()[category],
+			save: (on) => {
+				categories.save({ ...categories.load(), [category]: on });
+				if (on) this.syncNow();
+			},
+		}));
 	}
 
 	/**

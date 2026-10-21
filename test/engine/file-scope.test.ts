@@ -8,9 +8,9 @@ import {
 } from "../../src/engine/remote-metadata";
 import { ProviderError } from "../../src/engine/provider";
 import { FakeRemote, type FakeServiceOptions } from "../fakes/fake-remote";
-import { connectTestDevice, type TestDevice } from "../fakes/test-device";
+import { connectTestDevice } from "../fakes/test-device";
 import { bytes } from "../support/bytes";
-import { mirror, remoteText, syncNow, vaultText } from "../support/sync";
+import { mirror, putRemoteFile, remoteText, syncNow, vaultText, writeVaultFile } from "../support/sync";
 
 /** A Remote on a service with `service`, whose shared settings are the defaults with `settings` on top. */
 function remoteWith(settings: Partial<RemoteSettings>, service: FakeServiceOptions = {}): FakeRemote {
@@ -27,26 +27,6 @@ function writeSettings(remote: FakeRemote, settings: Partial<RemoteSettings>): v
 		data: encodeSettings({ ...DEFAULT_REMOTE_SETTINGS, ...settings }),
 		revision: remote.nextRevision(),
 	});
-}
-
-/** Puts a file holding `content` on the Remote at `path`, with its folders, as a device or a person would. */
-function putRemoteFile(remote: FakeRemote, path: string, content: string): void {
-	const segments = path.split("/");
-	for (let depth = 1; depth < segments.length; depth += 1) {
-		const folder = segments.slice(0, depth).join("/");
-		if (remote.get(folder) === undefined) remote.put(folder, { kind: "folder" });
-	}
-	remote.put(path, { kind: "file", data: bytes(content), revision: remote.nextRevision() });
-}
-
-/** Writes `content` to `path` in `device`'s vault, creating the folders above it. */
-async function writeVaultFile(device: TestDevice, path: string, content: string): Promise<void> {
-	const segments = path.split("/");
-	for (let depth = 1; depth < segments.length; depth += 1) {
-		const folder = segments.slice(0, depth).join("/");
-		if ((await device.vault.stat(folder)) === null) await device.vault.createFolder(folder);
-	}
-	await device.vault.write(path, bytes(content));
 }
 
 /** The paths of the Remote's mirror files. */
