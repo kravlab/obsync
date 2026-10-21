@@ -319,6 +319,93 @@ describe("logging in", () => {
 	});
 });
 
+describe("failures while connecting", () => {
+	it("reports a failure to start a login, with its detail, and throws it on", async () => {
+		const laptop = createConnectingDevice(new FakeService(), "laptop");
+		laptop.connectStep.failNext("startAuthorization", { category: "permanent" });
+
+		await expect(createConnectionService(laptop.ports).startAuthorization()).rejects.toMatchObject({
+			failure: { category: "permanent" },
+		});
+
+		expect(laptop.ui.connectFailures).toEqual([{ cause: "permanent", detail: "injected permanent on startAuthorization" }]);
+		expect(laptop.ui.notices).toEqual([]);
+	});
+
+	it("reports a failure to redeem the code other than a refused code", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		const pending = await createConnectionService(laptop.ports).startAuthorization();
+		laptop.connectStep.failNext("complete", { category: "permanent" });
+
+		await expect(pending.submitCode(account.approve(pending.authorizeUrl))).rejects.toMatchObject({
+			failure: { category: "permanent" },
+		});
+
+		expect(laptop.ui.connectFailures).toEqual([{ cause: "permanent", detail: "injected permanent on complete" }]);
+		expect(laptop.ui.notices).toEqual([]);
+	});
+
+	it("reports nothing for a refused code, which asks for a new login", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		const pending = await createConnectionService(laptop.ports).startAuthorization();
+		laptop.connectStep.failNext("complete", { category: "auth" });
+
+		expect(await pending.submitCode(account.approve(pending.authorizeUrl))).toEqual({ kind: "codeRejected" });
+
+		expect(laptop.ui.connectFailures).toEqual([]);
+	});
+
+	it("reports a failure to list the folders", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		const remotes = await authorize(laptop, account);
+		laptop.connectStep.failNext("listRoots", { category: "transient" });
+
+		await expect(remotes.list()).rejects.toMatchObject({ failure: { category: "transient" } });
+
+		expect(laptop.ui.connectFailures).toEqual([{ cause: "transient", detail: "injected transient on listRoots" }]);
+		expect(laptop.ui.notices).toEqual([]);
+	});
+
+	it("reports a failure to set up a chosen folder or a new Remote", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		account.addFolder("Notes");
+		const laptop = createConnectingDevice(service, "laptop");
+		const remotes = await authorize(laptop, account);
+		laptop.connectStep.failNext("createFolder", { category: "permanent" });
+		laptop.connectStep.failNext("createRoot", { category: "quotaExceeded" });
+
+		await expect(remotes.useFolder("Notes", "Laptop")).rejects.toMatchObject({ failure: { category: "permanent" } });
+		await expect(remotes.createRemote("My vault", "Laptop")).rejects.toMatchObject({
+			failure: { category: "quotaExceeded" },
+		});
+
+		expect(laptop.ui.connectFailures).toEqual([
+			{ cause: "permanent", detail: "injected permanent on createFolder" },
+			{ cause: "quotaExceeded", detail: "injected quotaExceeded on createRoot" },
+		]);
+		expect(laptop.ui.notices).toEqual([]);
+	});
+
+	it("reports nothing for a taken Remote name, which is an answer, not a failure", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		account.addFolder("My vault");
+		const laptop = createConnectingDevice(service, "laptop");
+		const remotes = await authorize(laptop, account);
+
+		expect(await remotes.createRemote("My vault", "Laptop")).toEqual({ kind: "nameTaken" });
+
+		expect(laptop.ui.connectFailures).toEqual([]);
+	});
+});
+
 describe("disconnecting", () => {
 	it("revokes the login and clears this device's secret and Connection", async () => {
 		const service = new FakeService();

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createDropboxConnectStep } from "../../src/providers/dropbox/connect-step";
+import { failureDetail } from "../../src/engine/failure-detail";
 import { ProviderError } from "../../src/engine/provider";
 import { bytes, text } from "../support/bytes";
 import { rejection } from "../support/assertions";
 import { expectFailure } from "../support/provider-failure";
-import { ACCESS_TOKEN_SECONDS, FakeDropbox, json, status, type FakeDropboxAccount } from "../fakes/fake-dropbox";
+import { ACCESS_TOKEN_SECONDS, FakeDropbox, json, routeError, status, type FakeDropboxAccount } from "../fakes/fake-dropbox";
 import { ManualClock } from "../fakes/manual-clock";
 import { testTransfers } from "../support/dropbox-remote";
 
@@ -230,5 +231,97 @@ describe("Dropbox failures", () => {
 			}),
 		);
 		await expectFailure(ops.write("a.md", bytes("a")), "quotaExceeded");
+	});
+});
+
+describe("Dropbox failure details", () => {
+	/** Fails the test if `detail` holds the app key or any of `secrets`. */
+	function expectNoSecrets(detail: string, secrets: readonly string[]): void {
+		for (const secret of ["test-app-key", ...secrets]) expect(detail, secret).not.toContain(secret);
+	}
+
+	it("tells a refused code exchange by its status and answer, without the code or the app key", async () => {
+		const { dropbox, account, connectStep } = setUp();
+		const attempt = await connectStep.startAuthorization();
+		const code = dropbox.approve(attempt.authorizeUrl, account);
+		dropbox.interceptions.push(status(400, "Error in call to API function"));
+
+		const error = await rejection(attempt.complete(code));
+
+		const detail = failureDetail(error);
+		expect(detail).toBe("HTTP 400: Error in call to API function");
+		expectNoSecrets(detail, [code]);
+	});
+
+	it("tells a refused request by its status and answer, without the login secret or the access token", async () => {
+		const setup = setUp();
+		const attempt = await setup.connectStep.startAuthorization();
+		const { secret } = await attempt.complete(setup.dropbox.approve(attempt.authorizeUrl, setup.account));
+		const accountAccess = setup.connectStep.access(secret);
+		await accountAccess.listRoots(".obsync");
+		const lastRequest = setup.dropbox.requests[setup.dropbox.requests.length - 1];
+		const accessToken = /^Bearer (.+)$/.exec(lastRequest?.headers?.Authorization ?? "")?.[1] ?? "";
+		expect(accessToken).not.toBe("");
+		setup.dropbox.interceptions.push(status(403, "app is disabled"));
+
+		const error = await rejection(accountAccess.listRoots(".obsync"));
+
+		const detail = failureDetail(error);
+		expect(detail).toBe("HTTP 403: app is disabled");
+		expectNoSecrets(detail, [secret, accessToken]);
+	});
+
+	it("tells a route error by its route and the error Dropbox gave, without the login secret or the access token", async () => {
+		const setup = setUp();
+		const attempt = await setup.connectStep.startAuthorization();
+		const { secret } = await attempt.complete(setup.dropbox.approve(attempt.authorizeUrl, setup.account));
+		const accountAccess = setup.connectStep.access(secret);
+		setup.dropbox.interceptions.push(routeError("other/", { ".tag": "other" }));
+
+		const error = await rejection(accountAccess.listRoots(".obsync"));
+
+		const detail = failureDetail(error);
+		expect(detail).toContain('{".tag":"other"}');
+		const tokens = setup.dropbox.requests.map((request) => request.headers?.Authorization ?? "").filter((value) => value !== "");
+		expectNoSecrets(detail, [secret, ...tokens.map((value) => value.replace(/^Bearer /, ""))]);
+	});
+
+	it("tells a refused code exchange without the code or the app key", async () => {
+		const { dropbox, account, connectStep } = setUp();
+		const attempt = await connectStep.startAuthorization();
+		const code = dropbox.approve(attempt.authorizeUrl, account);
+		dropbox.interceptions.push(json(400, { error: "invalid_grant", error_description: "code doesn't exist or has expired" }));
+
+		const error = await rejection(attempt.complete(code));
+
+		expect(error).toMatchObject({ failure: { category: "auth" } });
+		expectNoSecrets(failureDetail(error), [code]);
+	});
+
+	it("tells a failed token refresh without the login secret", async () => {
+		const setup = setUp();
+		const attempt = await setup.connectStep.startAuthorization();
+		const { secret } = await attempt.complete(setup.dropbox.approve(attempt.authorizeUrl, setup.account));
+		const accountAccess = setup.connectStep.access(secret);
+		setup.dropbox.expireAccessTokens();
+		setup.dropbox.interceptions.push(status(400, "Error in call to API function"));
+
+		const error = await rejection(accountAccess.listRoots(".obsync"));
+
+		const detail = failureDetail(error);
+		expect(detail).toBe("HTTP 400: Error in call to API function");
+		expectNoSecrets(detail, [secret]);
+	});
+
+	it("tells a token answer without an access token, without echoing it", async () => {
+		const { dropbox, account, connectStep } = setUp();
+		const attempt = await connectStep.startAuthorization();
+		const code = dropbox.approve(attempt.authorizeUrl, account);
+		dropbox.interceptions.push(json(200, { refresh_token: "refresh-leak", account_id: "dbid:account-1" }));
+
+		const error = await rejection(attempt.complete(code));
+
+		expect(error).toBeInstanceOf(ProviderError);
+		expectNoSecrets(failureDetail(error), [code, "refresh-leak"]);
 	});
 });

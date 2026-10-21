@@ -12,6 +12,7 @@ import {
 import { DEFAULT_CONFIGURATION_CATEGORIES, type ConfigurationCategories } from "../../src/engine/configuration";
 import type { SyncConflicts } from "../../src/engine/conflicts";
 import type { ActivityEvent, ActivityUi } from "../../src/engine/activity-log";
+import type { ConnectFailure, ConnectionUi } from "../../src/engine/connection";
 import { DEFAULT_DELETION_GUARD, type DeletionAnswer, type DeletionGuardSettings, type DeletionPrompt } from "../../src/engine/deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "../../src/engine/first-sync";
 import type { LocalVault, VaultPath } from "../../src/engine/local-vault";
@@ -182,10 +183,11 @@ export class InMemorySecretStore implements SecretStore {
 }
 
 /**
- * A UI port that records what the engine showed, and answers its prompts
- * as scripted; it records the activity log's events too.
+ * A UI port that records what the engine and the connection service
+ * showed, and answers prompts as scripted; it records the activity log's
+ * events and the failures reported while connecting too.
  */
-export class RecordingUi implements ActivityUi {
+export class RecordingUi implements ActivityUi, ConnectionUi {
 	/** Every status shown, oldest first. */
 	readonly statuses: SyncStatus[] = [];
 	/** Every notice shown, oldest first. */
@@ -206,6 +208,8 @@ export class RecordingUi implements ActivityUi {
 	readonly conflictLists: SyncConflicts[] = [];
 	/** Every activity log shown, oldest first. */
 	readonly activityLogs: (readonly ActivityEvent[])[] = [];
+	/** Every failure while connecting reported, oldest first. */
+	readonly connectFailures: ConnectFailure[] = [];
 
 	/** The status shown last, or undefined if none was. */
 	get lastStatus(): SyncStatus | undefined {
@@ -264,6 +268,11 @@ export class RecordingUi implements ActivityUi {
 		this.previews.push(preview);
 		const answer = this.firstSyncAnswers.length > 0 ? this.firstSyncAnswers.shift() : { differing: "merge" as const };
 		return Promise.resolve(answer ?? null);
+	}
+
+	/** Records `failure` instead of passing it on. */
+	reportConnectFailure(failure: ConnectFailure): void {
+		this.connectFailures.push(failure);
 	}
 }
 

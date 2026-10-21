@@ -25,7 +25,9 @@ export type SyncFailureCause = ProviderErrorCategory | "unsupportedProvider" | "
  *   retries with growing backoff and on the next trigger.
  * - `syncFailed`: the last sync stopped on a failure that is neither
  *   `transient` nor `auth`; the next one starts over. `cause` tells why,
- *   for the activity log and bug reports.
+ *   for the activity log and bug reports; `detail`, when the failure was an
+ *   error with something to tell, is its `failureDetail`, so it can be
+ *   diagnosed from a bug report.
  * - `reconnectNeeded`: the provider refused this device's login, or its
  *   secret is gone, so sync is paused on this device until the user logs
  *   in again (spec, "Status, notices, guidance"). The pause is kept with
@@ -43,7 +45,7 @@ export type SyncStatus =
 	| { readonly state: "syncing" }
 	| { readonly state: "synced" }
 	| { readonly state: "offline" }
-	| { readonly state: "syncFailed"; readonly cause: SyncFailureCause }
+	| { readonly state: "syncFailed"; readonly cause: SyncFailureCause; readonly detail?: string }
 	| { readonly state: "reconnectNeeded" }
 	| { readonly state: "deletionsOnHold" }
 	| { readonly state: "firstSyncWaiting" };

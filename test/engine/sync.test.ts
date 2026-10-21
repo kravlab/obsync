@@ -391,7 +391,7 @@ describe("sync status and runs", () => {
 
 		laptop.provider.failNext("list", { category: "permanent" });
 		await syncNow(laptop);
-		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "permanent" });
+		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "permanent", detail: "injected permanent on list" });
 
 		await syncNow(laptop);
 		expect(laptop.ui.lastStatus).toEqual({ state: "synced" });
@@ -407,14 +407,14 @@ describe("sync status and runs", () => {
 		expect(laptop.ui.statuses).toEqual([{ state: "syncing" }, { state: "reconnectNeeded" }]);
 	});
 
-	it("shows Sync failed as a bug, and throws, on an error that is not a provider failure", async () => {
+	it("shows Sync failed as a bug, with the error, and throws, on an error that is not a provider failure", async () => {
 		const remote = new FakeRemote();
 		const laptop = connectTestDevice(remote, "Laptop");
-		laptop.provider.beforeNext("list", () => Promise.reject(new Error("broken")));
+		laptop.provider.beforeNext("list", () => Promise.reject(new TypeError("broken")));
 
 		await expect(syncNow(laptop)).rejects.toThrow("broken");
 
-		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "bug" });
+		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "bug", detail: "TypeError: broken" });
 	});
 
 	it("shows Sync failed as a bug, and throws, when the login secret cannot be read", async () => {
@@ -426,7 +426,7 @@ describe("sync status and runs", () => {
 
 		await expect(syncNow(laptop)).rejects.toThrow("secret storage locked");
 
-		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "bug" });
+		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "bug", detail: "Error: secret storage locked" });
 	});
 
 	it("joins a sync already running instead of starting a second one", async () => {

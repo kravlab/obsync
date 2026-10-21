@@ -34,6 +34,24 @@ describe("bugReport", () => {
 		);
 	});
 
+	it("gives each failure's detail, in English whatever the user's language", () => {
+		const report = bugReport({
+			...about,
+			status: { state: "syncFailed", cause: "permanent", detail: "HTTP 409: path/not_found/" },
+			conflicts: NO_CONFLICTS,
+			skipped: [],
+			activity: [
+				{ at: AFTERNOON + 60_000, kind: "status", status: { state: "syncFailed", cause: "permanent", detail: "HTTP 409: path/not_found/" } },
+				{ at: AFTERNOON, kind: "connectFailed", cause: "permanent", detail: "HTTP 400: bad client_id" },
+			],
+		});
+
+		expect(report.split("\n").slice(-2)).toEqual([
+			"2026-10-20 14:31 Sync failed. Dropbox refused a request. (HTTP 409: path/not_found/)",
+			"2026-10-20 14:30 Connecting failed. Dropbox refused a request. (HTTP 400: bad client_id)",
+		]);
+	});
+
 	it("says so when no activity is recorded", () => {
 		const report = bugReport({ ...about, status: { state: "synced" }, conflicts: NO_CONFLICTS, skipped: [], activity: [] });
 

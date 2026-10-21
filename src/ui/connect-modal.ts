@@ -9,7 +9,7 @@ import type {
 } from "../engine/connection";
 import { ProviderError } from "../engine/provider";
 import { defaultDeviceName } from "./device-name";
-import { providerErrorMessage } from "./error-message";
+import { providerErrorDetailLine, providerErrorMessage } from "./error-message";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
 import { fitForPhone } from "./phone-modal";
@@ -23,13 +23,16 @@ import { fitForPhone } from "./phone-modal";
  *    vault are marked), or create a new one, named after the vault by
  *    default; the device name is edited here too.
  *
- * Failures show as a message at the top of the current screen; a failed
- * Remote choice also lists the folders again, since it may have left a new
- * folder behind. While a request runs, further clicks are ignored, so a
- * code is never sent twice.
+ * Failures show as a message at the top of the current screen, a provider
+ * failure with what the provider answered under it; a failed Remote choice
+ * also lists the folders again, since it may have left a new folder
+ * behind. While a request runs, further clicks are ignored, so a code is
+ * never sent twice.
  */
 export class ConnectModal extends Modal {
 	private messageEl: HTMLElement | undefined;
+	/** Under the message: what the provider answered on a failure. */
+	private detailLineEl: HTMLElement | undefined;
 	private busy = false;
 	/** The folders listed last, kept when listing them again fails. */
 	private candidates: readonly RemoteCandidate[] = [];
@@ -66,7 +69,7 @@ export class ConnectModal extends Modal {
 	}
 
 	/** Shows the login screen for a new login, with `message` above it if given. */
-	private async showLogin(message?: string): Promise<void> {
+	private async showLogin(message?: ScreenMessage): Promise<void> {
 		this.startScreen(message);
 		const pending = await this.run(() => this.service.startAuthorization());
 		if (!pending) return;
@@ -99,9 +102,9 @@ export class ConnectModal extends Modal {
 			case undefined:
 				return;
 			case "codeRejected":
-				return this.showLogin(this.strings.codeRejected);
+				return this.showLogin({ text: this.strings.codeRejected });
 			case "otherAccount":
-				this.showMessage(this.strings.otherAccount);
+				this.showMessage({ text: this.strings.otherAccount });
 				return;
 			case "reconnected":
 				this.done(this.strings.noticeReconnected, "reconnected");
@@ -116,7 +119,7 @@ export class ConnectModal extends Modal {
 	 * with `message` at the top if given. If listing fails, the folders
 	 * listed before stay and the failure is shown unless `message` is given.
 	 */
-	private async showRemotes(remotes: RemoteChooser, message?: string): Promise<void> {
+	private async showRemotes(remotes: RemoteChooser, message?: ScreenMessage): Promise<void> {
 		const listed = await this.attempt(() => remotes.list());
 		if (!listed) return;
 		if (listed.ok) this.candidates = listed.value;
@@ -178,16 +181,16 @@ export class ConnectModal extends Modal {
 				this.done(this.strings.noticeConnected, "connected");
 				return;
 			case "nameTaken":
-				this.showMessage(this.strings.folderTaken);
+				this.showMessage({ text: this.strings.folderTaken });
 				return;
 			case "invalidName":
-				this.showMessage(this.strings.folderNameInvalid);
+				this.showMessage({ text: this.strings.folderNameInvalid });
 				return;
 			case "unsupportedProvider":
-				this.showMessage(this.strings.providerUnsupported);
+				this.showMessage({ text: this.strings.providerUnsupported });
 				return;
 			case "firstSyncInProgress":
-				this.showMessage(fill(this.strings.firstSyncInProgress, { device: result.value.deviceName }));
+				this.showMessage({ text: fill(this.strings.firstSyncInProgress, { device: result.value.deviceName }) });
 				new Setting(this.contentEl).addButton((button) =>
 					button.setButtonText(this.strings.connectAnyway).onClick(() => void this.connectWith(remotes, choice, true)),
 				);
@@ -203,15 +206,17 @@ export class ConnectModal extends Modal {
 	}
 
 	/** Clears the window for a new screen, with `message` at the top if given. */
-	private startScreen(message?: string): void {
+	private startScreen(message?: ScreenMessage): void {
 		this.contentEl.empty();
 		this.messageEl = this.contentEl.createEl("p", { cls: "obsync-message" });
+		this.detailLineEl = this.contentEl.createEl("p", { cls: "obsync-message-detail" });
 		if (message) this.showMessage(message);
 	}
 
-	/** Shows `message` at the top of the current screen. */
-	private showMessage(message: string): void {
-		this.messageEl?.setText(message);
+	/** Shows `message` at the top of the current screen, replacing the one shown, its detail line included. */
+	private showMessage(message: ScreenMessage): void {
+		this.messageEl?.setText(message.text);
+		this.detailLineEl?.setText(message.detailLine ?? "");
 	}
 
 	/**
@@ -229,21 +234,30 @@ export class ConnectModal extends Modal {
 
 	/**
 	 * Runs one request unless another is running (then yields undefined). A
-	 * provider failure comes back with the message telling it; any other
-	 * error is a bug and propagates.
+	 * provider failure comes back with the message telling it and what the
+	 * provider answered; any other error is a bug and propagates.
 	 */
 	private async attempt<T>(
 		request: () => Promise<T>,
-	): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string } | undefined> {
+	): Promise<{ readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: ScreenMessage } | undefined> {
 		if (this.busy) return undefined;
 		this.busy = true;
 		try {
 			return { ok: true, value: await request() };
 		} catch (error) {
 			if (!(error instanceof ProviderError)) throw error;
-			return { ok: false, message: providerErrorMessage(error, this.strings) };
+			return {
+				ok: false,
+				message: { text: providerErrorMessage(error, this.strings), detailLine: providerErrorDetailLine(error, this.strings) },
+			};
 		} finally {
 			this.busy = false;
 		}
 	}
+}
+
+/** A message at the top of a screen: its text, and for a provider failure the line telling what the provider answered. */
+interface ScreenMessage {
+	readonly text: string;
+	readonly detailLine?: string;
 }

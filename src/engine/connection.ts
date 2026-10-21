@@ -8,8 +8,9 @@
  */
 import type { AccountAccess, Authorization, ConnectStep } from "./connect-step";
 import { NO_CONFLICTS } from "./conflicts";
+import { detailField } from "./failure-detail";
 import { providerSecretId, type Clock, type DeviceIdentity, type DeviceStore, type SecretStore, type UiPort } from "./ports";
-import { ProviderError, isFailure, isSyncable } from "./provider";
+import { ProviderError, isFailure, isSyncable, type ProviderErrorCategory } from "./provider";
 import {
 	DEFAULT_REMOTE_SETTINGS,
 	DEVICES_FOLDER,
@@ -22,12 +23,31 @@ import {
 } from "./remote-metadata";
 import { statusOf } from "./status";
 
+/**
+ * A provider failure while connecting this device: its category, and its
+ * `failureDetail` when it has one to tell.
+ */
+export interface ConnectFailure {
+	readonly cause: ProviderErrorCategory;
+	readonly detail?: string;
+}
+
+/**
+ * What connecting tells the UI: the status and lists a Connection changes,
+ * and its failures, which only the activity log keeps, since the connect
+ * window tells the user itself.
+ */
+export interface ConnectionUi extends Pick<UiPort, "showStatus" | "showSkipped" | "showConflicts"> {
+	/** Reports a provider failure while connecting, for the activity log. */
+	reportConnectFailure(failure: ConnectFailure): void;
+}
+
 /** Everything connecting and disconnecting is built from. */
 export interface ConnectionPorts {
 	readonly connectStep: ConnectStep;
 	readonly deviceStore: DeviceStore;
 	readonly secretStore: SecretStore;
-	readonly ui: UiPort;
+	readonly ui: ConnectionUi;
 	/** Returns a new random Device ID. */
 	readonly newDeviceId: () => string;
 	/** This device's clock, against which another device's "First sync in progress" mark is judged stale. */
@@ -159,6 +179,20 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 	const secretId = providerSecretId(connectStep.providerId);
 
 	/**
+	 * Runs one step of connecting; a provider failure it throws is reported
+	 * for the activity log with its detail, then thrown on to the connect
+	 * window, which tells the user.
+	 */
+	async function reported<T>(step: () => Promise<T>): Promise<T> {
+		try {
+			return await step();
+		} catch (error) {
+			if (error instanceof ProviderError) ui.reportConnectFailure({ cause: error.failure.category, ...detailField(error) });
+			throw error;
+		}
+	}
+
+	/**
 	 * Checks that `root` can be synced, sets up the Metadata folder there and
 	 * registers this device, then stores the secret and, last, the
 	 * Connection: a device interrupted before that point is simply still not
@@ -213,23 +247,27 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 	function remoteChooser(authorization: Authorization): RemoteChooser {
 		const access = connectStep.access(authorization.secret);
 		return {
-			async list(): Promise<readonly RemoteCandidate[]> {
-				const roots = await access.listRoots(METADATA_FOLDER);
-				return roots.map(({ root, name, holdsMarker }) => ({ root, name, isRemote: holdsMarker }));
+			list(): Promise<readonly RemoteCandidate[]> {
+				return reported(async () => {
+					const roots = await access.listRoots(METADATA_FOLDER);
+					return roots.map(({ root, name, holdsMarker }) => ({ root, name, isRemote: holdsMarker }));
+				});
 			},
 			useFolder(root, deviceName, options = {}): Promise<JoinOutcome> {
-				return join(access, authorization, root, deviceName, options.evenDuringFirstSync === true);
+				return reported(() => join(access, authorization, root, deviceName, options.evenDuringFirstSync === true));
 			},
-			async createRemote(name: string, deviceName: string): Promise<CreateRemoteOutcome> {
-				if (name.includes("/")) return { kind: "invalidName" };
-				let root: string;
-				try {
-					({ root } = await access.createRoot(name));
-				} catch (error) {
-					if (isFailure(error, "preconditionFailed")) return { kind: "nameTaken" };
-					throw error;
-				}
-				return connect(access, authorization, root, deviceName);
+			createRemote(name: string, deviceName: string): Promise<CreateRemoteOutcome> {
+				return reported(async () => {
+					if (name.includes("/")) return { kind: "invalidName" };
+					let root: string;
+					try {
+						({ root } = await access.createRoot(name));
+					} catch (error) {
+						if (isFailure(error, "preconditionFailed")) return { kind: "nameTaken" };
+						throw error;
+					}
+					return connect(access, authorization, root, deviceName);
+				});
 			},
 		};
 	}
@@ -259,18 +297,20 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 		},
 
 		async startAuthorization(): Promise<PendingAuthorization> {
-			const attempt = await connectStep.startAuthorization();
+			const attempt = await reported(() => connectStep.startAuthorization());
 			return {
 				authorizeUrl: attempt.authorizeUrl,
-				async submitCode(code: string): Promise<AuthorizationOutcome> {
-					let authorization: Authorization;
-					try {
-						authorization = await attempt.complete(code);
-					} catch (error) {
-						if (isFailure(error, "auth")) return { kind: "codeRejected" };
-						throw error;
-					}
-					return outcomeOf(authorization);
+				submitCode(code: string): Promise<AuthorizationOutcome> {
+					return reported(async () => {
+						let authorization: Authorization;
+						try {
+							authorization = await attempt.complete(code);
+						} catch (error) {
+							if (isFailure(error, "auth")) return { kind: "codeRejected" };
+							throw error;
+						}
+						return outcomeOf(authorization);
+					});
 				},
 			};
 		},

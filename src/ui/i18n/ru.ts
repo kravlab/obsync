@@ -93,6 +93,7 @@ export const ru: Strings = {
 	otherAccount: "Это устройство подключено к другому аккаунту Dropbox. Чтобы сменить аккаунт, сначала отключите его.",
 	errorUnreachable: "Dropbox недоступен. Проверьте подключение к сети и попробуйте ещё раз.",
 	errorFailed: "Dropbox отклонил запрос. Попробуйте позже.",
+	errorDetails: "Подробности: {detail}",
 
 	chooseInstructions: "Выберите папку, с которой будет синхронизироваться это хранилище, или создайте новую.",
 	folderIsRemote: "Содержит синхронизируемое хранилище.",
@@ -180,6 +181,8 @@ export const ru: Strings = {
 
 	activityLine: "{time} {text}",
 	activitySyncFailed: "Ошибка синхронизации. {cause}.",
+	activityConnectFailed: "Не удалось подключиться. {cause}.",
+	activityDetail: "{text} ({detail})",
 	failureAuth: "Dropbox отклонил вход",
 	failureThrottled: "Dropbox попросил делать запросы реже",
 	failureTransient: "Dropbox недоступен",

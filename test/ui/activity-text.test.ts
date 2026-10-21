@@ -42,4 +42,38 @@ describe("activityLine", () => {
 		expect(activityLine(event, selectStrings("en"))).toBe(`2026-10-20 14:30 Sync failed. ${english}.`);
 		expect(activityLine(event, selectStrings("ru"))).toBe(`2026-10-20 14:30 Ошибка синхронизации. ${russian}.`);
 	});
+
+	it("tells a failed sync's detail in parentheses, as the provider wrote it", () => {
+		const event = {
+			at: AFTERNOON,
+			kind: "status",
+			status: { state: "syncFailed", cause: "permanent", detail: "HTTP 400: Error in call to API" },
+		} as const;
+
+		expect(activityLine(event, selectStrings("en"))).toBe(
+			"2026-10-20 14:30 Sync failed. Dropbox refused a request. (HTTP 400: Error in call to API)",
+		);
+		expect(activityLine(event, selectStrings("ru"))).toBe(
+			"2026-10-20 14:30 Ошибка синхронизации. Dropbox отклонил запрос. (HTTP 400: Error in call to API)",
+		);
+	});
+
+	it("tells a failure while connecting, with its detail, in English and Russian", () => {
+		const event = { at: AFTERNOON, kind: "connectFailed", cause: "permanent", detail: "HTTP 400: bad client_id" } as const;
+
+		expect(activityLine(event, selectStrings("en"))).toBe(
+			"2026-10-20 14:30 Connecting failed. Dropbox refused a request. (HTTP 400: bad client_id)",
+		);
+		expect(activityLine(event, selectStrings("ru"))).toBe(
+			"2026-10-20 14:30 Не удалось подключиться. Dropbox отклонил запрос. (HTTP 400: bad client_id)",
+		);
+	});
+
+	it("tells a failure while connecting without parentheses when it has no detail", () => {
+		const event = { at: AFTERNOON, kind: "connectFailed", cause: "transient" } as const;
+
+		expect(activityLine(event, selectStrings("en"))).toBe(
+			"2026-10-20 14:30 Connecting failed. Dropbox could not be reached.",
+		);
+	});
 });

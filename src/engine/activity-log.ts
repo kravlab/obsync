@@ -10,6 +10,7 @@
  * notice or status can bypass the log.
  */
 import type { SyncNotice } from "./notices";
+import type { ConnectFailure, ConnectionUi } from "./connection";
 import type { Clock, UiPort } from "./ports";
 import type { SyncStatus } from "./status";
 
@@ -18,12 +19,13 @@ export const ACTIVITY_LIMIT = 100;
 
 /**
  * One thing that happened, at `at` (ms since the epoch by the engine's
- * Clock): a notice told to the user, or the sync status changing to
- * `status`.
+ * Clock): a notice told to the user, the sync status changing to
+ * `status`, or connecting this device failing as a `ConnectFailure` tells.
  */
 export type ActivityEvent =
 	| { readonly at: number; readonly kind: "notice"; readonly notice: SyncNotice }
-	| { readonly at: number; readonly kind: "status"; readonly status: SyncStatus };
+	| { readonly at: number; readonly kind: "status"; readonly status: SyncStatus }
+	| ({ readonly at: number; readonly kind: "connectFailed" } & ConnectFailure);
 
 /** Where this device keeps its activity log; never synced. */
 export interface ActivityStore {
@@ -40,14 +42,16 @@ export interface ActivityUi extends UiPort {
 }
 
 /**
- * `ui` with an activity log kept in `store`: every notice, and every
- * status that differs from the last status logged, is recorded at
+ * `ui` with an activity log kept in `store`: every notice, every failure
+ * while connecting, and every status that differs from the last status
+ * logged (a failure differs by its cause or its detail), is recorded at
  * `clock`'s time before `ui` shows it, and the whole log is shown again.
  * Syncing… is never logged, so each poll's Syncing… and Synced do not
- * flood it. The stored log is shown at once. Everything else passes
- * through unchanged.
+ * flood it. The stored log is shown at once. A failure while connecting
+ * is only logged: the connect window tells it. Everything else passes
+ * through unchanged. It serves both the engine and the connection service.
  */
-export function withActivityLog(ui: ActivityUi, store: ActivityStore, clock: Clock): UiPort {
+export function withActivityLog(ui: ActivityUi, store: ActivityStore, clock: Clock): UiPort & ConnectionUi {
 	let events = store.load();
 	ui.showActivity(events);
 
@@ -79,11 +83,12 @@ export function withActivityLog(ui: ActivityUi, store: ActivityStore, clock: Clo
 		showConflicts: (conflicts) => ui.showConflicts(conflicts),
 		askDeletions: (prompt) => ui.askDeletions(prompt),
 		askFirstSync: (preview) => ui.askFirstSync(preview),
+		reportConnectFailure: (failure) => record({ at: clock.now(), kind: "connectFailed", ...failure }),
 	};
 }
 
-/** Whether `a` and `b` are the same status, a failure with the same cause. */
+/** Whether `a` and `b` are the same status, a failure with the same cause and detail. */
 function sameStatus(a: SyncStatus, b: SyncStatus | undefined): boolean {
 	if (b === undefined || a.state !== b.state) return false;
-	return a.state !== "syncFailed" || (b.state === "syncFailed" && a.cause === b.cause);
+	return a.state !== "syncFailed" || (b.state === "syncFailed" && a.cause === b.cause && a.detail === b.detail);
 }

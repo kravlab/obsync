@@ -6,6 +6,19 @@
 	color: var(--text-error);
 }
 
+/* Under a failure's message: what the service answered, quieter, and
+   wrapped anywhere so a long answer stays inside a phone's screen. With
+   nothing to tell it takes no room, margins included. */
+.obsync-message-detail:not(:empty) {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	overflow-wrap: anywhere;
+}
+
+.obsync-message-detail:empty {
+	display: none;
+}
+
 /* Conflict blocks in the editor: markers stay visible but quiet, each
    side gets a light tint of its own, and a row of actions sits above. */
 .obsync-conflict-marker {

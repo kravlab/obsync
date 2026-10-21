@@ -4,6 +4,7 @@
  * triggers and lifecycle"). The shell builds one per device with
  * `createSyncEngine`.
  */
+import { detailField } from "./failure-detail";
 import { withVaultWrites } from "./local-vault";
 import { isWithin, movedAlong } from "./paths";
 import type { VaultRename } from "./renames";
@@ -12,7 +13,7 @@ import { ProviderError, isSyncable } from "./provider";
 import { beginFirstSync, noteFirstSyncDone } from "./first-sync";
 import { conflictsOf } from "./conflicts";
 import { readRemoteSettings } from "./remote-metadata";
-import { statusOf, type SyncStatus } from "./status";
+import { statusOf, type SyncFailureCause, type SyncStatus } from "./status";
 import { runSync, type SyncHold } from "./sync-run";
 import type { SyncSnapshot } from "./sync-snapshot";
 
@@ -135,6 +136,11 @@ function timerOn(scheduler: Scheduler, isStopped: () => boolean): Timer {
 /** The status shown while sync is held by `hold`. */
 function heldStatus(hold: SyncHold): SyncStatus {
 	return hold === "deletions" ? { state: "deletionsOnHold" } : { state: "firstSyncWaiting" };
+}
+
+/** Sync failed for `cause`, on `error`, with its detail when it has one to tell. */
+function failedOn(cause: SyncFailureCause, error: unknown): SyncStatus {
+	return { state: "syncFailed", cause, ...detailField(error) };
 }
 
 /** Builds a sync engine over `ports`. */
@@ -349,7 +355,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			}
 		} catch (error) {
 			if (!(error instanceof ProviderError)) {
-				ui.showStatus({ state: "syncFailed", cause: "bug" });
+				ui.showStatus(failedOn("bug", error));
 				throw error;
 			}
 			if (error.failure.category === "auth") {
@@ -363,7 +369,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				retry.schedule(delayMs, () => void trigger("sync"));
 				return;
 			}
-			ui.showStatus({ state: "syncFailed", cause: error.failure.category });
+			ui.showStatus(failedOn(error.failure.category, error));
 			if (error.failure.category === "throttled") {
 				retry.schedule(error.failure.retryAfterMs, () => void trigger("sync"));
 			}

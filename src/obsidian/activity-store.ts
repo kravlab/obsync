@@ -1,6 +1,7 @@
 import type { App } from "obsidian";
 import type { ActivityEvent, ActivityStore } from "../engine/activity-log";
 import type { SyncNotice } from "../engine/notices";
+import type { ProviderErrorCategory } from "../engine/provider";
 import type { SyncFailureCause, SyncStatus } from "../engine/status";
 import { isRecord } from "./is-record";
 
@@ -60,8 +61,8 @@ type FieldsCheck = (fields: Record<string, unknown>) => boolean;
 /** For a status or notice without fields of its own. */
 const noFields: FieldsCheck = () => true;
 
-/** Every failure cause; a record, so a cause added to the type must be added here. */
-const FAILURE_CAUSES: Record<SyncFailureCause, true> = {
+/** Every provider failure category, the causes of a failure while connecting; a record, so a category added to the type must be added here. */
+const PROVIDER_CAUSES: Record<ProviderErrorCategory, true> = {
 	auth: true,
 	throttled: true,
 	transient: true,
@@ -72,6 +73,11 @@ const FAILURE_CAUSES: Record<SyncFailureCause, true> = {
 	tooLarge: true,
 	nameNotRepresentable: true,
 	permanent: true,
+};
+
+/** Every failure cause of a sync; a record, so a cause added to the type must be added here. */
+const FAILURE_CAUSES: Record<SyncFailureCause, true> = {
+	...PROVIDER_CAUSES,
 	unsupportedProvider: true,
 	unreadableSettings: true,
 	bug: true,
@@ -87,7 +93,7 @@ const STATUS_FIELDS: Record<SyncStatus["state"], FieldsCheck> = {
 	syncing: noFields,
 	synced: noFields,
 	offline: noFields,
-	syncFailed: (status) => isOneOf(status.cause, FAILURE_CAUSES),
+	syncFailed: (status) => isOneOf(status.cause, FAILURE_CAUSES) && isOptionalText(status.detail),
 	reconnectNeeded: noFields,
 	deletionsOnHold: noFields,
 	firstSyncWaiting: noFields,
@@ -108,13 +114,21 @@ const NOTICE_FIELDS: Record<SyncNotice["kind"], FieldsCheck> = {
 /**
  * Whether `value` is an activity event the shell can word: a time, and a
  * status of a known state or a notice of a known kind, with the fields
- * that state or kind carries.
+ * that state or kind carries, or a failure while connecting with a known
+ * provider category. A detail is optional, since events stored before
+ * failures kept one have none.
  */
 function isActivityEvent(value: unknown): value is ActivityEvent {
 	if (!isRecord(value) || typeof value.at !== "number") return false;
 	if (value.kind === "notice") return hasFields(value.notice, "kind", NOTICE_FIELDS);
 	if (value.kind === "status") return hasFields(value.status, "state", STATUS_FIELDS);
+	if (value.kind === "connectFailed") return isOneOf(value.cause, PROVIDER_CAUSES) && isOptionalText(value.detail);
 	return false;
+}
+
+/** Whether `value` is absent or text. */
+function isOptionalText(value: unknown): boolean {
+	return value === undefined || typeof value === "string";
 }
 
 /** Whether `value` is a record whose `tag` field names an entry of `checks`, and whose fields pass that entry's check. */

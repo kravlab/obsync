@@ -55,13 +55,43 @@ describe("the activity log", () => {
 			ui.showStatus(status);
 		}
 
-		expect(inner.lastActivity?.map((event) => (event.kind === "status" ? event.status : event.notice))).toEqual([
+		expect(inner.lastActivity?.map((event) => event.kind === "status" && event.status)).toEqual([
 			{ state: "syncFailed", cause: "quotaExceeded" },
 			{ state: "syncFailed", cause: "permanent" },
 			{ state: "synced" },
 			{ state: "connected" },
 		]);
 		expect(inner.statuses).toHaveLength(8);
+	});
+
+	it("keeps a failure again when only its detail changed, and once when the detail is the same", () => {
+		const { inner, ui } = loggedUi();
+		for (const status of [
+			{ state: "syncFailed", cause: "permanent", detail: "HTTP 400: one" },
+			{ state: "syncFailed", cause: "permanent", detail: "HTTP 400: one" },
+			{ state: "syncFailed", cause: "permanent", detail: "HTTP 403: two" },
+			{ state: "syncFailed", cause: "permanent" },
+		] as const) {
+			ui.showStatus(status);
+		}
+
+		expect(inner.lastActivity?.map((event) => event.kind === "status" && event.status)).toEqual([
+			{ state: "syncFailed", cause: "permanent" },
+			{ state: "syncFailed", cause: "permanent", detail: "HTTP 403: two" },
+			{ state: "syncFailed", cause: "permanent", detail: "HTTP 400: one" },
+		]);
+	});
+
+	it("keeps a failure while connecting, with its detail, without a notice", () => {
+		const { clock, inner, store, ui } = loggedUi();
+		clock.advance(5_000);
+		ui.reportConnectFailure({ cause: "permanent", detail: "HTTP 400: bad client_id" });
+
+		const expected: ActivityEvent[] = [{ at: 5_000, kind: "connectFailed", cause: "permanent", detail: "HTTP 400: bad client_id" }];
+		expect(inner.lastActivity).toEqual(expected);
+		expect(store.events).toEqual(expected);
+		expect(inner.notices).toEqual([]);
+		expect(inner.connectFailures).toEqual([]);
 	});
 
 	it("keeps only the newest events up to its limit", () => {

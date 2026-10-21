@@ -174,6 +174,8 @@ export const en = {
 	errorUnreachable: "Dropbox cannot be reached. Check the connection and try again.",
 	/** Dropbox refused a request for another reason. */
 	errorFailed: "Dropbox refused the request. Try again later.",
+	/** Under a failure's message: what Dropbox answered, `{detail}`, untranslated. */
+	errorDetails: "Details: {detail}",
 
 	/** Remote step: what to choose. */
 	chooseInstructions: "Choose the folder this vault syncs with, or create a new one.",
@@ -315,6 +317,10 @@ export const en = {
 	activityLine: "{time} {text}",
 	/** A failed sync in the activity log; `{cause}` is one of the failure texts below, a sentence without its full stop. */
 	activitySyncFailed: "Sync failed. {cause}.",
+	/** A failure while connecting in the activity log; `{cause}` as for a failed sync. */
+	activityConnectFailed: "Connecting failed. {cause}.",
+	/** A failure's line with its detail; `{text}` is the line, `{detail}` what the provider answered, untranslated. */
+	activityDetail: "{text} ({detail})",
 	/** Why a sync failed, by cause. */
 	failureAuth: "Dropbox refused the login",
 	failureThrottled: "Dropbox asked to slow down",

@@ -55,10 +55,29 @@ describe("stored activity log", () => {
 		expect(storedActivity(storableActivity(every))).toEqual(every);
 	});
 
+	it("reads back a failure's detail and a failure while connecting, with and without a detail", () => {
+		const withDetails: ActivityEvent[] = [
+			{ at: 3, kind: "status", status: { state: "syncFailed", cause: "bug", detail: "TypeError: x is undefined" } },
+			{ at: 2, kind: "connectFailed", cause: "permanent", detail: "HTTP 400: bad client_id" },
+			{ at: 1, kind: "connectFailed", cause: "transient" },
+		];
+
+		expect(storedActivity(storableActivity(withDetails))).toEqual(withDetails);
+	});
+
+	it.each([
+		["an unknown cause", { at: 5, kind: "connectFailed", cause: "gremlins" }],
+		["a cause that is not a provider failure", { at: 5, kind: "connectFailed", cause: "bug" }],
+		["a detail that is not text", { at: 5, kind: "connectFailed", cause: "permanent", detail: 400 }],
+	])("leaves out a failure while connecting with %s", (_, event) => {
+		expect(storedActivity({ formatVersion: 1, events: [event] })).toEqual([]);
+	});
+
 	it.each([
 		["an unknown state", { state: "paused" }],
 		["a failure without its cause", { state: "syncFailed" }],
 		["a failure with an unknown cause", { state: "syncFailed", cause: "gremlins" }],
+		["a failure with a detail that is not text", { state: "syncFailed", cause: "permanent", detail: { code: 400 } }],
 	])("leaves out a status with %s", (_, status) => {
 		expect(storedActivity({ formatVersion: 1, events: [{ at: 5, kind: "status", status }] })).toEqual([]);
 	});
