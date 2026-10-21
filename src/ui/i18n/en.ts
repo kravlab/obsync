@@ -225,6 +225,18 @@ export const en = {
 		"{device} is doing its first sync with this folder. Connect once it has finished, so fewer files conflict.",
 	/** Connect window: connects although another device's First sync is in progress. */
 	connectAnyway: "Connect anyway",
+
+	/** After the sync status: how many files the last sync left out; `{count}` is a number. */
+	skippedCount: "{count} skipped",
+	/** The sync status with the skipped count after it; `{status}` and `{skipped}` are the two texts. */
+	statusWithSkipped: "{status} · {skipped}",
+	/** One skipped file in the status notice, by why it does not sync; `{file}` is a vault path. */
+	skippedIgnored: "{file} matches the ignore list",
+	skippedNameNotRepresentable: "{file} has a name the cloud cannot store",
+	skippedCaseClash: "{file} differs from another file's name only in case",
+	skippedTooLarge: "{file} is larger than the size limit",
+	/** The last line of a shortened skipped list; `{count}` is how many files it leaves out. */
+	skippedMore: "And {count} more",
 } as const;
 
 /** The shape every language's string table must have: the keys of `en`. */

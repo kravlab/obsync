@@ -55,9 +55,12 @@
  * A vault file typed into within the post-edit pause is not written or
  * trashed by this sync; a later one does it.
  *
- * Which paths take part, and their vault paths on a case-insensitive
- * provider, is settled by `syncListing` first; a path it leaves out is
- * never taken for a deleted one.
+ * Which paths take part (the Synced file scope rules), and their vault
+ * paths on a case-insensitive provider, is settled by `syncListing` first;
+ * a path it leaves out is never taken for a deleted one. The provider is
+ * reached through the Remote's name policy (name-policy.ts), so the sync
+ * works in vault paths only. An upload the provider refuses for its name
+ * or size is skipped and reported instead of stopping the sync.
  *
  * Everything else is left as it is on both sides: a file and a folder at
  * one path. A merged
@@ -68,7 +71,8 @@ import { conflictCopyPath } from "./conflict-copy";
 import { contentHash } from "./content-hash";
 import { guardReason, type DeletionGuardSettings } from "./deletion-guard";
 import { findDeletions } from "./deletions";
-import type { LocalVault, VaultFile, VaultPath } from "./local-vault";
+import { ignoreList } from "./ignore-list";
+import type { LocalVault, VaultEntry, VaultFile, VaultPath } from "./local-vault";
 import { comparePaths, foldersDownTo, parentOf, pathKey } from "./paths";
 import type { Clock, DeviceIdentity, DeviceStore, RemoteFeed, UiPort } from "./ports";
 import {
@@ -82,15 +86,19 @@ import {
 	type RemoteFile,
 } from "./provider";
 import type { DifferingOutcome, FirstSyncPreview, FirstSyncTally } from "./first-sync";
+import { namedProvider, pathCodec } from "./name-policy";
 import { contentKindOf, type RemoteSettings } from "./remote-metadata";
 import { serverHasher } from "./server-hash";
 import { carryRenames } from "./carry-renames";
 import { findRenames, type VaultRename } from "./renames";
-import { syncListing } from "./sync-listing";
+import { syncListing, type SkippedFile } from "./sync-listing";
 import type { SnapshotEntry, SyncedFile, VaultFileStat } from "./sync-snapshot";
 import { mergeText } from "./text-merge";
 import { postEditPauseRemainingMs } from "./post-edit-pause";
 import { decodeUtf8 } from "./utf8";
+
+/** What `refusable` gives for a write the provider refused for its name or size. */
+const REFUSED = Symbol("refused");
 
 /**
  * The second label of every Conflict block: without Device journals the
@@ -100,7 +108,10 @@ const REMOTE_LABEL = "Remote";
 
 /** What one sync works on. */
 export interface SyncRun {
-	/** The Remote, through a provider reporting conditional writes. */
+	/**
+	 * The Remote, through a provider reporting conditional writes, as it
+	 * stores paths; the sync applies the Remote's name policy itself.
+	 */
 	readonly provider: Provider;
 	readonly vault: LocalVault;
 	/** Holds the Sync snapshot, the Bases and the Remote feed state. */
@@ -156,6 +167,13 @@ export interface SyncRunResult {
 	readonly held?: SyncHold;
 	/** For a completed First sync, what it did. */
 	readonly firstSync?: Readonly<FirstSyncTally>;
+	/**
+	 * The files this sync left out for a reason the user is told, ordered
+	 * by path: those the listing left out, and those whose upload the
+	 * provider refused for their name or size. Reported for a held sync
+	 * too, from its listing.
+	 */
+	readonly skipped: readonly SkippedFile[];
 }
 
 /**
@@ -163,7 +181,7 @@ export interface SyncRunResult {
  * the sync and is thrown; every path recorded before it stays recorded.
  */
 export async function runSync({
-	provider,
+	provider: storedAs,
 	vault,
 	deviceStore,
 	settings,
@@ -178,12 +196,21 @@ export async function runSync({
 }: SyncRun): Promise<SyncRunResult> {
 	// A First sync is a union: entries left from one cut off earlier must not turn into renames or deletions.
 	const snapshot = new Map(firstSync === undefined ? await deviceStore.loadSnapshot() : []);
+	const codec = pathCodec(storedAs.nameRules, settings.namePolicy);
+	// From here on every provider call takes and gives vault paths.
+	const provider = namedProvider(storedAs, codec);
 	const previousFeed = await deviceStore.loadRemoteFeed();
 	const listed = await listRemote(provider, previousFeed, snapshot.size > 0, reconcile);
 	const listing = syncListing(
 		await vault.list(),
 		listed.entries,
-		{ configDir: vault.configDir, caseInsensitive: provider.nameRules.caseInsensitive },
+		{
+			configDir: vault.configDir,
+			caseInsensitive: provider.nameRules.caseInsensitive,
+			ignore: ignoreList(settings.ignoreList, provider.nameRules.caseInsensitive),
+			storable: (path) => codec.toRemote(path) !== null,
+			sizeCeiling: Math.min(settings.sizeCeilingBytes, provider.maxFileSize),
+		},
 		snapshot.keys(),
 	);
 	const remote = new Map(listing.remote.map((entry) => [entry.path, entry] as const));
@@ -199,6 +226,31 @@ export async function runSync({
 	const tally: FirstSyncTally = { downloaded: 0, uploaded: 0, conflicted: 0, conflictCopies: 0 };
 	/** In a First sync started with "keep Remote": every differing file gets a Conflict copy, text included. */
 	let keepRemote = false;
+	/** Files whose upload the provider refused for their name or size, beyond what its declared rules foresaw. */
+	const refused: SkippedFile[] = [];
+
+	/**
+	 * Runs `step`, a write that brings the vault entry `path` itself to the
+	 * Remote: its folders, or its content as this device has it. A name or
+	 * size the provider refuses skips the entry for this sync instead of
+	 * stopping it, reports it if it is a `file`, and gives `REFUSED`; each
+	 * later sync tries again. Writes made while merging or for Conflict
+	 * copies do not go through here, so their refusals still stop the sync.
+	 */
+	async function refusable<T>(path: VaultPath, kind: VaultEntry["kind"], step: () => Promise<T>): Promise<T | typeof REFUSED> {
+		try {
+			return await step();
+		} catch (error) {
+			const reason = isFailure(error, "nameNotRepresentable") ? "nameNotRepresentable" : isFailure(error, "tooLarge") ? "tooLarge" : null;
+			if (reason === null) throw error;
+			if (kind === "file") refused.push({ path, reason });
+			return REFUSED;
+		}
+	}
+
+	/** Everything skipped so far, ordered by path; the listing's list already is. */
+	const skipped = (): readonly SkippedFile[] =>
+		refused.length === 0 ? listing.skipped : [...listing.skipped, ...refused].sort((a, b) => comparePaths(a.path, b.path));
 
 	/** Whether `path` is within the post-edit pause; remembers the earliest pause end. */
 	function pausedForTyping(path: VaultPath): boolean {
@@ -429,7 +481,7 @@ export async function runSync({
 		if (snapshot.has(path)) return;
 		const there = remote.get(path);
 		if (there?.kind === "file") return;
-		if (there === undefined) await ensureRemoteFolder(path);
+		if (there === undefined && (await refusable(path, "folder", () => ensureRemoteFolder(path))) === REFUSED) return;
 		await record(path, { kind: "folder", ...stableIdAt(path) }, null);
 	}
 
@@ -447,7 +499,7 @@ export async function runSync({
 		let precondition: Precondition;
 		if (synced === undefined) {
 			if (there !== undefined) return;
-			await ensureRemoteFolder(parentOf(file.path));
+			if ((await refusable(file.path, "file", () => ensureRemoteFolder(parentOf(file.path)))) === REFUSED) return;
 			precondition = { kind: "absent" };
 		} else {
 			if (synced.kind !== "file") return;
@@ -468,7 +520,7 @@ export async function runSync({
 	 * Uploads `data`, the vault file `path` with `hash`, on `precondition`
 	 * and records it; returns whether it did. Refused because another
 	 * device wrote the file since, it is merged with what that device wrote,
-	 * against `synced`.
+	 * against `synced`; refused for its name or size, it is skipped.
 	 */
 	async function uploadOrMerge(
 		path: VaultPath,
@@ -477,7 +529,8 @@ export async function runSync({
 		precondition: Precondition,
 		synced: SnapshotEntry | undefined,
 	): Promise<boolean> {
-		const written = await writeRemote(path, data, precondition);
+		const written = await refusable(path, "file", () => writeRemote(path, data, precondition));
+		if (written === REFUSED) return false;
 		if (written === undefined) {
 			const remoteVersion = await readRemote(path);
 			if (remoteVersion !== undefined) await merge(path, remoteVersion, synced);
@@ -620,15 +673,18 @@ export async function runSync({
 	 * file edited here, an edit beats a delete, and `announce` tells the
 	 * user; for the Deletion guard's Restore, it is not announced. A file
 	 * another device put there meanwhile is merged with it, as one created
-	 * on both sides.
+	 * on both sides. One refused for its name or size is skipped.
 	 */
 	async function keepEditedHere(path: VaultPath, announce: boolean): Promise<void> {
 		const here = await vault.stat(path);
 		if (here?.kind !== "file") return;
 		const data = await vault.read(path);
 		const hash = await contentHash(data);
-		await ensureRemoteFolder(parentOf(path));
-		const written = await writeRemote(path, data, { kind: "absent" });
+		const written = await refusable(path, "file", async () => {
+			await ensureRemoteFolder(parentOf(path));
+			return writeRemote(path, data, { kind: "absent" });
+		});
+		if (written === REFUSED) return;
 		if (written === undefined) {
 			const remoteVersion = await readRemote(path);
 			if (remoteVersion !== undefined) await merge(path, remoteVersion, undefined);
@@ -798,7 +854,7 @@ export async function runSync({
 
 	if (firstSync !== undefined) {
 		const answer = await ui.askFirstSync(await firstSyncPreview());
-		if (answer === null) return { held: "firstSync" };
+		if (answer === null) return { held: "firstSync", skipped: skipped() };
 		keepRemote = answer.differing === "keepRemote";
 		await firstSync.begin();
 	}
@@ -842,7 +898,7 @@ export async function runSync({
 		reason === null
 			? "apply"
 			: await ui.askDeletions({ reason, toRemote: toRemotePaths, toVault: deletions.toVault });
-	if (answer === null) return { held: "deletions" };
+	if (answer === null) return { held: "deletions", skipped: skipped() };
 
 	const { deferred, leftRemoteFolders } = await carryRenames(renames, {
 		provider,
@@ -892,7 +948,9 @@ export async function runSync({
 	if (listed.cursor !== undefined && listed.cursor !== previousFeed?.cursor) {
 		await deviceStore.saveRemoteFeed({ cursor: listed.cursor, entries: listed.entries });
 	}
-	return firstSync === undefined ? { nextPostEditPauseMs } : { nextPostEditPauseMs, firstSync: tally };
+	return firstSync === undefined
+		? { nextPostEditPauseMs, skipped: skipped() }
+		: { nextPostEditPauseMs, firstSync: tally, skipped: skipped() };
 }
 
 /**

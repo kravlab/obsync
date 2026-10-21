@@ -57,10 +57,22 @@ import {
 const MAX_FILE_SIZE = 2 ** 41 - 2 ** 22;
 
 /**
- * Dropbox paths are case-insensitive. Its other name rules are not
- * declared yet: a name it refuses fails with `nameNotRepresentable`.
+ * Dropbox's name rules. Paths are case-insensitive. The rest is not
+ * verified on the live service, since Dropbox documents no list (its API
+ * spec only has `WriteError.disallowed_name`):
+ * - NUL, `\` and DEL, a trailing space, and segments over 255 characters,
+ *   from rclone's Dropbox backend, built from observed behaviour;
+ * - the reserved names `desktop.ini` and `thumbs.db`, from a third-party
+ *   (QNAP) FAQ; its other names start with a dot, which never syncs.
+ * A name Dropbox refuses anyway fails with `nameNotRepresentable`.
  */
-const NAME_RULES: NameRules = { forbiddenCharacters: [], reservedNames: [], caseInsensitive: true };
+const NAME_RULES: NameRules = {
+	forbiddenCharacters: ["\u0000", "\\", "\u007F"],
+	forbiddenAtEnd: [" "],
+	reservedNames: ["desktop.ini", "thumbs.db"],
+	caseInsensitive: true,
+	maxSegmentLength: 255,
+};
 
 /** The id naming Dropbox in Connections and in the login secret's id. */
 export const DROPBOX_PROVIDER_ID = "dropbox";

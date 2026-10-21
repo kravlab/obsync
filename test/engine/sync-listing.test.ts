@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { VaultEntry } from "../../src/engine/local-vault";
 import type { RemoteEntry } from "../../src/engine/provider";
 import { syncListing } from "../../src/engine/sync-listing";
+import { listingRules } from "../support/listing-rules";
 
 /** A vault file at `path`. */
 function vaultFile(path: string): VaultEntry {
@@ -13,10 +14,8 @@ function remoteFile(path: string): RemoteEntry {
 	return { kind: "file", path, revision: "r1", size: 1 };
 }
 
-/** A configuration folder name; the tests here never list it. */
-const CONFIG_DIR = ".config";
-const caseInsensitive = { configDir: CONFIG_DIR, caseInsensitive: true };
-const caseSensitive = { configDir: CONFIG_DIR, caseInsensitive: false };
+const caseInsensitive = listingRules(true);
+const caseSensitive = listingRules(false);
 
 describe("sync listing: which paths are gone", () => {
 	it("tells a path missing from a side's listing as gone there, and a listed one as not", () => {

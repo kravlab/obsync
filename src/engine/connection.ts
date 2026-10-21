@@ -43,7 +43,8 @@ export interface ConnectionService {
 	startAuthorization(): Promise<PendingAuthorization>;
 	/**
 	 * Revokes this device's login at the service, then clears its secret
-	 * and everything it keeps for the Connection. The local cleanup runs
+	 * and everything it keeps for the Connection, and empties the shown
+	 * skipped-files list. The local cleanup runs
 	 * even when the revoke fails, e.g. offline; the outcome then says so,
 	 * since the user has to revoke the app in the service's own settings.
 	 * The vault, the Remote and other devices are left untouched.
@@ -284,6 +285,8 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 			secretStore.deleteSecret(secretId);
 			await deviceStore.clear();
 			ui.showStatus({ state: "notConnected" });
+			// What the last sync skipped belonged to the Remote just left.
+			ui.showSkipped([]);
 			return outcome;
 		},
 	};

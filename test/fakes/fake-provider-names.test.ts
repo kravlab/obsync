@@ -10,7 +10,12 @@ describe("FakeProvider name rules and size", () => {
 			nameRules: { forbiddenCharacters: ["\\"], caseInsensitive: true },
 			maxFileSize: 1024,
 		}).openProvider();
-		expect(provider.nameRules).toEqual({ forbiddenCharacters: ["\\"], reservedNames: [], caseInsensitive: true });
+		expect(provider.nameRules).toEqual({
+			forbiddenCharacters: ["\\"],
+			forbiddenAtEnd: [],
+			reservedNames: [],
+			caseInsensitive: true,
+		});
 		expect(provider.maxFileSize).toBe(1024);
 	});
 
@@ -18,6 +23,13 @@ describe("FakeProvider name rules and size", () => {
 		const provider = new FakeRemote({ nameRules: { forbiddenCharacters: [":"] } }).openProvider();
 		await expectFailure(provider.write("a:b.md", bytes("a")), "nameNotRepresentable");
 		expect((await provider.list()).entries).toEqual([]);
+	});
+
+	it("refuses a segment ending with a character forbidden there with nameNotRepresentable", async () => {
+		const provider = new FakeRemote({ nameRules: { forbiddenAtEnd: [" "] } }).openProvider();
+		await expectFailure(provider.createFolder("notes "), "nameNotRepresentable");
+		await provider.write("my notes.md", bytes("a"));
+		expect((await provider.list()).entries.map((entry) => entry.path)).toEqual(["my notes.md"]);
 	});
 
 	it("refuses a reserved name with nameNotRepresentable", async () => {

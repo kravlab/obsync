@@ -127,7 +127,9 @@ export interface Capabilities {
 export interface NameRules {
 	/** Characters a path segment must not contain. */
 	readonly forbiddenCharacters: readonly string[];
-	/** Whole segment names the service refuses. */
+	/** Characters a path segment must not end with, such as a trailing space. */
+	readonly forbiddenAtEnd: readonly string[];
+	/** Whole segment names the service refuses, compared without case on a case-insensitive service. */
 	readonly reservedNames: readonly string[];
 	/** Paths that differ only by case name the same entry. */
 	readonly caseInsensitive: boolean;

@@ -128,4 +128,11 @@ export const ru: Strings = {
 	firstSyncInProgress:
 		"{device} сейчас выполняет первую синхронизацию с этой папкой. Подключитесь, когда она закончится, чтобы конфликтов было меньше.",
 	connectAnyway: "Всё равно подключить",
+	skippedCount: "пропущено: {count}",
+	statusWithSkipped: "{status} · {skipped}",
+	skippedIgnored: "{file} подходит под список исключений",
+	skippedNameNotRepresentable: "{file}: облако не может сохранить такое имя",
+	skippedCaseClash: "{file} отличается от имени другого файла только регистром",
+	skippedTooLarge: "{file} больше предельного размера",
+	skippedMore: "И ещё {count}",
 };

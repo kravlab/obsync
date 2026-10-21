@@ -247,6 +247,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				...(isFirstSync ? { firstSync: { begin: () => beginFirstSync(deviceStore, provider, newDeviceId, clock) } } : {}),
 			});
 			backoffAttempt = 0;
+			ui.showSkipped(result.skipped);
 			if (result.held !== undefined) {
 				// A sync the user asked for meanwhile runs next and asks again.
 				if (userRequests === userRequestsBefore) held = result.held;

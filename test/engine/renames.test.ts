@@ -3,6 +3,7 @@ import type { VaultEntry } from "../../src/engine/local-vault";
 import type { RemoteEntry } from "../../src/engine/provider";
 import { findRenames, type RenameChecks, type VaultRename } from "../../src/engine/renames";
 import { syncListing } from "../../src/engine/sync-listing";
+import { listingRules } from "../support/listing-rules";
 import type { SnapshotEntry } from "../../src/engine/sync-snapshot";
 
 /** A synced file entry with content `hash`, at revision `rev-<hash>`, of size 1. */
@@ -55,7 +56,7 @@ async function renamesOf(
 		},
 	};
 	const map = new Map(Object.entries(snapshot));
-	const listing = syncListing(local.entries, remote.entries, { configDir: ".config", caseInsensitive }, map.keys());
+	const listing = syncListing(local.entries, remote.entries, listingRules(caseInsensitive), map.keys());
 	const renames = await findRenames(map, listing, hints, checks, { caseInsensitive, folderMove });
 	return { renames, read };
 }

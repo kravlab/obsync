@@ -9,6 +9,7 @@ import type { LocalVault, VaultPath } from "./local-vault";
 import type { SyncNotice } from "./notices";
 import type { Provider, RemoteEntry } from "./provider";
 import type { SyncStatus } from "./status";
+import type { SkippedFile } from "./sync-listing";
 import type { SyncSchedule } from "./sync-schedule";
 import type { SnapshotEntry, SyncSnapshot } from "./sync-snapshot";
 
@@ -171,6 +172,12 @@ export interface UiPort {
 	showStatus(status: SyncStatus): void;
 	/** Tells the user `notice` once, without waiting for an answer. */
 	showNotice(notice: SyncNotice): void;
+	/**
+	 * Shows the files the last sync left out for a reason the user is told
+	 * (sync-listing.ts), each with its reason, ordered by path; it replaces
+	 * the list shown before.
+	 */
+	showSkipped(files: readonly SkippedFile[]): void;
 	/**
 	 * Asks the user what to do about the deletions the Deletion guard
 	 * stopped, with the list to review, and resolves with the answer; null

@@ -20,6 +20,7 @@ import {
 } from "../../src/engine/remote-metadata";
 import type { Provider } from "../../src/engine/provider";
 import type { SyncStatus } from "../../src/engine/status";
+import type { SkippedFile } from "../../src/engine/sync-listing";
 import { DEFAULT_SYNC_SCHEDULE, type SyncSchedule } from "../../src/engine/sync-schedule";
 import type { SnapshotEntry, SyncSnapshot } from "../../src/engine/sync-snapshot";
 import type { FakeProvider } from "./fake-provider";
@@ -163,6 +164,8 @@ export class RecordingUi implements UiPort {
 	readonly previews: FirstSyncPreview[] = [];
 	/** The answers to give the next previews, in order; with none left, the sync starts with differing files merged. */
 	readonly firstSyncAnswers: FirstSyncAnswer[] = [];
+	/** Every skipped-files list shown, oldest first. */
+	readonly skippedLists: (readonly SkippedFile[])[] = [];
 
 	/** The status shown last, or undefined if none was. */
 	get lastStatus(): SyncStatus | undefined {
@@ -171,6 +174,16 @@ export class RecordingUi implements UiPort {
 
 	showStatus(status: SyncStatus): void {
 		this.statuses.push(status);
+	}
+
+	/** The skipped-files list shown last, or undefined if none was. */
+	get lastSkipped(): readonly SkippedFile[] | undefined {
+		return this.skippedLists[this.skippedLists.length - 1];
+	}
+
+	/** Records `files` instead of showing them. */
+	showSkipped(files: readonly SkippedFile[]): void {
+		this.skippedLists.push(files);
 	}
 
 	/** Records `notice` instead of showing it. */

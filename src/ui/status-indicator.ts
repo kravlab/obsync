@@ -4,22 +4,32 @@ import type { FirstSyncAnswer, FirstSyncPreview } from "../engine/first-sync";
 import type { SyncNotice } from "../engine/notices";
 import type { UiPort } from "../engine/ports";
 import type { SyncStatus } from "../engine/status";
+import type { SkippedFile } from "../engine/sync-listing";
 import type { Strings } from "./i18n/strings";
 import { DeletionGuardModal } from "./deletion-guard-modal";
 import { FirstSyncModal } from "./first-sync-modal";
 import { noticeText } from "./notice-text";
+import { skippedLines, withSkippedCount } from "./skipped-text";
 import { statusLabel } from "./status-label";
+
+/** How many skipped files the click notice lists before it says how many more there are. */
+const NOTICE_SKIPPED_LINES = 20;
 
 /**
  * Shows the sync status where the platform has room for it: a status bar
- * item on desktop, a ribbon icon on mobile, which has no status bar. A
- * click on either shows the status in a notice until the Sync window
- * exists. It is the shell's UI port: the engine reports each status here,
- * and each sync notice, shown as an Obsidian notice, and asks the Deletion
- * guard's question through it.
+ * item on desktop, a ribbon icon on mobile, which has no status bar, with
+ * the count of skipped files after it. A click on either shows the status
+ * in a notice, with the first skipped files and their reasons, until the Sync
+ * window and its Skipped tab exist. It is the shell's UI port: the engine
+ * reports each status and skipped-files list here, and each sync notice,
+ * shown as an Obsidian notice, and asks the Deletion guard's question
+ * through it.
  */
 export class StatusIndicator implements UiPort {
+	/** The status text, without the skipped count. */
 	private label: string;
+	/** The files the last sync skipped, as the engine reported them. */
+	private skipped: readonly SkippedFile[] = [];
 	/** Deletion guard prompts and First sync previews open now; the plugin's unload closes them, which answers null. */
 	private readonly prompts = new Set<DeletionGuardModal | FirstSyncModal>();
 	/** The status bar item (desktop) or ribbon icon (mobile). */
@@ -41,11 +51,11 @@ export class StatusIndicator implements UiPort {
 			for (const prompt of this.prompts) prompt.close();
 		});
 		const showState = (): void => {
-			new Notice(this.label);
+			new Notice([this.text(), ...skippedLines(this.skipped, this.strings, NOTICE_SKIPPED_LINES)].join("\n"));
 		};
 
 		if (Platform.isMobile) {
-			this.element = plugin.addRibbonIcon("cloud-off", this.label, showState);
+			this.element = plugin.addRibbonIcon("cloud-off", this.text(), showState);
 		} else {
 			// A status bar item is a plain div, so it is made a focusable
 			// button that Enter and Space activate, like a click.
@@ -66,6 +76,12 @@ export class StatusIndicator implements UiPort {
 
 	showStatus(status: SyncStatus): void {
 		this.label = statusLabel(status, this.strings);
+		this.render();
+	}
+
+	/** Shows the count of `files` after the status, and the files themselves in the click notice. */
+	showSkipped(files: readonly SkippedFile[]): void {
+		this.skipped = files;
 		this.render();
 	}
 
@@ -103,12 +119,17 @@ export class StatusIndicator implements UiPort {
 	}
 
 	/**
-	 * Puts the label on the entry point: the status bar item's text, or the
+	 * Puts the label, with the skipped count, on the entry point: the status bar item's text, or the
 	 * ribbon icon's tooltip. The ribbon icon itself stays as it is; whether
 	 * it can change at runtime is checked with the Sync window.
 	 */
 	private render(): void {
-		if (Platform.isMobile) setTooltip(this.element, this.label);
-		else this.element.setText(this.label);
+		if (Platform.isMobile) setTooltip(this.element, this.text());
+		else this.element.setText(this.text());
+	}
+
+	/** The status text with the skipped count after it. */
+	private text(): string {
+		return withSkippedCount(this.label, this.skipped, this.strings);
 	}
 }

@@ -166,6 +166,9 @@ importers:
 
   .:
     dependencies:
+      ignore:
+        specifier: 7.0.12
+        version: 7.0.12
       node-diff3:
         specifier: 3.2.1
         version: 3.2.1

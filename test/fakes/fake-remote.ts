@@ -69,6 +69,7 @@ export class FakeRemote {
 	constructor(readonly service: FakeServiceOptions = {}) {
 		this.nameRules = {
 			forbiddenCharacters: [],
+			forbiddenAtEnd: [],
 			reservedNames: [],
 			caseInsensitive: false,
 			...service.nameRules,
@@ -200,7 +201,8 @@ export class FakeRemote {
 
 	/**
 	 * Whether the service can store `path`: no forbidden character, no
-	 * reserved segment, and within the length limits.
+	 * segment ending with a character forbidden there, no reserved
+	 * segment, and within the length limits.
 	 */
 	canStore(path: RemotePath): boolean {
 		const rules = this.nameRules;
@@ -209,6 +211,7 @@ export class FakeRemote {
 		return path.split("/").every(
 			(segment) =>
 				!rules.forbiddenCharacters.some((character) => segment.includes(character)) &&
+				!rules.forbiddenAtEnd.some((character) => segment.endsWith(character)) &&
 				!reserved.has(this.key(segment)) &&
 				(rules.maxSegmentLength === undefined || segment.length <= rules.maxSegmentLength),
 		);

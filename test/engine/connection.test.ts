@@ -336,6 +336,18 @@ describe("disconnecting", () => {
 		expect(laptop.ui.lastStatus).toEqual({ state: "notConnected" });
 	});
 
+	it("clears the skipped-files list shown for the Remote it leaves", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
+		laptop.ui.showSkipped([{ path: "big.pdf", reason: "tooLarge" }]);
+
+		await createConnectionService(laptop.ports).disconnect();
+
+		expect(laptop.ui.lastSkipped).toEqual([]);
+	});
+
 	it("clears local state even when the revoke cannot reach the service, saying so", async () => {
 		const service = new FakeService();
 		const account = service.addAccount("account-1");
