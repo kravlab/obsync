@@ -105,7 +105,7 @@ Checked by hand in Obsidian: the preview modal and the connect warning.
 - [x] 6. Dropbox: `content_hash` as a server hash; FakeDropbox (with a synchronous SHA-256 in `test/support`, since the project has no Node types); contract test.
 - [x] 7. Shell: the preview modal, the connect warning, status and notice texts in EN/RU, wiring in `main.ts`. UI text keeps sentence case (the lint rule), so it writes "conflict copy" in lower case.
 - [x] 8. Full test run, typecheck, lint (`src`, `test`), build with a stand-in key: 563 passed, 4 skipped; all clean. Setup helpers in older tests drop the notices of their own First syncs (`forgetNotices`).
-- [x] 9. Code review done 2026-10-21; the chosen fixes are below. After them: 564 passed, 4 skipped; typecheck, lint (`src`, `test`) and build clean.
+- [x] 9. Code review done 2026-10-21; the chosen fixes are below. After them: 564 passed, 4 skipped; typecheck, lint (`src`, `test`) and build clean. Committed in `acd0340`.
 
 ## Review fixes
 
