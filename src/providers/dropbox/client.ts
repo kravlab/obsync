@@ -82,12 +82,18 @@ export class DropboxClient {
 		private accessToken?: AccessToken,
 	) {}
 
-	/** Calls the RPC `route` with `arg`, or with no body for a route without one. */
+	/**
+	 * Calls the RPC `route` with `arg` as JSON, or with `null` for a route
+	 * without one, as the official Python SDK sends it. The Content-Type is
+	 * always set: without one, `requestUrl` on Android sends the POST as a
+	 * form, which Dropbox refuses.
+	 */
 	rpc(route: string, arg?: unknown): Promise<RouteResult> {
 		return this.call((token) => ({
 			url: API_URL + route,
 			method: "POST",
-			...(arg === undefined ? {} : { contentType: "application/json", body: JSON.stringify(arg) }),
+			contentType: "application/json",
+			body: JSON.stringify(arg ?? null),
 			headers: { Authorization: `Bearer ${token}` },
 			throw: false,
 		}));

@@ -184,6 +184,8 @@ export class FakeDropbox {
 			return status(404, "unknown route");
 		}
 		if (url.origin !== "https://api.dropboxapi.com") return status(404, "unknown host");
+		const refused = badContentType(route, request);
+		if (refused) return refused;
 		const arg = parseBody(request);
 		if (arg === invalid) return status(400, "Error in call: could not decode input as JSON");
 		switch (route) {
@@ -791,10 +793,32 @@ function deletedMetadataOf(path: string): Record<string, unknown> {
 /** Marks a request body that is not valid JSON. */
 const invalid = Symbol("invalid");
 
-/** The JSON argument of an RPC request; null for a route without one. */
+/**
+ * The Content-Type an RPC request arrives with. Without one, Obsidian's
+ * `requestUrl` on Android was seen to send a POST as
+ * `application/x-www-form-urlencoded`, which Dropbox refuses, so the fake
+ * takes it the same way.
+ */
+function contentTypeOf(request: HttpRequest): string {
+	return request.contentType ?? "application/x-www-form-urlencoded";
+}
+
+/**
+ * Dropbox's answer to an RPC request whose Content-Type is not JSON, as it
+ * was seen on Android; undefined for a JSON one.
+ */
+function badContentType(route: string, request: HttpRequest): HttpResponse | undefined {
+	const contentType = contentTypeOf(request);
+	if (contentType === "application/json") return undefined;
+	return status(
+		400,
+		`Error in call to API function "${route}": Bad HTTP "Content-Type" header: "${contentType}".  Expecting one of "application/json", "application/json; charset=utf-8", "text/plain; charset=dropbox-cors-hack".`,
+	);
+}
+
+/** The JSON argument of an RPC request, `null` for a route without one. */
 function parseBody(request: HttpRequest): unknown {
-	if (request.body === undefined) return null;
-	if (request.contentType !== "application/json" || typeof request.body !== "string") return invalid;
+	if (typeof request.body !== "string") return invalid;
 	try {
 		return JSON.parse(request.body) as unknown;
 	} catch {

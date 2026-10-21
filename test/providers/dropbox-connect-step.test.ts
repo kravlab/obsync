@@ -99,6 +99,21 @@ describe("Dropbox login", () => {
 });
 
 describe("Dropbox setup requests", () => {
+	it("sends every RPC call as JSON, a route without an argument with null", async () => {
+		const setup = setUp();
+		const vault = await access(setup);
+		await vault.listRoots(".obsync");
+		await vault.revoke();
+
+		const rpcCalls = setup.dropbox.requests.filter((request) => request.url.startsWith("https://api.dropboxapi.com/2/"));
+		expect(rpcCalls.map((request) => request.url.slice("https://api.dropboxapi.com/2/".length))).toEqual(
+			expect.arrayContaining(["users/get_current_account", "files/list_folder", "auth/token/revoke"]),
+		);
+		for (const request of rpcCalls) expect(request.contentType, request.url).toBe("application/json");
+		const withoutArgument = rpcCalls.filter((request) => /get_current_account|token\/revoke$/.test(request.url));
+		expect(withoutArgument.map((request) => request.body)).toEqual(["null", "null"]);
+	});
+
 	it("escapes non-ASCII path characters in Dropbox-API-Arg and stores the exact name", async () => {
 		const setup = setUp();
 		const vault = await access(setup);
