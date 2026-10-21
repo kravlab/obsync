@@ -108,7 +108,7 @@ The Obsidian side (a folder rename's events, mtime kept by `vault.rename`) is ch
 - [x] 7. Dropbox: `stableId`, `move_v2` Capabilities, FakeDropbox, contract suite (seam 3). FakeDropbox keeps a moved file's `rev`; Dropbox does not document it, and the engine does not rely on it.
 - [x] 8. Case-only renames: the snapshot entry follows the vault's case; the Remote keeps its own.
 - [x] 9. Full test run, typecheck, lint, build with a stand-in key: 528 passed, 4 skipped (as before); typecheck and build clean; lint clean for `src` and `test`. `pnpm lint` also reports an untracked prototype file, `.scratch/vault-sync/prototypes/mobile-runtime-checks/vault-sync-probe/main.js`, not part of this change.
-- [x] 10. Code review done 2026-10-21; the chosen fixes are below. After them: 534 passed, 4 skipped; typecheck, lint (`src`, `test`) and build clean. Commit and ticket closed on your go-ahead.
+- [x] 10. Code review done 2026-10-21; the chosen fixes are below. After them: 534 passed, 4 skipped; typecheck, lint (`src`, `test`) and build clean. Committed in `347381b`.
 
 ## Review fixes
 
