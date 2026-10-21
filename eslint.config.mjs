@@ -4,10 +4,11 @@ import { defineConfig } from "eslint/config";
 import obsidianmd from "eslint-plugin-obsidianmd";
 
 export default defineConfig([
-	// main.js is esbuild output; *.mjs are build and tool configs outside
+	// dist/ is build output; *.mjs are build and tool configs outside
 	// the TypeScript project; .agents/ and .claude/ hold vendored agent
-	// skills, not plugin code.
-	{ ignores: ["main.js", "*.mjs", ".agents/", ".claude/"] },
+	// skills, and .scratch/ tickets and local prototype builds, not plugin
+	// code.
+	{ ignores: ["dist/", "*.mjs", ".agents/", ".claude/", ".scratch/"] },
 	...obsidianmd.configs.recommendedWithLocalesEn,
 	{
 		languageOptions: {

@@ -1,9 +1,9 @@
 # Installed packages (pnpm install).
 node_modules/
 
-# Build output: esbuild writes the bundle to the root, where Obsidian expects
-# it next to manifest.json and styles.css.
-main.js
+# Build output: main.js with copies of manifest.json and styles.css, the
+# plugin folder as Obsidian loads it (see esbuild.config.mjs).
+dist/
 
 # Local build settings, such as the Dropbox app key (see esbuild.config.mjs).
 .env

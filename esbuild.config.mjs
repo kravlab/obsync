@@ -1,12 +1,32 @@
-// Bundles src/main.ts into main.js, the one script Obsidian loads.
+// Bundles src/main.ts into dist/main.js, the one script Obsidian loads, and
+// copies manifest.json and styles.css next to it, so dist/ holds exactly the
+// files of <vault>/.obsidian/plugins/obsync/.
 // `node esbuild.config.mjs production` builds once, minified; without an
 // argument it watches and rebuilds with inline source maps.
 import esbuild from "esbuild";
 import process from "node:process";
-import { existsSync } from "node:fs";
+import { copyFileSync, existsSync } from "node:fs";
 import { builtinModules } from "node:module";
 
 const production = process.argv[2] === "production";
+
+const outdir = "dist";
+
+// The files Obsidian loads besides main.js. They are copied after every
+// successful build, so a watch rebuild also refreshes them; an edit to one of
+// them alone triggers no rebuild.
+const pluginFiles = ["manifest.json", "styles.css"];
+
+/** Copies pluginFiles into outdir once a build has written main.js. */
+const copyPluginFiles = {
+	name: "copy-plugin-files",
+	setup(build) {
+		build.onEnd((result) => {
+			if (result.errors.length > 0) return;
+			for (const file of pluginFiles) copyFileSync(file, `${outdir}/${file}`);
+		});
+	},
+};
 
 // The Dropbox app key is never written in the repository. It comes from the
 // environment or from a git-ignored .env file (the environment wins), and
@@ -45,9 +65,10 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: production ? false : "inline",
 	treeShaking: true,
-	outfile: "main.js",
+	outfile: `${outdir}/main.js`,
 	minify: production,
 	define: { OBSYNC_DROPBOX_APP_KEY: JSON.stringify(dropboxAppKey) },
+	plugins: [copyPluginFiles],
 });
 
 if (production) {

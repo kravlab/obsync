@@ -10,7 +10,7 @@ pnpm = "12.13.0"  # installs package.json's devDependencies
 # `mise run <task>` and `pnpm run <script>` do the same thing.
 
 [tasks.build]
-description = "Type-check, then bundle src/main.ts into main.js"
+description = "Type-check, then bundle the plugin into dist/"
 run = "pnpm run build"
 
 [tasks.typecheck]
