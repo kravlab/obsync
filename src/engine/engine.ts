@@ -9,9 +9,10 @@ import { isWithin, movedAlong } from "./paths";
 import type { VaultRename } from "./renames";
 import { providerSecretId, type EnginePorts, type Scheduler } from "./ports";
 import { ProviderError, isSyncable } from "./provider";
+import { beginFirstSync, noteFirstSyncDone } from "./first-sync";
 import { readRemoteSettings } from "./remote-metadata";
-import { statusOf } from "./status";
-import { runSync } from "./sync-run";
+import { statusOf, type SyncStatus } from "./status";
+import { runSync, type SyncHold } from "./sync-run";
 
 /** First backoff wait after a transient failure, in milliseconds. */
 const INITIAL_BACKOFF_MS = 5_000;
@@ -113,16 +114,21 @@ function timerOn(scheduler: Scheduler, isStopped: () => boolean): Timer {
 	};
 }
 
+/** The status shown while sync is held by `hold`. */
+function heldStatus(hold: SyncHold): SyncStatus {
+	return hold === "deletions" ? { state: "deletionsOnHold" } : { state: "firstSyncWaiting" };
+}
+
 /** Builds a sync engine over `ports`. */
 export function createSyncEngine(ports: EnginePorts): SyncEngine {
-	const { deviceStore, secretStore, providers, vault, clock, scheduler, ui, schedule, deletionGuard } = ports;
+	const { deviceStore, secretStore, providers, vault, clock, scheduler, ui, schedule, deletionGuard, newDeviceId } = ports;
 	/** The sync running now, if any. */
 	let running: Run | undefined;
 	/** How many of the engine's own vault writes are under way; their change hints are not edits. */
 	let ownWrites = 0;
 	let backoffAttempt = 0;
-	/** Whether a closed Deletion guard prompt holds sync until the user asks for one. */
-	let held = false;
+	/** What holds sync until the user asks for one, if anything. */
+	let held: SyncHold | undefined;
 	/** How many syncs the user has asked for; a hold is not set over a request made while its prompt was open. */
 	let userRequests = 0;
 	/**
@@ -197,8 +203,8 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			ui.showStatus({ state: "notConnected" });
 			return;
 		}
-		if (held) {
-			ui.showStatus({ state: "deletionsOnHold" });
+		if (held !== undefined) {
+			ui.showStatus(heldStatus(held));
 			return;
 		}
 		const userRequestsBefore = userRequests;
@@ -225,6 +231,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				return;
 			}
 			run.listing = true;
+			const isFirstSync = !(await deviceStore.hasSnapshot());
 			const result = await runSync({
 				provider,
 				vault: syncVault,
@@ -237,14 +244,20 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				editPauseMs: schedule().editPause.ms,
 				guard: deletionGuard(),
 				renameHints: hints,
+				...(isFirstSync ? { firstSync: { begin: () => beginFirstSync(deviceStore, provider, newDeviceId, clock) } } : {}),
 			});
 			backoffAttempt = 0;
-			if (result.held === true) {
+			if (result.held !== undefined) {
 				// A sync the user asked for meanwhile runs next and asks again.
-				held = userRequests === userRequestsBefore;
-				ui.showStatus({ state: "deletionsOnHold" });
+				if (userRequests === userRequestsBefore) held = result.held;
+				ui.showStatus(heldStatus(result.held));
 				return;
 			}
+			if (result.firstSync !== undefined) {
+				await deviceStore.markSnapshotComplete();
+				ui.showNotice({ kind: "firstSyncDone", ...result.firstSync });
+			}
+			await noteFirstSyncDone(deviceStore, provider);
 			renameHints.splice(0, hints.length);
 			ui.showStatus({ state: "synced" });
 			if (result.nextPostEditPauseMs !== undefined) {
@@ -277,7 +290,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 	 */
 	function trigger(kind: SyncKind, source: SyncSource = "automatic"): Promise<void> {
 		if (source === "user") {
-			held = false;
+			held = undefined;
 			userRequests += 1;
 		}
 		retry.cancel();

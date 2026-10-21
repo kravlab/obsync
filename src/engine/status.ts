@@ -19,6 +19,9 @@ import type { Connection } from "./ports";
  * - `deletionsOnHold`: the Deletion guard stopped a sync and its prompt
  *   was closed without an answer; nothing syncs until the user asks for a
  *   sync, which asks again.
+ * - `firstSyncWaiting`: the preview of a First sync was closed without
+ *   starting it; nothing syncs until the user asks for a sync, which shows
+ *   the preview again.
  */
 export type SyncStatus =
 	| { readonly state: "notConnected" }
@@ -27,7 +30,8 @@ export type SyncStatus =
 	| { readonly state: "synced" }
 	| { readonly state: "offline" }
 	| { readonly state: "syncFailed" }
-	| { readonly state: "deletionsOnHold" };
+	| { readonly state: "deletionsOnHold" }
+	| { readonly state: "firstSyncWaiting" };
 
 /** The status a device shows for its Connection, or for having none. */
 export function statusOf(connection: Connection | null): SyncStatus {

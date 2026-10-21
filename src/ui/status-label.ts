@@ -22,5 +22,7 @@ export function statusLabel(status: SyncStatus, strings: Strings): string {
 			return strings.statusSyncFailed;
 		case "deletionsOnHold":
 			return strings.statusDeletionsOnHold;
+		case "firstSyncWaiting":
+			return strings.statusFirstSyncWaiting;
 	}
 }

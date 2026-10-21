@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSyncEngine } from "../../src/engine/engine";
+import { isWithin } from "../../src/engine/paths";
+import { METADATA_FOLDER } from "../../src/engine/remote-metadata";
 import { SimulatedCrash } from "../fakes/fake-provider";
 import { FakeRemote } from "../fakes/fake-remote";
 import { connectTestDevice } from "../fakes/test-device";
@@ -160,8 +162,11 @@ describe("order of work", () => {
 		await laptop.vault.write("longer.md", bytes("a longer text note"));
 		await laptop.vault.write("short.md", bytes("hi"));
 		const before = remote.cursor();
-		/** The paths written to the Remote since `before`, in the order they were written. */
-		const written = (): string[] => (remote.changesSince(before)?.changes ?? []).map((change) => change.path);
+		/** The vault paths written to the Remote since `before`, in the order they were written; the Metadata folder aside. */
+		const written = (): string[] =>
+			(remote.changesSince(before)?.changes ?? [])
+				.map((change) => change.path)
+				.filter((path) => !isWithin(path, METADATA_FOLDER));
 		let writtenWhenDownloading: string[] = [];
 		laptop.vault.beforeNextWrite("incoming.md", () => {
 			writtenWhenDownloading = written();

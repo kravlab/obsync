@@ -1,3 +1,4 @@
+import type { FirstSyncTally } from "./first-sync";
 import type { VaultPath } from "./local-vault";
 
 /**
@@ -22,6 +23,10 @@ import type { VaultPath } from "./local-vault";
  * - `renameBeatsDelete`: the entry now at `path` was renamed on one side
  *   and deleted on the other, and the rename won: it is kept under its new
  *   name. `deletedOn` tells where it was deleted, as above.
+ * - `firstSyncDone`: a First sync completed, with how many files it
+ *   downloaded and uploaded, how many it merged with Conflict blocks left
+ *   in them, and how many Conflict copies it made. It stands for every
+ *   Conflict copy notice of that sync.
  */
 export type SyncNotice =
 	| {
@@ -43,4 +48,5 @@ export type SyncNotice =
 			readonly kind: "renameBeatsDelete";
 			readonly path: VaultPath;
 			readonly deletedOn: "thisDevice" | "otherDevice";
-	  };
+	  }
+	| ({ readonly kind: "firstSyncDone" } & Readonly<FirstSyncTally>);

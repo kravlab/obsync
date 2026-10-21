@@ -19,6 +19,8 @@ export const en = {
 	statusSyncFailed: "Sync failed",
 	/** Sync status after the Deletion guard prompt was closed without a choice; sync waits for "Sync now". */
 	statusDeletionsOnHold: "Deletions waiting for you",
+	/** Sync status after the First sync preview was closed without starting; sync waits for "Sync now". */
+	statusFirstSyncWaiting: "First sync waiting for you",
 
 	/** Settings row naming the provider the device connects to. */
 	settingsDropbox: "Dropbox",
@@ -102,6 +104,34 @@ export const en = {
 	/** The typed Deletion guard percentage is not one. */
 	settingsGuardPercentInvalid: "Enter a whole number from 1 to 100.",
 
+	/** Title of the First sync preview. */
+	firstSyncTitle: "First sync",
+	/** What the First sync preview is about. */
+	firstSyncIntro: "This device has not synced with Dropbox yet. Here is what the first sync will do; nothing changes until you start it, and it deletes nothing.",
+	/** First sync preview: files only Dropbox has; `{count}` is a number. */
+	firstSyncToDownload: "To download from Dropbox: {count}",
+	/** First sync preview: files only this device has. */
+	firstSyncToUpload: "To upload to Dropbox: {count}",
+	/** First sync preview: files with the same content on both sides. */
+	firstSyncIdentical: "Already the same on both: {count}",
+	/** First sync preview: files with different content on the two sides. */
+	firstSyncDiffering: "Different on both: {count}",
+	/** First sync preview list: what happens to a differing text file. */
+	firstSyncMerged: "Merged, every difference marked",
+	/** First sync preview list: what happens to any other differing file. */
+	firstSyncConflictCopy: "This device's version kept as a conflict copy",
+	/** First sync preview: the bulk option for differing files. */
+	firstSyncKeepRemote: "Use the Dropbox version of every differing file",
+	/** First sync preview: what the bulk option does. */
+	firstSyncKeepRemoteDescription: "This device's versions are kept as conflict copies, so no note gets conflict markers.",
+	/** First sync preview: shows the list of files. */
+	firstSyncShowList: "Show list",
+	/** First sync preview: hides the list of files. */
+	firstSyncHideList: "Hide list",
+	/** First sync preview: starts the sync. */
+	firstSyncStart: "Start first sync",
+	/** First sync preview: what closing it does. */
+	firstSyncCloseHint: "Closing this window pauses sync until you start a sync yourself.",
 	/** Title of the Deletion guard prompt. */
 	guardTitle: "Confirm deletions",
 	/** Why the guard stopped: more deletions than N or P allow. */
@@ -187,6 +217,14 @@ export const en = {
 	noticeRenamedDeletedHere: "{file} came back: it was deleted on this device but renamed on another one.",
 	/** A file renamed on this device was kept, though another device deleted it; `{file}` is a vault path. */
 	noticeRenamedDeletedThere: "{file} was kept: it was deleted on another device but renamed on this one.",
+	/** A First sync completed; every placeholder is a number. */
+	noticeFirstSyncDone:
+		"First sync done: {downloaded} downloaded, {uploaded} uploaded, {conflicted} with conflicts to resolve, {copies} conflict copies.",
+	/** Connect window: another device is doing its First sync with the chosen folder; `{device}` is its name. */
+	firstSyncInProgress:
+		"{device} is doing its first sync with this folder. Connect once it has finished, so fewer files conflict.",
+	/** Connect window: connects although another device's First sync is in progress. */
+	connectAnyway: "Connect anyway",
 } as const;
 
 /** The shape every language's string table must have: the keys of `en`. */

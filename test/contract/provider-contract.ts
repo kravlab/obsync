@@ -1,5 +1,6 @@
 import { describe, expect, it, type TestContext } from "vitest";
 import type { FileMove, FolderMove, Provider, RemoteFile } from "../../src/engine/provider";
+import { BLOCK_SHA256 } from "../../src/engine/server-hash";
 import { bytes, patterned, text } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
 import { readText, readBytes } from "../support/provider-read";
@@ -227,6 +228,19 @@ export function describeProviderContract(
 			await provider.delete("note.md");
 			const again = await provider.write("note.md", bytes("one"));
 			expect(again.stableId).not.toBe(written.stableId);
+		});
+	});
+
+	describe(`Provider contract: ${name}, server hashes`, () => {
+		it("reports the block SHA-256 of a file's content as its server hash, in listing and write", async (context) => {
+			const provider = await openEmptyRemote();
+			const written = await provider.write("note.md", bytes("content"));
+			if (written.serverHash?.algorithm !== BLOCK_SHA256) return context.skip();
+			// The block SHA-256 of "content", computed with openssl.
+			const expected = { algorithm: BLOCK_SHA256, value: "c4eec85eb66b79b8f59ff76a97d5d97aac1b5eca8c6675b4e988a5deea786e53" };
+			expect(written.serverHash).toEqual(expected);
+			const [listed] = (await provider.list()).entries;
+			expect(listed?.kind === "file" ? listed.serverHash : undefined).toEqual(expected);
 		});
 	});
 

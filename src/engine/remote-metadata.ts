@@ -9,7 +9,7 @@
  * - `devices/<Device ID>.json`: one record per device, written only by it.
  */
 import type { VaultPath } from "./local-vault";
-import { nameOf, splitName } from "./paths";
+import { nameOf, parentOf, splitName } from "./paths";
 import type { DeviceIdentity } from "./ports";
 import { isFailure, type Provider, type RemotePath } from "./provider";
 import { decodeUtf8 } from "./utf8";
@@ -120,9 +120,83 @@ function isStringList(value: unknown): value is string[] {
 	return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-/** Encodes a device record as the bytes of its file. */
-export function encodeDeviceRecord(device: DeviceIdentity): ArrayBuffer {
-	return encodeJson({ formatVersion: FORMAT_VERSION, deviceId: device.id, deviceName: device.name });
+/**
+ * How long a "First sync in progress" mark holds: six hours, enough for
+ * the First sync of a large vault on a phone, and for the clocks of two
+ * devices disagreeing. An older mark was left by a First sync that never
+ * finished.
+ */
+export const FIRST_SYNC_MARK_MS = 6 * 60 * 60 * 1_000;
+
+/**
+ * The name of a device whose record holds a "First sync in progress" mark
+ * within `FIRST_SYNC_MARK_MS` of `now`, either way, by this device's clock;
+ * null when there is none. Finding the records takes a full listing.
+ * Records this plugin cannot read are passed over.
+ */
+export async function deviceNameInFirstSync(provider: Provider, now: number): Promise<string | null> {
+	const { entries } = await provider.list();
+	for (const entry of entries) {
+		if (entry.kind !== "file" || parentOf(entry.path) !== DEVICES_FOLDER) continue;
+		let data: ArrayBuffer;
+		try {
+			({ data } = await provider.read(entry.path));
+		} catch (error) {
+			if (isFailure(error, "notFound")) continue;
+			throw error;
+		}
+		const record = decodeDeviceRecord(data);
+		const startedAt = record?.firstSyncStartedAt;
+		if (record !== null && startedAt !== undefined && Math.abs(now - startedAt) < FIRST_SYNC_MARK_MS) {
+			return record.deviceName;
+		}
+	}
+	return null;
+}
+
+/** The fields of a device record this plugin reads, or null if the bytes hold none of its format. */
+function decodeDeviceRecord(data: ArrayBuffer): { readonly deviceName: string; readonly firstSyncStartedAt?: number } | null {
+	const parsed = parseJson(data);
+	if (parsed === null || parsed.formatVersion !== FORMAT_VERSION || typeof parsed.deviceName !== "string") return null;
+	const { deviceName, firstSyncStartedAt } = parsed;
+	return typeof firstSyncStartedAt === "number" ? { deviceName, firstSyncStartedAt } : { deviceName };
+}
+
+/** The JSON object in `data`, UTF-8, or null if it holds none. */
+function parseJson(data: ArrayBuffer): Record<string, unknown> | null {
+	const decoded = decodeUtf8(data);
+	if (decoded === null) return null;
+	try {
+		const parsed: unknown = JSON.parse(decoded);
+		return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Encodes a device record as the bytes of its file; `firstSyncStartedAt`,
+ * when given, is the "First sync in progress" mark: when this device
+ * started its First sync, in ms since the epoch by its own clock.
+ */
+export function encodeDeviceRecord(device: DeviceIdentity, firstSyncStartedAt?: number): ArrayBuffer {
+	const mark = firstSyncStartedAt === undefined ? {} : { firstSyncStartedAt };
+	return encodeJson({ formatVersion: FORMAT_VERSION, deviceId: device.id, deviceName: device.name, ...mark });
+}
+
+/**
+ * Writes the record of `device` in the Metadata folder, replacing what it
+ * wrote before, with the "First sync in progress" mark when
+ * `firstSyncStartedAt` is given. Only this device writes its record.
+ */
+export async function writeDeviceRecord(
+	provider: Provider,
+	device: DeviceIdentity,
+	firstSyncStartedAt?: number,
+): Promise<void> {
+	await provider.createFolder(METADATA_FOLDER);
+	await provider.createFolder(DEVICES_FOLDER);
+	await provider.write(devicePath(device), encodeDeviceRecord(device, firstSyncStartedAt));
 }
 
 /**

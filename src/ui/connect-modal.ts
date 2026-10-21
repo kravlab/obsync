@@ -2,6 +2,7 @@ import { Modal, Notice, Setting, type App } from "obsidian";
 import type {
 	ConnectionService,
 	CreateRemoteOutcome,
+	JoinOutcome,
 	PendingAuthorization,
 	RemoteCandidate,
 	RemoteChooser,
@@ -9,6 +10,7 @@ import type {
 import { ProviderError } from "../engine/provider";
 import { defaultDeviceName } from "./device-name";
 import { providerErrorMessage } from "./error-message";
+import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
 
 /**
@@ -136,7 +138,9 @@ export class ConnectModal extends Modal {
 				.setDesc(candidate.isRemote ? strings.folderIsRemote : strings.folderIsPlain)
 				.addButton((button) =>
 					button.setButtonText(strings.useFolder).onClick(() => {
-						void this.connectWith(remotes, () => remotes.useFolder(candidate.root, chosenDeviceName()));
+						void this.connectWith(remotes, (evenDuringFirstSync) =>
+							remotes.useFolder(candidate.root, chosenDeviceName(), { evenDuringFirstSync }),
+						);
 					}),
 				);
 		}
@@ -153,12 +157,18 @@ export class ConnectModal extends Modal {
 	}
 
 	/**
-	 * Runs one Remote choice. A refused name or a folder that cannot be
-	 * synced is shown on the same screen; a failure lists the folders again
-	 * with its message.
+	 * Runs one Remote choice, first without connecting during another
+	 * device's First sync. A refused name or a folder that cannot be synced
+	 * is shown on the same screen; a failure lists the folders again with
+	 * its message. Another device's First sync in progress is shown with a
+	 * button that runs the choice again, connecting anyway.
 	 */
-	private async connectWith(remotes: RemoteChooser, choice: () => Promise<CreateRemoteOutcome>): Promise<void> {
-		const result = await this.attempt(choice);
+	private async connectWith(
+		remotes: RemoteChooser,
+		choice: (evenDuringFirstSync: boolean) => Promise<CreateRemoteOutcome | JoinOutcome>,
+		evenDuringFirstSync = false,
+	): Promise<void> {
+		const result = await this.attempt(() => choice(evenDuringFirstSync));
 		if (!result) return;
 		if (!result.ok) return this.showRemotes(remotes, result.message);
 		switch (result.value.kind) {
@@ -173,6 +183,12 @@ export class ConnectModal extends Modal {
 				return;
 			case "unsupportedProvider":
 				this.showMessage(this.strings.providerUnsupported);
+				return;
+			case "firstSyncInProgress":
+				this.showMessage(fill(this.strings.firstSyncInProgress, { device: result.value.deviceName }));
+				new Setting(this.contentEl).addButton((button) =>
+					button.setButtonText(this.strings.connectAnyway).onClick(() => void this.connectWith(remotes, choice, true)),
+				);
 				return;
 		}
 	}

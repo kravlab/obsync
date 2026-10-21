@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDropboxConnector } from "../../src/providers/dropbox/provider";
+import { BLOCK_SHA256 } from "../../src/engine/server-hash";
 import { bytes } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
 import { openDropboxRemote, testTransfers, type DropboxRemote } from "../support/dropbox-remote";
@@ -55,8 +56,8 @@ describe("Dropbox provider", () => {
 		const batch = await provider.capabilities.changeFeed!.changes(cursor!);
 		expect(batch.changes).toEqual([
 			{ kind: "folder", path: "Notes", stableId: folder.stableId },
-			{ kind: "file", path: "Notes/a.md", revision: first.revision, size: 1, stableId: first.stableId },
-			{ kind: "file", path: "Notes/b.md", revision: second.revision, size: 1, stableId: second.stableId },
+			{ kind: "file", path: "Notes/a.md", revision: first.revision, size: 1, stableId: first.stableId, serverHash: first.serverHash },
+			{ kind: "file", path: "Notes/b.md", revision: second.revision, size: 1, stableId: second.stableId, serverHash: second.serverHash },
 		]);
 	});
 
@@ -150,6 +151,15 @@ describe("Dropbox provider", () => {
 		const moved = await provider.capabilities.fileMove?.moveFile("note.md", "moved.md");
 		expect(moved?.stableId).toBe(id);
 		expect((await provider.list()).entries.find((entry) => entry.path === "moved.md")?.stableId).toBe(id);
+	});
+
+	it("reports Dropbox's content_hash as the block SHA-256 server hash", async () => {
+		const { provider } = await setUp();
+		// Dropbox's content hash of "abc", computed with openssl per its content hash reference.
+		const expected = { algorithm: BLOCK_SHA256, value: "4f8b42c22dd3729b519ba6f68d2da7cc5b2d606d05daed5ad5128cc03e6c6358" };
+		expect((await provider.write("note.md", bytes("abc"))).serverHash).toEqual(expected);
+		const [listed] = (await provider.list()).entries;
+		expect(listed).toMatchObject({ serverHash: expected });
 	});
 
 	it("moves with move_v2, never renaming automatically", async () => {

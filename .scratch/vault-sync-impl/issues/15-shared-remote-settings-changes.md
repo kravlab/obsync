@@ -14,3 +14,8 @@ Parent spec: `.scratch/vault-sync/spec.md`, "Concurrency and the no-loss guarant
 - [ ] The device name is editable, and conflict labels and messages use it.
 - [ ] "Forget this device" removes that device's record.
 - [ ] Engine tests cover settings propagation, collision, and an interrupted name-policy change.
+
+## Comments
+
+- 2026-10-21, from ticket 11 (First sync): two devices setting up one empty Remote at once write `settings.json` only if absent, so the first one wins. Today every device writes the defaults, so the values cannot differ. Once this ticket lets the user choose settings before or while connecting, differing values from such a simultaneous setup must also stop sync until the user picks the value (map ticket `.scratch/vault-sync/issues/12-first-sync-against-existing-remote.md`, point 7).
+- 2026-10-21, from ticket 11 (First sync): a device that lost its Sync snapshot registers again under a new Device ID and leaves its old record in the Metadata folder. The spec says that record "ages out" under the inactive-device rule. That rule is not built yet; it belongs with "Forget this device" here.

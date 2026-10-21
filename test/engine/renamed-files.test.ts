@@ -3,7 +3,7 @@ import { FakeRemote, type FakeServiceOptions } from "../fakes/fake-remote";
 import { SimulatedCrash } from "../fakes/fake-provider";
 import { connectTestDevice, type TestDevice } from "../fakes/test-device";
 import { bytes } from "../support/bytes";
-import { mirror, remoteText, syncNow, vaultText, withStartedEngine } from "../support/sync";
+import { forgetNotices, mirror, remoteText, syncNow, vaultText, withStartedEngine } from "../support/sync";
 
 /** 2026-10-20 14:30 on the test machine's own clock, the local time a Conflict copy is named after. */
 const AFTERNOON = new Date(2026, 9, 20, 14, 30).getTime();
@@ -26,6 +26,7 @@ async function syncedPair(
 	await laptop.vault.write("keep.md", bytes("kept"));
 	await syncNow(laptop);
 	await syncNow(phone);
+	forgetNotices(laptop, phone);
 	return { remote, laptop, phone };
 }
 

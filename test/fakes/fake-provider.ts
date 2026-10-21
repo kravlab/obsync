@@ -7,6 +7,7 @@ import {
 	type Precondition,
 	type Provider,
 	type ProviderFailure,
+	type RemoteEntry,
 	type RemoteFile,
 	type RemoteFolder,
 	type RemotePath,
@@ -15,6 +16,7 @@ import {
 import { toRemoteEntry, toRemoteFile, type FakeRemote, type StoredFile } from "./fake-remote";
 import { CrashPoints } from "./crash-points";
 import { parentOf } from "../../src/engine/paths";
+import { BLOCK_SHA256, serverHasher } from "../../src/engine/server-hash";
 
 /** The operations a FakeProvider counts and can inject faults into. */
 export type FakeOperation =
@@ -113,9 +115,10 @@ export class FakeProvider implements Provider {
 	}
 
 	list(): Promise<Listing> {
-		return this.run("list", () => {
+		return this.run("list", async () => {
 			const cursor = this.capabilities.changeFeed ? this.remote.cursor() : undefined;
-			return Promise.resolve({ entries: this.remote.list(), cursor });
+			const entries = await Promise.all(this.remote.list().map((entry) => this.withServerHash(entry)));
+			return { entries, cursor };
 		});
 	}
 
@@ -140,7 +143,7 @@ export class FakeProvider implements Provider {
 			if (this.remote.isFolder(path)) throw preconditionFailed(path);
 			if (!this.holds(path, precondition)) throw preconditionFailed(path);
 			const file: StoredFile = { kind: "file", data: data.slice(0), revision: this.remote.nextRevision() };
-			return Promise.resolve(toRemoteEntry(path, this.remote.put(path, file)) as RemoteFile);
+			return this.withServerHash(toRemoteEntry(path, this.remote.put(path, file)) as RemoteFile);
 		});
 	}
 
@@ -168,10 +171,13 @@ export class FakeProvider implements Provider {
 	}
 
 	/** The change feed Capability, when the service offers it. */
-	private changes(cursor: string): Promise<ChangeBatch> {
+	private async changes(cursor: string): Promise<ChangeBatch> {
 		const batch = this.remote.changesSince(cursor);
 		if (!batch) throw new ProviderError({ category: "cursorLost" }, `unknown cursor: ${cursor}`);
-		return Promise.resolve(batch);
+		const changes = await Promise.all(
+			batch.changes.map((change) => (change.kind === "deleted" ? Promise.resolve(change) : this.withServerHash(change))),
+		);
+		return { changes, cursor: batch.cursor };
 	}
 
 	/** The file move Capability, when the service offers it. */
@@ -211,6 +217,13 @@ export class FakeProvider implements Provider {
 		});
 	}
 
+	/** `entry` with its server hash, when it is a file and the service reports server hashes. */
+	private async withServerHash<T extends RemoteEntry>(entry: T): Promise<T> {
+		const stored = this.remote.get(entry.path);
+		if (this.remote.service.serverHashes !== true || stored?.kind !== "file") return entry;
+		return { ...entry, serverHash: { algorithm: BLOCK_SHA256, value: await blockSha256Of(stored.data) } };
+	}
+
 	/** Throws `nameNotRepresentable` if the service cannot store `path`. */
 	private checkName(path: RemotePath): void {
 		if (!this.remote.canStore(path)) {
@@ -236,6 +249,13 @@ export class FakeProvider implements Provider {
 				return stored?.kind === "file" && stored.revision === precondition.revision;
 		}
 	}
+}
+
+/** The `BLOCK_SHA256` hash of `data`. */
+function blockSha256Of(data: ArrayBuffer): Promise<string> {
+	const hasher = serverHasher(BLOCK_SHA256);
+	if (hasher === null) throw new Error("the block SHA-256 is unknown");
+	return hasher(data);
 }
 
 /** The queue for `operation` in `queues`, created empty if missing. */

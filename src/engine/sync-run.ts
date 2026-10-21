@@ -10,7 +10,9 @@
  * and the Remote file R:
  * - only L, no S: upload it on condition that R is absent;
  * - only R, no S: download it, if the vault path is still free;
- * - L and R, no S: record them if their content is the same;
+ * - L and R, no S: record them if their content is the same, proved by
+ *   the provider's server hash where the plugin computes it too
+ *   (server-hash.ts), else by downloading R;
  * - L, R and S: an edit on one side only is copied to the other, an
  *   upload on condition that R still has S's revision; a new revision
  *   with the same content, or edits on both sides to the same content,
@@ -79,7 +81,9 @@ import {
 	type RemoteEntry,
 	type RemoteFile,
 } from "./provider";
+import type { DifferingOutcome, FirstSyncPreview, FirstSyncTally } from "./first-sync";
 import { contentKindOf, type RemoteSettings } from "./remote-metadata";
+import { serverHasher } from "./server-hash";
 import { carryRenames } from "./carry-renames";
 import { findRenames, type VaultRename } from "./renames";
 import { syncListing } from "./sync-listing";
@@ -117,7 +121,29 @@ export interface SyncRun {
 	readonly guard: DeletionGuardSettings;
 	/** The vault's renames since the last completed sync, in order: hints for finding renames. */
 	readonly renameHints: readonly VaultRename[];
+	/**
+	 * Present when this is a First sync: the device has no Sync snapshot,
+	 * and entries left from a First sync cut off earlier are ignored, so it
+	 * only adds and merges.
+	 */
+	readonly firstSync?: FirstSyncRun;
 }
+
+/** What a First sync needs besides an ordinary sync. */
+export interface FirstSyncRun {
+	/**
+	 * Called once the user started the First sync from its preview, before
+	 * anything is written: the engine registers the device and marks the
+	 * First sync as in progress.
+	 */
+	begin(): Promise<void>;
+}
+
+/**
+ * Which closed prompt holds sync until the user asks for one: the Deletion
+ * guard's (`deletions`) or the First sync preview (`firstSync`).
+ */
+export type SyncHold = "deletions" | "firstSync";
 
 /** What a completed sync reports to the engine. */
 export interface SyncRunResult {
@@ -126,11 +152,10 @@ export interface SyncRunResult {
 	 * typing in it, the milliseconds remaining until its post-edit pause ends.
 	 */
 	readonly nextPostEditPauseMs?: number;
-	/**
-	 * True when the Deletion guard's prompt was closed without an answer:
-	 * the sync stopped before writing anything.
-	 */
-	readonly held?: boolean;
+	/** Set when a prompt was closed without an answer and the sync stopped before writing anything. */
+	readonly held?: SyncHold;
+	/** For a completed First sync, what it did. */
+	readonly firstSync?: Readonly<FirstSyncTally>;
 }
 
 /**
@@ -149,8 +174,10 @@ export async function runSync({
 	editPauseMs,
 	guard,
 	renameHints,
+	firstSync,
 }: SyncRun): Promise<SyncRunResult> {
-	const snapshot = new Map(await deviceStore.loadSnapshot());
+	// A First sync is a union: entries left from one cut off earlier must not turn into renames or deletions.
+	const snapshot = new Map(firstSync === undefined ? await deviceStore.loadSnapshot() : []);
 	const previousFeed = await deviceStore.loadRemoteFeed();
 	const listed = await listRemote(provider, previousFeed, snapshot.size > 0, reconcile);
 	const listing = syncListing(
@@ -165,6 +192,13 @@ export async function runSync({
 	/** Content hashes of the vault files, as read or taken from the snapshot for the uploads. */
 	const localHashes = new Map<VaultPath, string>();
 	let nextPostEditPauseMs: number | undefined;
+	/**
+	 * What this sync did so far, reported for a First sync only, whose
+	 * Conflict copies are told in one summary instead of one by one.
+	 */
+	const tally: FirstSyncTally = { downloaded: 0, uploaded: 0, conflicted: 0, conflictCopies: 0 };
+	/** In a First sync started with "keep Remote": every differing file gets a Conflict copy, text included. */
+	let keepRemote = false;
 
 	/** Whether `path` is within the post-edit pause; remembers the earliest pause end. */
 	function pausedForTyping(path: VaultPath): boolean {
@@ -234,11 +268,12 @@ export async function runSync({
 			await recordFile(path, remoteVersion, localHash, unchanged);
 			return;
 		}
-		const merged = await mergedContent(path, localData, remoteVersion.data, synced);
-		if (merged === null) {
+		const mergeResult = await mergedContent(path, localData, remoteVersion.data, synced);
+		if (mergeResult === null) {
 			await keepConflictCopy(path, localData, localHash, remoteVersion, remoteHash);
 			return;
 		}
+		const merged = mergeResult.data;
 		const hash = await contentHash(merged);
 		let { revision } = remoteVersion;
 		if (hash !== remoteHash) {
@@ -251,28 +286,30 @@ export async function runSync({
 			return;
 		}
 		await recordFile(path, { data: merged, revision }, hash, hash === localHash ? unchanged : undefined);
+		if (mergeResult.conflicted) tally.conflicted += 1;
 	}
 
 	/**
 	 * The merge of `localData` and `remoteData`, the two versions of the
 	 * file `path`, against the Base when `synced` has a true one; null when
 	 * they cannot be merged: a file that is not text, a version that is not
-	 * UTF-8, or a JSON file whose merge wrote Conflict blocks or does not
-	 * parse.
+	 * UTF-8, a JSON file whose merge wrote Conflict blocks or does not
+	 * parse, or any file created on both sides in a First sync started with
+	 * "keep Remote". `conflicted` tells whether it holds Conflict blocks.
 	 */
 	async function mergedContent(
 		path: VaultPath,
 		localData: ArrayBuffer,
 		remoteData: ArrayBuffer,
 		synced: SnapshotEntry | undefined,
-	): Promise<ArrayBuffer | null> {
+	): Promise<{ readonly data: ArrayBuffer; readonly conflicted: boolean } | null> {
 		const kind = contentKindOf(path, settings);
-		if (kind === "other") return null;
+		if (kind === "other" || (keepRemote && synced === undefined)) return null;
 		const base = synced?.kind === "file" ? await trueBase(path, synced.hash) : null;
 		const merged = mergeText({ base, local: localData, remote: remoteData }, { local: device.name, remote: REMOTE_LABEL });
 		if (merged === null) return null;
 		if (kind === "json" && (merged.conflicted || !parsesAsJson(merged.data))) return null;
-		return merged.data;
+		return merged;
 	}
 
 	/**
@@ -307,7 +344,8 @@ export async function runSync({
 		}
 		remote.set(copy.path, written);
 		await recordFile(copy.path, { data: localData, revision: written.revision }, localHash);
-		ui.showNotice({ kind: "conflictCopyCreated", path, copyPath: copy.path });
+		tally.conflictCopies += 1;
+		if (firstSync === undefined) ui.showNotice({ kind: "conflictCopyCreated", path, copyPath: copy.path });
 		if (pausedForTyping(path) || !(await vault.replace(path, localData, remoteVersion.data))) return;
 		// The listing's revision is older when another device wrote `path` since: this one is now synced.
 		setRemoteFile(path, remoteVersion);
@@ -422,13 +460,15 @@ export async function runSync({
 			if (there?.kind !== "file" || there.revision !== synced.revision) return;
 			precondition = { kind: "revision", revision: synced.revision };
 		}
-		await uploadOrMerge(file.path, data, hash, precondition, synced);
+		const uploaded = await uploadOrMerge(file.path, data, hash, precondition, synced);
+		if (uploaded && synced === undefined) tally.uploaded += 1;
 	}
 
 	/**
 	 * Uploads `data`, the vault file `path` with `hash`, on `precondition`
-	 * and records it. Refused because another device wrote the file since,
-	 * it is merged with what that device wrote, against `synced`.
+	 * and records it; returns whether it did. Refused because another
+	 * device wrote the file since, it is merged with what that device wrote,
+	 * against `synced`.
 	 */
 	async function uploadOrMerge(
 		path: VaultPath,
@@ -436,15 +476,16 @@ export async function runSync({
 		hash: string,
 		precondition: Precondition,
 		synced: SnapshotEntry | undefined,
-	): Promise<void> {
+	): Promise<boolean> {
 		const written = await writeRemote(path, data, precondition);
 		if (written === undefined) {
 			const remoteVersion = await readRemote(path);
 			if (remoteVersion !== undefined) await merge(path, remoteVersion, synced);
-			return;
+			return false;
 		}
 		remote.set(path, written);
 		await recordFile(path, { data, revision: written.revision }, hash, walkedStat(path));
+		return true;
 	}
 
 	/**
@@ -652,6 +693,20 @@ export async function runSync({
 	}
 
 	/**
+	 * Records the vault file at `file`'s path, with no snapshot entry, as
+	 * synced at `file`'s revision when `file` carries a server hash the
+	 * plugin computes itself and the vault file has the same one; returns
+	 * whether it did. The vault's bytes are the Base, so nothing downloads.
+	 */
+	async function recordIfSameByServerHash(file: RemoteFile): Promise<boolean> {
+		if (file.serverHash === undefined || (await vault.stat(file.path))?.kind !== "file") return false;
+		const data = await vault.read(file.path);
+		if ((await sameByServerHash(data, file)) !== true) return false;
+		await recordFile(file.path, { data, revision: file.revision }, await contentHash(data));
+		return true;
+	}
+
+	/**
 	 * Downloads a Remote file that is new or changed there only since the
 	 * snapshot, or merges it with the vault file where both changed.
 	 */
@@ -688,6 +743,8 @@ export async function runSync({
 			await recordFile(file.path, remoteVersion, hash);
 			return;
 		}
+		// Created on both sides with content the provider's hash proves the same: no download.
+		if (localHash !== undefined && (await recordIfSameByServerHash(file))) return;
 		const remoteVersion = await readRemote(file.path);
 		if (remoteVersion === undefined) return;
 		const hash = await contentHash(remoteVersion.data);
@@ -702,8 +759,49 @@ export async function runSync({
 		if ((await vault.stat(file.path)) !== null) return;
 		await vault.write(file.path, remoteVersion.data);
 		await recordFile(file.path, remoteVersion, hash);
+		tally.downloaded += 1;
 	}
 
+	/**
+	 * What a First sync would do, as its preview shows it, from this sync's
+	 * listings; files on both sides are compared by content, through the
+	 * provider's server hash where the plugin computes it, else by reading
+	 * the Remote file. Nothing is written.
+	 */
+	async function firstSyncPreview(): Promise<FirstSyncPreview> {
+		const toDownload: VaultPath[] = [];
+		const toUpload: VaultPath[] = [];
+		const identical: VaultPath[] = [];
+		const differing: { path: VaultPath; outcome: DifferingOutcome }[] = [];
+		for (const entry of sortedByPath([...localEntries.values()])) {
+			if (entry.kind !== "file") continue;
+			const there = remote.get(entry.path);
+			if (there === undefined) toUpload.push(entry.path);
+			else if (there.kind !== "file") continue;
+			else if (await sameContent(entry.path, there)) identical.push(entry.path);
+			else differing.push({ path: entry.path, outcome: contentKindOf(entry.path, settings) === "text" ? "merged" : "conflictCopy" });
+		}
+		for (const entry of sortedByPath([...remote.values()])) {
+			if (entry.kind === "file" && !localEntries.has(entry.path)) toDownload.push(entry.path);
+		}
+		return { toDownload, toUpload, identical, differing };
+	}
+
+	/** Whether the vault file `path` holds what the Remote file `there` does. */
+	async function sameContent(path: VaultPath, there: RemoteFile): Promise<boolean> {
+		const data = await vault.read(path);
+		const byServerHash = await sameByServerHash(data, there);
+		if (byServerHash !== undefined) return byServerHash;
+		const theirs = await readRemote(path);
+		return theirs !== undefined && (await contentHash(theirs.data)) === (await contentHash(data));
+	}
+
+	if (firstSync !== undefined) {
+		const answer = await ui.askFirstSync(await firstSyncPreview());
+		if (answer === null) return { held: "firstSync" };
+		keepRemote = answer.differing === "keepRemote";
+		await firstSync.begin();
+	}
 	const renames = await findRenames(
 		snapshot,
 		listing,
@@ -744,7 +842,7 @@ export async function runSync({
 		reason === null
 			? "apply"
 			: await ui.askDeletions({ reason, toRemote: toRemotePaths, toVault: deletions.toVault });
-	if (answer === null) return { held: true };
+	if (answer === null) return { held: "deletions" };
 
 	const { deferred, leftRemoteFolders } = await carryRenames(renames, {
 		provider,
@@ -794,7 +892,7 @@ export async function runSync({
 	if (listed.cursor !== undefined && listed.cursor !== previousFeed?.cursor) {
 		await deviceStore.saveRemoteFeed({ cursor: listed.cursor, entries: listed.entries });
 	}
-	return { nextPostEditPauseMs };
+	return firstSync === undefined ? { nextPostEditPauseMs } : { nextPostEditPauseMs, firstSync: tally };
 }
 
 /**
@@ -904,6 +1002,16 @@ function deepestFirst(folders: readonly VaultPath[]): VaultPath[] {
 	return sortedByPath(folders.map((path) => ({ path })))
 		.reverse()
 		.map(({ path }) => path);
+}
+
+/**
+ * Whether `data` is what `there` holds, by `there`'s server hash; undefined
+ * when it carries none the plugin computes itself.
+ */
+async function sameByServerHash(data: ArrayBuffer, there: RemoteFile): Promise<boolean | undefined> {
+	const hasher = there.serverHash === undefined ? null : serverHasher(there.serverHash.algorithm);
+	if (hasher === null) return undefined;
+	return (await hasher(data)) === there.serverHash?.value;
 }
 
 /** `entries` ordered by path, so every folder comes before what it holds. */

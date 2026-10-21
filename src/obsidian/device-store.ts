@@ -18,10 +18,11 @@ const SNAPSHOT_FORMAT_VERSION = 1;
 
 /**
  * The snapshot database's IndexedDB schema version: 1 held the entries
- * only, 2 added the Bases, 3 adds the Remote change-feed state. An older
- * database is upgraded in place, keeping its existing stores.
+ * only, 2 added the Bases, 3 the Remote change-feed state, 4 adds the
+ * marks (whether the snapshot is complete). An older database is upgraded
+ * in place, keeping its existing stores.
  */
-const SNAPSHOT_SCHEMA_VERSION = 3;
+const SNAPSHOT_SCHEMA_VERSION = 4;
 
 /** The object store holding one snapshot entry per vault path. */
 const ENTRIES = "entries";
@@ -35,6 +36,12 @@ const FEED = "feed";
 /** The one key in `FEED` holding the current Remote change-feed state. */
 const CURRENT_FEED_KEY = "current";
 
+/** The object store holding marks about the snapshot as a whole. */
+const MARKS = "marks";
+
+/** The key in `MARKS` present once a First sync completed this snapshot. */
+const COMPLETE_KEY = "complete";
+
 /**
  * The Device store on this device only, never in `data.json` or the
  * vault, and separate for each vault:
@@ -46,7 +53,9 @@ const CURRENT_FEED_KEY = "current";
  *   is shared by every vault of the app, and Obsidian names no vault id, so
  *   the database gets a random name, kept in the vault's localStorage;
  * - the Bases in a second object store of that database, written in the
- *   same transaction as their entries and read one at a time when merging.
+ *   same transaction as their entries and read one at a time when merging;
+ * - whether a First sync completed the snapshot, as a mark in that same
+ *   database, so it is lost together with the snapshot.
  *
  * Both carry a format version. A Connection that is missing, of another
  * version or malformed reads as none, and a snapshot of another version as
@@ -133,6 +142,24 @@ export class ObsidianDeviceStore implements DeviceStore {
 		return stored instanceof ArrayBuffer ? stored : null;
 	}
 
+	async hasSnapshot(): Promise<boolean> {
+		const name = this.databaseName();
+		if (name === null) return false;
+		const request = (await this.open(name)).transaction(MARKS, "readonly").objectStore(MARKS).get(COMPLETE_KEY);
+		const stored = await new Promise<unknown>((resolve, reject) => {
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error ?? new Error("snapshot mark read failed"));
+		});
+		return stored === true;
+	}
+
+	async markSnapshotComplete(): Promise<void> {
+		const name = this.databaseName() ?? this.newDatabase();
+		const transaction = (await this.open(name)).transaction(MARKS, "readwrite");
+		transaction.objectStore(MARKS).put(true, COMPLETE_KEY);
+		await completion(transaction);
+	}
+
 	async loadRemoteFeed(): Promise<RemoteFeed | null> {
 		const name = this.databaseName();
 		if (name === null) return null;
@@ -198,8 +225,9 @@ export class ObsidianDeviceStore implements DeviceStore {
 
 	/**
 	 * Opens the database `name`, once, creating the object stores it lacks:
-	 * all three on first use, the newer ones when upgrading from an older
-	 * schema version. An upgrade another connection blocks fails instead of
+	 * all of them on first use, the newer ones when upgrading from an older
+	 * schema version; a database from before the marks store gets the
+	 * "complete" mark. An upgrade another connection blocks fails instead of
 	 * waiting, and this connection closes when another one needs to upgrade,
 	 * so neither side hangs.
 	 */
@@ -207,11 +235,14 @@ export class ObsidianDeviceStore implements DeviceStore {
 		if (this.database?.name !== name) {
 			const opened = new Promise<IDBDatabase>((resolve, reject) => {
 				const request = indexedDB.open(name, SNAPSHOT_SCHEMA_VERSION);
-				request.onupgradeneeded = () => {
+				request.onupgradeneeded = (event) => {
 					const database = request.result;
-					for (const store of [ENTRIES, BASES, FEED]) {
+					const marksAdded = !database.objectStoreNames.contains(MARKS);
+					for (const store of [ENTRIES, BASES, FEED, MARKS]) {
 						if (!database.objectStoreNames.contains(store)) database.createObjectStore(store);
 					}
+					// A snapshot from before First syncs were tracked was made by syncs that completed: no First sync again.
+					if (marksAdded && event.oldVersion > 0) request.transaction?.objectStore(MARKS).put(true, COMPLETE_KEY);
 				};
 				request.onblocked = () => reject(new Error(`upgrading ${name} is blocked by another connection`));
 				request.onsuccess = () => {
@@ -265,7 +296,9 @@ function parseConnection(stored: unknown): Connection | null {
 	const { accountId, remoteRoot, device } = connection;
 	if (typeof accountId !== "string" || typeof remoteRoot !== "string") return null;
 	if (typeof device.id !== "string" || typeof device.name !== "string") return null;
-	return { accountId, remoteRoot, device: { id: device.id, name: device.name } };
+	// Records from before First sync was tracked have no flag: not done, which costs at most a re-registration less.
+	const firstSyncDone = connection.firstSyncDone === true;
+	return { accountId, remoteRoot, device: { id: device.id, name: device.name }, firstSyncDone };
 }
 
 /** The snapshot entry in a stored record, or null if it holds no valid one. */

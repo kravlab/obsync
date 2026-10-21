@@ -4,7 +4,8 @@
  * metadata, paging through `list_folder`, and the categories of the route
  * errors both read.
  */
-import { ProviderError } from "../../engine/provider";
+import { ProviderError, type ServerHash } from "../../engine/provider";
+import { BLOCK_SHA256 } from "../../engine/server-hash";
 import type { DropboxClient, RouteResult } from "./client";
 import type { Tagged } from "./errors";
 
@@ -25,13 +26,16 @@ export interface Metadata {
 	readonly rev?: string;
 	/** Files only, in bytes. */
 	readonly size?: number;
+	/** Files only: the block SHA-256 of the content (developers/reference/content-hash); optional in the API. */
+	readonly content_hash?: string;
 }
 
-/** What the plugin needs of a file's metadata: its revision and size, and its id when given. */
+/** What the plugin needs of a file's metadata: its revision and size, and its id and content hash when given. */
 export interface FileRevision {
 	readonly rev: string;
 	readonly size: number;
 	readonly id?: string;
+	readonly contentHash?: string;
 }
 
 /**
@@ -42,7 +46,20 @@ export function fileRevision(file: Metadata, route: string): FileRevision {
 	if (file.rev === undefined || file.size === undefined) {
 		throw new ProviderError({ category: "permanent" }, `${route}: a file without rev or size: ${file.path_lower}`);
 	}
-	return file.id === undefined ? { rev: file.rev, size: file.size } : { rev: file.rev, size: file.size, id: file.id };
+	return {
+		rev: file.rev,
+		size: file.size,
+		...(file.id === undefined ? {} : { id: file.id }),
+		...(file.content_hash === undefined ? {} : { contentHash: file.content_hash }),
+	};
+}
+
+/** The stable id and server hash of a file's metadata, as listing-entry fields. */
+export function fileHints({ id, contentHash }: FileRevision): { readonly stableId?: string; readonly serverHash?: ServerHash } {
+	return {
+		...(id === undefined ? {} : { stableId: id }),
+		...(contentHash === undefined ? {} : { serverHash: { algorithm: BLOCK_SHA256, value: contentHash } }),
+	};
 }
 
 /** The entry's id as a stable id field, when Dropbox gave one. */

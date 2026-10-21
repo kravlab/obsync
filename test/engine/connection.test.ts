@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createConnectionService, type AuthorizationOutcome } from "../../src/engine/connection";
-import { text } from "../support/bytes";
+import { SimulatedCrash } from "../fakes/fake-provider";
+import { connectTestDevice } from "../fakes/test-device";
+import { syncNow } from "../support/sync";
+import { bytes, text } from "../support/bytes";
 import { FakeService, type FakeAccount } from "../fakes/fake-service";
 import type { FakeRemote } from "../fakes/fake-remote";
 import { createConnectingDevice, type ConnectingDevice } from "../fakes/connecting-device";
@@ -24,6 +27,63 @@ function readJson(remote: FakeRemote | undefined, path: string): unknown {
 	if (stored?.kind !== "file") throw new Error(`no file at ${path}`);
 	return JSON.parse(text(stored.data));
 }
+
+/** Six hours, after which a "First sync in progress" mark is stale. */
+const MARK_TIMEOUT_MS = 6 * 60 * 60 * 1_000;
+
+/**
+ * An account with the Remote "My vault", set up by a laptop, where the
+ * device "Tablet" started its First sync at `startedAt` by its clock and
+ * was cut off uploading its note, so its record keeps the mark.
+ */
+async function remoteWithMark(startedAt: number) {
+	const service = new FakeService();
+	const account = service.addAccount("account-1");
+	await (await authorize(createConnectingDevice(service, "laptop"), account)).createRemote("My vault", "Laptop");
+	const remote = account.folders.get("My vault");
+	if (remote === undefined) throw new Error("no Remote created");
+	const tablet = connectTestDevice(remote, "Tablet");
+	tablet.clock.advance(startedAt);
+	await tablet.vault.write("note.md", bytes("from the tablet"));
+	// The first write once started is the marked record; the second, the note, is cut off.
+	tablet.provider.beforeNext("write", () => Promise.resolve());
+	tablet.provider.beforeNext("write", () => Promise.reject(new SimulatedCrash("cut off")));
+	await expect(syncNow(tablet)).rejects.toBeInstanceOf(SimulatedCrash);
+	return { service, account };
+}
+
+describe("connecting while another device does its First sync", () => {
+	it("tells the device to wait, naming the other device, and changes nothing", async () => {
+		const { service, account } = await remoteWithMark(0);
+		const phone = createConnectingDevice(service, "phone");
+
+		const outcome = await (await authorize(phone, account)).useFolder("My vault", "Phone");
+
+		expect(outcome).toEqual({ kind: "firstSyncInProgress", deviceName: "Tablet" });
+		expect(phone.deviceStore.connection).toBeNull();
+		expect(account.folders.get("My vault")?.get(".obsync/devices/phone-1.json")).toBeUndefined();
+	});
+
+	it("connects anyway when the user asks to", async () => {
+		const { service, account } = await remoteWithMark(0);
+		const phone = createConnectingDevice(service, "phone");
+
+		const outcome = await (await authorize(phone, account)).useFolder("My vault", "Phone", { evenDuringFirstSync: true });
+
+		expect(outcome).toEqual({ kind: "connected" });
+		expect(phone.deviceStore.connection?.device).toEqual({ id: "phone-1", name: "Phone" });
+	});
+
+	it("takes a mark older than six hours for one left by a First sync that never finished", async () => {
+		const { service, account } = await remoteWithMark(1_000);
+		const phone = createConnectingDevice(service, "phone");
+		phone.clock.advance(1_000 + MARK_TIMEOUT_MS + 1);
+
+		const outcome = await (await authorize(phone, account)).useFolder("My vault", "Phone");
+
+		expect(outcome).toEqual({ kind: "connected" });
+	});
+});
 
 describe("connecting a device", () => {
 	it("creates a Remote named as asked and leaves the device Connected to it", async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChangeFeed, FileMove, FolderMove } from "../../src/engine/provider";
+import { BLOCK_SHA256 } from "../../src/engine/server-hash";
 import { reported } from "../support/assertions";
 import { bytes } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
@@ -113,6 +114,23 @@ describe("FakeProvider Capability toggles", () => {
 			await provider.delete("note.md");
 			const second = await provider.write("note.md", bytes("a"));
 			expect(second.stableId).not.toBe(first.stableId);
+		});
+	});
+
+	describe("server hashes", () => {
+		it("lists and writes files with no server hash by default", async () => {
+			const provider = new FakeRemote().openProvider();
+			expect((await provider.write("note.md", bytes("abc"))).serverHash).toBeUndefined();
+			expect((await provider.list()).entries[0]).not.toHaveProperty("serverHash");
+		});
+
+		it("lists and writes files with their block SHA-256 when on", async () => {
+			const provider = new FakeRemote({ serverHashes: true }).openProvider();
+			// The block SHA-256 of "abc", computed with openssl.
+			const expected = { algorithm: BLOCK_SHA256, value: "4f8b42c22dd3729b519ba6f68d2da7cc5b2d606d05daed5ad5128cc03e6c6358" };
+			expect((await provider.write("note.md", bytes("abc"))).serverHash).toEqual(expected);
+			const [listed] = (await provider.list()).entries;
+			expect(listed).toMatchObject({ serverHash: expected });
 		});
 	});
 

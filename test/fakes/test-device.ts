@@ -9,6 +9,7 @@ import {
 	type UiPort,
 } from "../../src/engine/ports";
 import { DEFAULT_DELETION_GUARD, type DeletionAnswer, type DeletionGuardSettings, type DeletionPrompt } from "../../src/engine/deletion-guard";
+import type { FirstSyncAnswer, FirstSyncPreview } from "../../src/engine/first-sync";
 import type { LocalVault, VaultPath } from "../../src/engine/local-vault";
 import type { SyncNotice } from "../../src/engine/notices";
 import {
@@ -39,6 +40,8 @@ export class InMemoryDeviceStore implements DeviceStore {
 	readonly bases = new Map<VaultPath, ArrayBuffer>();
 	/** The Remote change-feed state from the last completed sync, if any. */
 	remoteFeed: RemoteFeed | null = null;
+	/** Whether a First sync completed the snapshot. */
+	snapshotComplete = false;
 
 	/** @param connection this device's Connection, or null for none */
 	constructor(public connection: Connection | null = null) {}
@@ -83,6 +86,27 @@ export class InMemoryDeviceStore implements DeviceStore {
 		return Promise.resolve(this.bases.get(path)?.slice(0) ?? null);
 	}
 
+	/**
+	 * Loses the Sync snapshot, its Bases and the Remote feed state, as
+	 * cleared site data or an unknown format version would, keeping the
+	 * Connection.
+	 */
+	loseSnapshot(): void {
+		this.snapshot.clear();
+		this.bases.clear();
+		this.remoteFeed = null;
+		this.snapshotComplete = false;
+	}
+
+	hasSnapshot(): Promise<boolean> {
+		return Promise.resolve(this.snapshotComplete);
+	}
+
+	markSnapshotComplete(): Promise<void> {
+		this.snapshotComplete = true;
+		return Promise.resolve();
+	}
+
 	loadRemoteFeed(): Promise<RemoteFeed | null> {
 		return Promise.resolve(
 			this.remoteFeed === null
@@ -101,6 +125,7 @@ export class InMemoryDeviceStore implements DeviceStore {
 		this.snapshot.clear();
 		this.bases.clear();
 		this.remoteFeed = null;
+		this.snapshotComplete = false;
 		return Promise.resolve();
 	}
 }
@@ -134,6 +159,10 @@ export class RecordingUi implements UiPort {
 	readonly answers: DeletionAnswer[] = [];
 	/** Runs when the next prompt is asked, before it is answered, e.g. the user asking for a sync meanwhile. */
 	onAsk: (() => void) | undefined;
+	/** Every First sync preview shown, oldest first. */
+	readonly previews: FirstSyncPreview[] = [];
+	/** The answers to give the next previews, in order; with none left, the sync starts with differing files merged. */
+	readonly firstSyncAnswers: FirstSyncAnswer[] = [];
 
 	/** The status shown last, or undefined if none was. */
 	get lastStatus(): SyncStatus | undefined {
@@ -155,6 +184,13 @@ export class RecordingUi implements UiPort {
 		this.onAsk?.();
 		if (this.answers.length === 0) return Promise.reject(new Error("unexpected Deletion guard prompt"));
 		return Promise.resolve(this.answers.shift() ?? null);
+	}
+
+	/** Records `preview` and gives the next scripted answer, or starts with differing files merged. */
+	askFirstSync(preview: FirstSyncPreview): Promise<FirstSyncAnswer> {
+		this.previews.push(preview);
+		const answer = this.firstSyncAnswers.length > 0 ? this.firstSyncAnswers.shift() : { differing: "merge" as const };
+		return Promise.resolve(answer ?? null);
 	}
 }
 
@@ -220,6 +256,7 @@ export function createTestDevice(remote: FakeRemote): TestDevice {
 			ui,
 			schedule: () => device.schedule,
 			deletionGuard: () => device.deletionGuard,
+			newDeviceId: () => crypto.randomUUID(),
 		},
 	};
 	return device;
@@ -276,6 +313,8 @@ function crashingDeviceStore(store: InMemoryDeviceStore, crash: CrashPoints): De
 		moveSnapshotEntry: (from, to, entry) =>
 			crash.step(`move snapshot entry ${from}`, () => store.moveSnapshotEntry(from, to, entry)),
 		loadBase: (path) => store.loadBase(path),
+		hasSnapshot: () => store.hasSnapshot(),
+		markSnapshotComplete: () => crash.step("mark snapshot complete", () => store.markSnapshotComplete()),
 		loadRemoteFeed: () => store.loadRemoteFeed(),
 		saveRemoteFeed: (feed) => crash.step("save Remote feed", () => store.saveRemoteFeed(feed)),
 		clear: () => crash.step("clear Device store", () => store.clear()),

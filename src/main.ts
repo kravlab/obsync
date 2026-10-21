@@ -69,6 +69,7 @@ export default class ObsyncPlugin extends Plugin {
 			secretStore,
 			ui,
 			newDeviceId: () => crypto.randomUUID(),
+			clock: dropbox.clock,
 		});
 		const engine = createSyncEngine({
 			providers: createDropboxConnector(dropbox),
@@ -80,6 +81,7 @@ export default class ObsyncPlugin extends Plugin {
 			ui,
 			schedule: () => schedule.load(),
 			deletionGuard: () => deletionGuard.load(),
+			newDeviceId: () => crypto.randomUUID(),
 		});
 		// The engine shows Sync failed itself; an error reaching here is a
 		// bug, logged for the bug report.

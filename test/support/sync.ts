@@ -7,6 +7,11 @@ import { FakeRemote } from "../fakes/fake-remote";
 import { connectTestDevice, type TestDevice } from "../fakes/test-device";
 import { bytes, text } from "./bytes";
 
+/** Drops the notices `devices` showed so far, such as the First sync summaries of a test's setup. */
+export function forgetNotices(...devices: readonly TestDevice[]): void {
+	for (const device of devices) device.ui.notices.length = 0;
+}
+
 /** Runs one "Sync now" on `device`. */
 export async function syncNow(device: TestDevice): Promise<void> {
 	await createSyncEngine(device.ports).sync();
@@ -37,6 +42,7 @@ export async function syncedPair(content: string): Promise<{ remote: FakeRemote;
 	await laptop.vault.write("note.md", bytes(content));
 	await syncNow(laptop);
 	await syncNow(phone);
+	forgetNotices(laptop, phone);
 	return { remote, laptop, phone };
 }
 

@@ -11,6 +11,10 @@
  * are: a different line ending is a different hash.
  */
 export async function contentHash(data: ArrayBuffer): Promise<string> {
-	const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
-	return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+	return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", data)));
+}
+
+/** `bytes` as lowercase hex, two digits each. */
+export function hex(bytes: Uint8Array): string {
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

@@ -12,6 +12,9 @@
  *   "a unique file reference that persists if files are moved or renamed".
  *   Whether a moved file keeps its `rev` is not documented; the engine
  *   does not rely on it.
+ * - A file's `content_hash` is its server hash, `BLOCK_SHA256`, which the
+ *   engine computes too, so a First sync recognises identical files
+ *   without downloading them.
  * - Conditional writes are upload modes (`add` for "absent", `update` with
  *   the known `rev`) and `delete_v2` with `parent_rev`, files only.
  *
@@ -36,6 +39,7 @@ import type { DropboxOptions, DropboxTransfers } from "./options";
 import { WRITE_RETRY_AFTER_MS, writeFailure, type Tagged } from "./errors";
 import { downloadFile, uploadFile, type TransferRules } from "./transfers";
 import {
+	fileHints,
 	fileRevision,
 	listFolder,
 	listFolderContinue,
@@ -103,8 +107,8 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 			},
 			fileMove: {
 				async moveFile(from, to): Promise<RemoteFile> {
-					const { rev, size, id } = fileRevision(await move(from, to), "move_v2");
-					return { kind: "file", path: to, revision: rev, size, ...(id === undefined ? {} : { stableId: id }) };
+					const file = fileRevision(await move(from, to), "move_v2");
+					return { kind: "file", path: to, revision: file.rev, size: file.size, ...fileHints(file) };
 				},
 			},
 			folderMove: {
@@ -127,8 +131,8 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 
 		async write(path, data, precondition): Promise<RemoteFile> {
 			const commit = { path: full(path), mode: writeMode(precondition), autorename: false, strict_conflict: true };
-			const { rev, size, id } = await uploadFile(client, commit, data, rules);
-			return { kind: "file", path, revision: rev, size, ...(id === undefined ? {} : { stableId: id }) };
+			const file = await uploadFile(client, commit, data, rules);
+			return { kind: "file", path, revision: file.rev, size: file.size, ...fileHints(file) };
 		},
 
 		async delete(path, precondition) {
@@ -201,8 +205,8 @@ function remoteChanges(root: string, listed: readonly Metadata[], route: string)
 		if (entry[".tag"] === "deleted") changes.push({ kind: "deleted", path });
 		else if (entry[".tag"] === "folder") changes.push({ kind: "folder", path, ...stableIdOf(entry) });
 		else if (entry[".tag"] === "file") {
-			const { rev, size } = fileRevision(entry, route);
-			changes.push({ kind: "file", path, revision: rev, size, ...stableIdOf(entry) });
+			const file = fileRevision(entry, route);
+			changes.push({ kind: "file", path, revision: file.rev, size: file.size, ...fileHints(file) });
 		}
 	}
 	return changes;

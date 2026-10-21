@@ -1,4 +1,5 @@
 import type { Clock } from "../../src/engine/ports";
+import { sha256, sha256Hex } from "../support/sha256";
 import type { HttpRequest, HttpResponse } from "../../src/providers/dropbox/http";
 import { ManualClock } from "./manual-clock";
 
@@ -760,7 +761,21 @@ function metadataOf(entry: FakeDropboxEntry): Record<string, unknown> {
 	};
 	return entry.kind === "folder"
 		? { ".tag": "folder", ...common }
-		: { ".tag": "file", ...common, rev: entry.rev, size: entry.data.byteLength };
+		: { ".tag": "file", ...common, rev: entry.rev, size: entry.data.byteLength, content_hash: contentHashOf(entry.data) };
+}
+
+/**
+ * Dropbox's `content_hash` of `data` (developers/reference/content-hash):
+ * the SHA-256 of the SHA-256 digests of its 4 MiB blocks, as hex.
+ */
+function contentHashOf(data: ArrayBuffer): string {
+	const block = 4 * 1024 * 1024;
+	const count = Math.ceil(data.byteLength / block);
+	const digests = new Uint8Array(count * 32);
+	for (let index = 0; index < count; index += 1) {
+		digests.set(sha256(new Uint8Array(data.slice(index * block, (index + 1) * block))), index * 32);
+	}
+	return sha256Hex(digests);
 }
 
 /** The Dropbox `DeletedMetadata` of an entry deleted at `path`. */

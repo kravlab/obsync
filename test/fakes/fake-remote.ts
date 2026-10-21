@@ -40,6 +40,8 @@ export interface FakeServiceOptions {
 	 * moved, new for a new entry; off by default.
 	 */
 	readonly stableIds?: boolean;
+	/** List and write files with their `BLOCK_SHA256` server hash; off by default. */
+	readonly serverHashes?: boolean;
 	/** Names the service refuses or folds; by default it accepts any name. */
 	readonly nameRules?: Partial<NameRules>;
 	/** Largest file the service accepts, in bytes; unlimited by default. */

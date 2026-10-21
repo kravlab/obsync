@@ -108,9 +108,10 @@
 	font-size: var(--font-ui-small);
 }
 
-/* The Deletion guard prompt's review list: every path, scrolled within
-   the window however many there are. */
-.obsync-guard-list {
+/* The Deletion guard prompt's review list and the First sync preview's
+   list: every path, scrolled within the window however many there are. */
+.obsync-guard-list,
+.obsync-first-sync-list {
 	max-height: 40vh;
 	overflow-y: auto;
 }

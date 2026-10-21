@@ -3,7 +3,7 @@ import { parentOf } from "../../src/engine/paths";
 import { bytes } from "../support/bytes";
 import { FakeRemote } from "../fakes/fake-remote";
 import { connectTestDevice, type TestDevice } from "../fakes/test-device";
-import { mirror, remoteText, syncNow, vaultText } from "../support/sync";
+import { forgetNotices, mirror, remoteText, syncNow, vaultText } from "../support/sync";
 
 /** 2026-10-20 14:30 on the test machine's own clock, the local time a Conflict copy is named after. */
 const AFTERNOON = new Date(2026, 9, 20, 14, 30).getTime();
@@ -26,6 +26,7 @@ async function syncedPairWith(
 	await laptop.vault.write(path, content);
 	await syncNow(laptop);
 	await syncNow(phone);
+	forgetNotices(laptop, phone);
 	return { remote, laptop, phone };
 }
 

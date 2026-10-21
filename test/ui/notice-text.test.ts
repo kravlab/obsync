@@ -78,4 +78,15 @@ describe("noticeText", () => {
 			"notes/New.md сохранён: он был удалён на другом устройстве, но переименован на этом.",
 		);
 	});
+
+	const firstSyncDone = { kind: "firstSyncDone", downloaded: 3, uploaded: 2, conflicted: 1, conflictCopies: 4 } as const;
+
+	it("sums up a First sync in English and Russian", () => {
+		expect(noticeText(firstSyncDone, selectStrings("en"))).toBe(
+			"First sync done: 3 downloaded, 2 uploaded, 1 with conflicts to resolve, 4 conflict copies.",
+		);
+		expect(noticeText(firstSyncDone, selectStrings("ru"))).toBe(
+			"Первая синхронизация завершена: скачано 3, загружено 2, с конфликтами для разрешения 1, копий конфликта 4.",
+		);
+	});
 });

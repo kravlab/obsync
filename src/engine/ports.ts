@@ -4,6 +4,7 @@
  * supply fakes; the engine never imports Obsidian.
  */
 import type { DeletionAnswer, DeletionGuardSettings, DeletionPrompt } from "./deletion-guard";
+import type { FirstSyncAnswer, FirstSyncPreview } from "./first-sync";
 import type { LocalVault, VaultPath } from "./local-vault";
 import type { SyncNotice } from "./notices";
 import type { Provider, RemoteEntry } from "./provider";
@@ -25,6 +26,13 @@ export interface Connection {
 	readonly remoteRoot: string;
 	/** This device as registered in the Remote's Metadata folder. */
 	readonly device: DeviceIdentity;
+	/**
+	 * Whether this device completed a First sync on this Connection. Done
+	 * while the Device store holds no snapshot means the snapshot was lost,
+	 * and the next First sync registers the device again (spec, "First
+	 * sync"). Absent means not done.
+	 */
+	readonly firstSyncDone?: boolean;
 }
 
 /** How a device is known on a Remote. */
@@ -96,6 +104,14 @@ export interface DeviceStore {
 	/** Returns the Base recorded for `path`, or null if there is none. */
 	loadBase(path: VaultPath): Promise<ArrayBuffer | null>;
 	/**
+	 * Whether this device has a Sync snapshot: one a First sync completed
+	 * (`markSnapshotComplete`), however few entries it holds. One lost,
+	 * unreadable or of another format version is none.
+	 */
+	hasSnapshot(): Promise<boolean>;
+	/** Records that a First sync completed the snapshot, durable once the returned promise resolves. */
+	markSnapshotComplete(): Promise<void>;
+	/**
 	 * Returns the Remote feed state from the last completed sync, or null
 	 * when none was saved or it is unreadable.
 	 */
@@ -161,6 +177,12 @@ export interface UiPort {
 	 * when the prompt was closed without one.
 	 */
 	askDeletions(prompt: DeletionPrompt): Promise<DeletionAnswer>;
+	/**
+	 * Shows what a First sync would do and resolves when the user starts it,
+	 * with how to handle differing files, or null when the preview was
+	 * closed without starting.
+	 */
+	askFirstSync(preview: FirstSyncPreview): Promise<FirstSyncAnswer>;
 }
 
 /** Everything the engine is built from. */
@@ -176,4 +198,6 @@ export interface EnginePorts {
 	readonly schedule: () => SyncSchedule;
 	/** This device's current Deletion guard thresholds, read at the start of each sync. */
 	readonly deletionGuard: () => DeletionGuardSettings;
+	/** Returns a new random Device ID, for registering again after the Sync snapshot was lost. */
+	readonly newDeviceId: () => string;
 }

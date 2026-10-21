@@ -14,6 +14,13 @@ export function noticeText(notice: SyncNotice, strings: Strings): string {
 			);
 		case "renamedOnBoth":
 			return fill(strings.noticeRenamedOnBoth, { file: notice.path, local: notice.localPath });
+		case "firstSyncDone":
+			return fill(strings.noticeFirstSyncDone, {
+				downloaded: String(notice.downloaded),
+				uploaded: String(notice.uploaded),
+				conflicted: String(notice.conflicted),
+				copies: String(notice.conflictCopies),
+			});
 		case "renameBeatsDelete":
 			return fill(
 				notice.deletedOn === "thisDevice" ? strings.noticeRenamedDeletedHere : strings.noticeRenamedDeletedThere,

@@ -3,7 +3,7 @@ import { createSyncEngine } from "../../src/engine/engine";
 import { FakeRemote } from "../fakes/fake-remote";
 import { connectTestDevice, type TestDevice } from "../fakes/test-device";
 import { bytes } from "../support/bytes";
-import { mirror, remoteText, syncNow, vaultText } from "../support/sync";
+import { forgetNotices, mirror, remoteText, syncNow, vaultText } from "../support/sync";
 
 /**
  * A Remote with a laptop and a phone that both hold `note.md` as
@@ -20,6 +20,7 @@ async function syncedPair(
 	await laptop.vault.write("keep.md", bytes("kept"));
 	await syncNow(laptop);
 	await syncNow(phone);
+	forgetNotices(laptop, phone);
 	return { remote, laptop, phone };
 }
 
@@ -149,6 +150,7 @@ async function syncedFolder(
 	}
 	await syncNow(laptop);
 	await syncNow(phone);
+	forgetNotices(laptop, phone);
 	return { remote, laptop, phone };
 }
 
@@ -243,6 +245,7 @@ async function syncedFiles(count: number): Promise<{ remote: FakeRemote; laptop:
 	for (const path of paths) await laptop.vault.write(path, bytes(path));
 	await syncNow(laptop);
 	await syncNow(phone);
+	forgetNotices(laptop, phone);
 	return { remote, laptop, phone, paths };
 }
 

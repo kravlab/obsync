@@ -7,13 +7,14 @@
  * Remote's Metadata folder, and the local cleanup on disconnect.
  */
 import type { AccountAccess, Authorization, ConnectStep } from "./connect-step";
-import { providerSecretId, type DeviceIdentity, type DeviceStore, type SecretStore, type UiPort } from "./ports";
+import { providerSecretId, type Clock, type DeviceIdentity, type DeviceStore, type SecretStore, type UiPort } from "./ports";
 import { ProviderError, isFailure, isSyncable } from "./provider";
 import {
 	DEFAULT_REMOTE_SETTINGS,
 	DEVICES_FOLDER,
 	METADATA_FOLDER,
 	SETTINGS_PATH,
+	deviceNameInFirstSync,
 	devicePath,
 	encodeDeviceRecord,
 	encodeSettings,
@@ -28,6 +29,8 @@ export interface ConnectionPorts {
 	readonly ui: UiPort;
 	/** Returns a new random Device ID. */
 	readonly newDeviceId: () => string;
+	/** This device's clock, against which another device's "First sync in progress" mark is judged stale. */
+	readonly clock: Clock;
 }
 
 /** Connects and disconnects this device. */
@@ -103,9 +106,11 @@ export interface RemoteChooser {
 	/**
 	 * Uses the folder at `root` as this device's Remote: joins the Remote it
 	 * holds, or makes a plain folder a new Remote, then registers this
-	 * device and stores the Connection.
+	 * device and stores the Connection. While another device's First sync
+	 * there is in progress, it changes nothing and says so, unless
+	 * `evenDuringFirstSync` asks to connect anyway.
 	 */
-	useFolder(root: string, deviceName: string): Promise<ConnectOutcome>;
+	useFolder(root: string, deviceName: string, options?: { readonly evenDuringFirstSync?: boolean }): Promise<JoinOutcome>;
 	/**
 	 * Creates a new Remote named `name`, with the Metadata folder holding
 	 * the default shared settings and this device's record, then stores the
@@ -125,6 +130,14 @@ export interface RemoteChooser {
  *   written there and nothing stored.
  */
 export type ConnectOutcome = { readonly kind: "connected" } | { readonly kind: "unsupportedProvider" };
+
+/**
+ * What choosing an existing folder led to: a `ConnectOutcome`, or
+ * `firstSyncInProgress`: the device named `deviceName` is doing its First
+ * sync there (spec, "Concurrency and the no-loss guarantee"), so this
+ * device waits; nothing was written or stored.
+ */
+export type JoinOutcome = ConnectOutcome | { readonly kind: "firstSyncInProgress"; readonly deviceName: string };
 
 /**
  * What creating a Remote led to: a `ConnectOutcome` for the new folder, or
@@ -173,6 +186,26 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 		return { kind: "connected" };
 	}
 
+	/**
+	 * Connects to the existing folder `root` (`connect`), unless another
+	 * device's First sync is in progress there and `evenDuringFirstSync`
+	 * is not set.
+	 */
+	async function join(
+		access: AccountAccess,
+		authorization: Authorization,
+		root: string,
+		deviceName: string,
+		evenDuringFirstSync: boolean,
+	): Promise<JoinOutcome> {
+		const setup = access.openRoot(root);
+		if (!evenDuringFirstSync && isSyncable(setup)) {
+			const other = await deviceNameInFirstSync(setup, ports.clock.now());
+			if (other !== null) return { kind: "firstSyncInProgress", deviceName: other };
+		}
+		return connect(access, authorization, root, deviceName);
+	}
+
 	/** The Remote choice offered after `authorization` logged in. */
 	function remoteChooser(authorization: Authorization): RemoteChooser {
 		const access = connectStep.access(authorization.secret);
@@ -181,8 +214,8 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 				const roots = await access.listRoots(METADATA_FOLDER);
 				return roots.map(({ root, name, holdsMarker }) => ({ root, name, isRemote: holdsMarker }));
 			},
-			useFolder(root: string, deviceName: string): Promise<ConnectOutcome> {
-				return connect(access, authorization, root, deviceName);
+			useFolder(root, deviceName, options = {}): Promise<JoinOutcome> {
+				return join(access, authorization, root, deviceName, options.evenDuringFirstSync === true);
 			},
 			async createRemote(name: string, deviceName: string): Promise<CreateRemoteOutcome> {
 				if (name.includes("/")) return { kind: "invalidName" };

@@ -1,10 +1,12 @@
 import { Notice, Platform, setTooltip, type Plugin } from "obsidian";
 import type { DeletionAnswer, DeletionPrompt } from "../engine/deletion-guard";
+import type { FirstSyncAnswer, FirstSyncPreview } from "../engine/first-sync";
 import type { SyncNotice } from "../engine/notices";
 import type { UiPort } from "../engine/ports";
 import type { SyncStatus } from "../engine/status";
 import type { Strings } from "./i18n/strings";
 import { DeletionGuardModal } from "./deletion-guard-modal";
+import { FirstSyncModal } from "./first-sync-modal";
 import { noticeText } from "./notice-text";
 import { statusLabel } from "./status-label";
 
@@ -18,8 +20,8 @@ import { statusLabel } from "./status-label";
  */
 export class StatusIndicator implements UiPort {
 	private label: string;
-	/** Deletion guard prompts open now; the plugin's unload closes them, which answers null. */
-	private readonly prompts = new Set<DeletionGuardModal>();
+	/** Deletion guard prompts and First sync previews open now; the plugin's unload closes them, which answers null. */
+	private readonly prompts = new Set<DeletionGuardModal | FirstSyncModal>();
 	/** The status bar item (desktop) or ribbon icon (mobile). */
 	private readonly element: HTMLElement;
 
@@ -78,6 +80,20 @@ export class StatusIndicator implements UiPort {
 	 */
 	async askDeletions(prompt: DeletionPrompt): Promise<DeletionAnswer> {
 		const modal = new DeletionGuardModal(this.plugin.app, this.strings, prompt);
+		this.prompts.add(modal);
+		try {
+			return await modal.ask();
+		} finally {
+			this.prompts.delete(modal);
+		}
+	}
+
+	/**
+	 * Shows `preview` in the First sync modal and resolves with the answer;
+	 * null if it is closed, or the plugin unloads while it is open.
+	 */
+	async askFirstSync(preview: FirstSyncPreview): Promise<FirstSyncAnswer> {
+		const modal = new FirstSyncModal(this.plugin.app, this.strings, preview);
 		this.prompts.add(modal);
 		try {
 			return await modal.ask();

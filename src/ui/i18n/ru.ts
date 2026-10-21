@@ -9,6 +9,7 @@ export const ru: Strings = {
 	statusOffline: "Офлайн",
 	statusSyncFailed: "Ошибка синхронизации",
 	statusDeletionsOnHold: "Удаления ждут вашего решения",
+	statusFirstSyncWaiting: "Первая синхронизация ждёт вашего решения",
 
 	settingsDropbox: "Dropbox",
 	settingsNotConnected: "Это устройство не подключено.",
@@ -54,6 +55,21 @@ export const ru: Strings = {
 		"Спрашивать, прежде чем синхронизация удалит на одной стороне большую долю синхронизированных файлов, от 1 до 100 процентов.",
 	settingsGuardPercentInvalid: "Введите целое число от 1 до 100.",
 
+	firstSyncTitle: "Первая синхронизация",
+	firstSyncIntro:
+		"Это устройство ещё не синхронизировалось с Dropbox. Вот что сделает первая синхронизация; пока вы её не начнёте, ничего не изменится, и она ничего не удаляет.",
+	firstSyncToDownload: "Скачать из Dropbox: {count}",
+	firstSyncToUpload: "Загрузить в Dropbox: {count}",
+	firstSyncIdentical: "Уже одинаковые с обеих сторон: {count}",
+	firstSyncDiffering: "Различаются: {count}",
+	firstSyncMerged: "Будет объединён, каждое различие отмечено",
+	firstSyncConflictCopy: "Версия этого устройства сохранится как копия конфликта",
+	firstSyncKeepRemote: "Взять версию из Dropbox для каждого различающегося файла",
+	firstSyncKeepRemoteDescription: "Версии этого устройства сохранятся как копии конфликта, и ни в одной заметке не появятся метки конфликта.",
+	firstSyncShowList: "Показать список",
+	firstSyncHideList: "Скрыть список",
+	firstSyncStart: "Начать первую синхронизацию",
+	firstSyncCloseHint: "Если закрыть это окно, синхронизация приостановится, пока вы не запустите её сами.",
 	guardTitle: "Подтвердите удаления",
 	guardReasonThreshold: "Эта синхронизация удалила бы больше файлов, чем позволяет защита от удалений.",
 	guardReasonMissingVault: "В этом хранилище не осталось ни одного синхронизированного файла.",
@@ -107,4 +123,9 @@ export const ru: Strings = {
 	noticeRenamedOnBoth: "{local} переименован на другом устройстве иначе и теперь называется {file}.",
 	noticeRenamedDeletedHere: "{file} восстановлен: он был удалён на этом устройстве, но переименован на другом.",
 	noticeRenamedDeletedThere: "{file} сохранён: он был удалён на другом устройстве, но переименован на этом.",
+	noticeFirstSyncDone:
+		"Первая синхронизация завершена: скачано {downloaded}, загружено {uploaded}, с конфликтами для разрешения {conflicted}, копий конфликта {copies}.",
+	firstSyncInProgress:
+		"{device} сейчас выполняет первую синхронизацию с этой папкой. Подключитесь, когда она закончится, чтобы конфликтов было меньше.",
+	connectAnyway: "Всё равно подключить",
 };
