@@ -13,7 +13,22 @@ export function moveToConflict(editor: Editor, direction: BlockDirection, string
 		new Notice(strings.noConflicts);
 		return;
 	}
-	const position = { line: target.startLine, ch: 0 };
+	revealLine(editor, target.startLine);
+}
+
+/**
+ * Puts the cursor of `editor` on its first Conflict block's `<<<<<<<`
+ * line, as a note opened from the Sync window's Conflicts tab lands; a
+ * note without blocks, resolved meanwhile, is left as it opened.
+ */
+export function moveToFirstConflict(editor: Editor): void {
+	const [first] = conflictBlocks(editor.getValue());
+	if (first !== undefined) revealLine(editor, first.startLine);
+}
+
+/** Moves the cursor of `editor` to the start of `line` and scrolls it into view, centred. */
+function revealLine(editor: Editor, line: number): void {
+	const position = { line, ch: 0 };
 	editor.setCursor(position);
 	editor.scrollIntoView({ from: position, to: position }, true);
 }

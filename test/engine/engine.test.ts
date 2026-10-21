@@ -198,7 +198,7 @@ describe("sync engine lifecycle and triggers", () => {
 
 		laptop.provider.failNext("list", { category: "throttled", retryAfterMs: 7_000 });
 		await engine.sync();
-		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed" });
+		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "throttled" });
 
 		await advance(laptop, 6_900);
 		expect(remote.get("note.md")).toBeUndefined();

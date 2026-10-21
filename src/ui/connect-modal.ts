@@ -12,6 +12,7 @@ import { defaultDeviceName } from "./device-name";
 import { providerErrorMessage } from "./error-message";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
+import { fitForPhone } from "./phone-modal";
 
 /**
  * The connect window. Two screens, each driving the connection service:
@@ -42,16 +43,17 @@ export class ConnectModal extends Modal {
 	 * @param service connects this device
 	 * @param strings the UI strings in the user's language
 	 * @param vaultName the default name of a new Remote
-	 * @param onConnected called once the device is connected or reconnected
+	 * @param onConnected called once the device is connected, or reconnected to the account it was connected to
 	 */
 	constructor(
 		app: App,
 		private readonly service: ConnectionService,
 		private readonly strings: Strings,
 		private readonly vaultName: string,
-		private readonly onConnected: () => void,
+		private readonly onConnected: (how: "connected" | "reconnected") => void,
 	) {
 		super(app);
+		fitForPhone(this);
 	}
 
 	override onOpen(): void {
@@ -102,7 +104,7 @@ export class ConnectModal extends Modal {
 				this.showMessage(this.strings.otherAccount);
 				return;
 			case "reconnected":
-				this.done(this.strings.noticeReconnected);
+				this.done(this.strings.noticeReconnected, "reconnected");
 				return;
 			case "authorized":
 				return this.showRemotes(outcome.remotes);
@@ -173,7 +175,7 @@ export class ConnectModal extends Modal {
 		if (!result.ok) return this.showRemotes(remotes, result.message);
 		switch (result.value.kind) {
 			case "connected":
-				this.done(this.strings.noticeConnected);
+				this.done(this.strings.noticeConnected, "connected");
 				return;
 			case "nameTaken":
 				this.showMessage(this.strings.folderTaken);
@@ -193,10 +195,10 @@ export class ConnectModal extends Modal {
 		}
 	}
 
-	/** Tells the user the device is connected and closes the window. */
-	private done(notice: string): void {
+	/** Tells the user the device is connected, `how`, and closes the window. */
+	private done(notice: string, how: "connected" | "reconnected"): void {
 		new Notice(notice);
-		this.onConnected();
+		this.onConnected(how);
 		this.close();
 	}
 

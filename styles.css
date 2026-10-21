@@ -115,3 +115,78 @@
 	max-height: 40vh;
 	overflow-y: auto;
 }
+
+/* Every modal of the plugin on a phone: buttons big enough to tap. */
+.modal.obsync-phone button {
+	min-height: 44px;
+}
+
+/* The status dot, in the status bar item and the Sync window: its colour
+   tells the state at a glance (status-look.ts). */
+.obsync-dot {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	margin-inline-end: var(--size-4-1);
+	background-color: var(--text-faint);
+}
+
+.obsync-dot-ok {
+	background-color: var(--color-green);
+}
+
+.obsync-dot-busy {
+	background-color: var(--interactive-accent);
+}
+
+.obsync-dot-attention {
+	background-color: var(--color-orange);
+}
+
+.obsync-dot-error {
+	background-color: var(--color-red);
+}
+
+/* The Sync window: the status with its button, the tab row, then the tab. */
+.obsync-sync-header {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+}
+
+.obsync-sync-header button {
+	margin-inline-start: auto;
+}
+
+.obsync-sync-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+	margin: var(--size-4-3) 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding-bottom: var(--size-4-2);
+}
+
+.obsync-sync-tab-selected {
+	color: var(--text-on-accent);
+	background-color: var(--interactive-accent);
+}
+
+/* A file in the Conflicts tab: a whole-width button that opens it. */
+.obsync-sync-item {
+	display: block;
+	width: 100%;
+	height: auto;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	text-align: start;
+	margin-bottom: var(--size-4-1);
+}
+
+.obsync-sync-line {
+	padding: var(--size-4-1) 0;
+	font-size: var(--font-ui-small);
+	user-select: text;
+}

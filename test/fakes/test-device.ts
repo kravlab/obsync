@@ -8,9 +8,10 @@ import {
 	type ProviderConnector,
 	type RemoteFeed,
 	type SecretStore,
-	type UiPort,
 } from "../../src/engine/ports";
 import { DEFAULT_CONFIGURATION_CATEGORIES, type ConfigurationCategories } from "../../src/engine/configuration";
+import type { SyncConflicts } from "../../src/engine/conflicts";
+import type { ActivityEvent, ActivityUi } from "../../src/engine/activity-log";
 import { DEFAULT_DELETION_GUARD, type DeletionAnswer, type DeletionGuardSettings, type DeletionPrompt } from "../../src/engine/deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "../../src/engine/first-sync";
 import type { LocalVault, VaultPath } from "../../src/engine/local-vault";
@@ -180,8 +181,11 @@ export class InMemorySecretStore implements SecretStore {
 	}
 }
 
-/** A UI port that records what the engine showed, and answers its prompts as scripted. */
-export class RecordingUi implements UiPort {
+/**
+ * A UI port that records what the engine showed, and answers its prompts
+ * as scripted; it records the activity log's events too.
+ */
+export class RecordingUi implements ActivityUi {
 	/** Every status shown, oldest first. */
 	readonly statuses: SyncStatus[] = [];
 	/** Every notice shown, oldest first. */
@@ -198,8 +202,10 @@ export class RecordingUi implements UiPort {
 	readonly firstSyncAnswers: FirstSyncAnswer[] = [];
 	/** Every skipped-files list shown, oldest first. */
 	readonly skippedLists: (readonly SkippedFile[])[] = [];
-	/** Every list of kept configuration versions shown, oldest first. */
-	readonly configurationConflictLists: (readonly KeptConfiguration[])[] = [];
+	/** Every conflicts list shown, oldest first. */
+	readonly conflictLists: SyncConflicts[] = [];
+	/** Every activity log shown, oldest first. */
+	readonly activityLogs: (readonly ActivityEvent[])[] = [];
 
 	/** The status shown last, or undefined if none was. */
 	get lastStatus(): SyncStatus | undefined {
@@ -220,19 +226,29 @@ export class RecordingUi implements UiPort {
 		this.skippedLists.push(files);
 	}
 
-	/** The list of kept configuration versions shown last, or undefined if none was. */
-	get lastConfigurationConflicts(): readonly KeptConfiguration[] | undefined {
-		return this.configurationConflictLists[this.configurationConflictLists.length - 1];
+	/** The conflicts list shown last, or undefined if none was. */
+	get lastConflicts(): SyncConflicts | undefined {
+		return this.conflictLists[this.conflictLists.length - 1];
 	}
 
-	/** Records `kept` instead of showing it. */
-	showConfigurationConflicts(kept: readonly KeptConfiguration[]): void {
-		this.configurationConflictLists.push(kept);
+	/** Records `conflicts` instead of showing them. */
+	showConflicts(conflicts: SyncConflicts): void {
+		this.conflictLists.push(conflicts);
 	}
 
 	/** Records `notice` instead of showing it. */
 	showNotice(notice: SyncNotice): void {
 		this.notices.push(notice);
+	}
+
+	/** The activity log shown last, or undefined if none was. */
+	get lastActivity(): readonly ActivityEvent[] | undefined {
+		return this.activityLogs[this.activityLogs.length - 1];
+	}
+
+	/** Records `events` instead of showing them. */
+	showActivity(events: readonly ActivityEvent[]): void {
+		this.activityLogs.push(events);
 	}
 
 	/** Records `prompt` and gives the next scripted answer; an unscripted prompt is a test failure. */

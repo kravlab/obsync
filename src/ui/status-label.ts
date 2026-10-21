@@ -20,6 +20,8 @@ export function statusLabel(status: SyncStatus, strings: Strings): string {
 			return strings.statusOffline;
 		case "syncFailed":
 			return strings.statusSyncFailed;
+		case "reconnectNeeded":
+			return strings.statusReconnectNeeded;
 		case "deletionsOnHold":
 			return strings.statusDeletionsOnHold;
 		case "firstSyncWaiting":

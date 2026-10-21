@@ -4,6 +4,7 @@
  * supply fakes; the engine never imports Obsidian.
  */
 import type { ConfigurationCategories } from "./configuration";
+import type { SyncConflicts } from "./conflicts";
 import type { DeletionAnswer, DeletionGuardSettings, DeletionPrompt } from "./deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "./first-sync";
 import type { LocalVault, VaultPath } from "./local-vault";
@@ -35,6 +36,12 @@ export interface Connection {
 	 * sync"). Absent means not done.
 	 */
 	readonly firstSyncDone?: boolean;
+	/**
+	 * Whether sync is paused on this device until the user logs in again:
+	 * the provider refused the login (`auth`), or the secret was gone.
+	 * Cleared by a login to the same account. Absent means not paused.
+	 */
+	readonly reconnectNeeded?: boolean;
 }
 
 /** How a device is known on a Remote. */
@@ -210,10 +217,12 @@ export interface UiPort {
 	 */
 	showSkipped(files: readonly SkippedFile[]): void;
 	/**
-	 * Shows the local versions kept on configuration conflicts, newest
-	 * first, which the user can restore; it replaces the list shown before.
+	 * Shows what is left in conflict on this device: files with Conflict
+	 * blocks, Conflict copies, and the local versions kept on configuration
+	 * conflicts, which the user can restore; it replaces the list shown
+	 * before.
 	 */
-	showConfigurationConflicts(kept: readonly KeptConfiguration[]): void;
+	showConflicts(conflicts: SyncConflicts): void;
 	/**
 	 * Asks the user what to do about the deletions the Deletion guard
 	 * stopped, with the list to review, and resolves with the answer; null

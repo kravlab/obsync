@@ -20,14 +20,15 @@ describe("statusLabel", () => {
 	});
 
 	it.each([
-		["syncing", "Syncing…", "Синхронизация…"],
-		["synced", "Synced", "Синхронизировано"],
-		["offline", "Offline", "Офлайн"],
-		["syncFailed", "Sync failed", "Ошибка синхронизации"],
-		["deletionsOnHold", "Deletions waiting for you", "Удаления ждут вашего решения"],
-		["firstSyncWaiting", "First sync waiting for you", "Первая синхронизация ждёт вашего решения"],
-	] as const)("names the %s state in English and Russian", (state, english, russian) => {
-		expect(statusLabel({ state }, selectStrings("en"))).toBe(english);
-		expect(statusLabel({ state }, selectStrings("ru"))).toBe(russian);
+		[{ state: "syncing" }, "Syncing…", "Синхронизация…"],
+		[{ state: "synced" }, "Synced", "Синхронизировано"],
+		[{ state: "offline" }, "Offline", "Офлайн"],
+		[{ state: "syncFailed", cause: "permanent" }, "Sync failed", "Ошибка синхронизации"],
+		[{ state: "reconnectNeeded" }, "Reconnect needed", "Нужно подключиться заново"],
+		[{ state: "deletionsOnHold" }, "Paused (confirm deletions)", "Пауза (подтвердите удаления)"],
+		[{ state: "firstSyncWaiting" }, "First sync waiting for you", "Первая синхронизация ждёт вашего решения"],
+	] as const)("names the %o state in English and Russian", (status, english, russian) => {
+		expect(statusLabel(status, selectStrings("en"))).toBe(english);
+		expect(statusLabel(status, selectStrings("ru"))).toBe(russian);
 	});
 });

@@ -6,7 +6,7 @@ import type { Strings } from "./i18n/strings";
 /**
  * "Restore local configuration": lists the local configuration versions
  * kept on configuration conflicts, newest first, and restores the one the
- * user picks, until the Sync window's Conflicts tab lists them too.
+ * user picks; the Sync window's Conflicts tab lists them too.
  */
 export class RestoreConfigurationModal extends SuggestModal<KeptConfiguration> {
 	/**

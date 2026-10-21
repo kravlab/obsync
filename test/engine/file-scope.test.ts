@@ -365,7 +365,7 @@ describe("refusals while bringing an edit to the Remote", () => {
 			Promise.reject(new ProviderError({ category: "nameNotRepresentable" }, "copy name refused")),
 		);
 		await syncNow(laptop);
-		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed" });
+		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "nameNotRepresentable" });
 		expect(laptop.ui.lastSkipped?.map(({ path }) => path) ?? []).not.toContain("photo.png");
 	});
 });

@@ -348,6 +348,18 @@ describe("disconnecting", () => {
 		expect(laptop.ui.lastSkipped).toEqual([]);
 	});
 
+	it("clears the conflicts list shown for the Remote it leaves", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
+		laptop.ui.showConflicts({ conflicted: ["note.md"], copies: [], configuration: [] });
+
+		await createConnectionService(laptop.ports).disconnect();
+
+		expect(laptop.ui.lastConflicts).toEqual({ conflicted: [], copies: [], configuration: [] });
+	});
+
 	it("clears local state even when the revoke cannot reach the service, saying so", async () => {
 		const service = new FakeService();
 		const account = service.addAccount("account-1");

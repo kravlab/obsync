@@ -2,6 +2,7 @@ import { Modal, Notice, Setting, TextAreaComponent, type App } from "obsidian";
 import type { ConflictBlock } from "../engine/conflict-blocks";
 import { shownSides } from "./conflict-sides";
 import type { Strings } from "./i18n/strings";
+import { fitForPhone } from "./phone-modal";
 
 /**
  * The Edit… dialog of a Conflict block: both sides, labelled, and one text
@@ -26,6 +27,7 @@ export class ConflictEditModal extends Modal {
 		private readonly onSave: (text: string) => boolean,
 	) {
 		super(app);
+		fitForPhone(this);
 	}
 
 	override onOpen(): void {

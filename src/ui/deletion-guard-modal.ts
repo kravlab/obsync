@@ -2,6 +2,7 @@ import { Modal, Setting, type App } from "obsidian";
 import type { DeletionAnswer, DeletionPrompt } from "../engine/deletion-guard";
 import { deletionPromptText } from "./deletion-prompt-text";
 import type { Strings } from "./i18n/strings";
+import { fitForPhone } from "./phone-modal";
 
 /**
  * The Deletion guard prompt (spec, "Status, notices, guidance", modal
@@ -24,6 +25,7 @@ export class DeletionGuardModal extends Modal {
 		private readonly prompt: DeletionPrompt,
 	) {
 		super(app);
+		fitForPhone(this);
 	}
 
 	/** Opens the prompt and resolves with the user's answer, null if it is closed without one. */

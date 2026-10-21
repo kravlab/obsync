@@ -377,7 +377,7 @@ describe("sync status and runs", () => {
 
 		await syncNow(laptop);
 
-		expect(laptop.ui.statuses).toEqual([{ state: "syncing" }, { state: "syncFailed" }]);
+		expect(laptop.ui.statuses).toEqual([{ state: "syncing" }, { state: "syncFailed", cause: "unsupportedProvider" }]);
 		expect(mirror(remote)).toEqual([]);
 	});
 
@@ -391,20 +391,42 @@ describe("sync status and runs", () => {
 
 		laptop.provider.failNext("list", { category: "permanent" });
 		await syncNow(laptop);
-		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed" });
+		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "permanent" });
 
 		await syncNow(laptop);
 		expect(laptop.ui.lastStatus).toEqual({ state: "synced" });
 	});
 
-	it("shows Sync failed when the login secret is missing", async () => {
+	it("shows Reconnect needed when the login secret is missing", async () => {
 		const remote = new FakeRemote();
 		const laptop = connectTestDevice(remote, "Laptop");
 		laptop.secretStore.deleteSecret("obsync-fake-service");
 
 		await syncNow(laptop);
 
-		expect(laptop.ui.statuses).toEqual([{ state: "syncing" }, { state: "syncFailed" }]);
+		expect(laptop.ui.statuses).toEqual([{ state: "syncing" }, { state: "reconnectNeeded" }]);
+	});
+
+	it("shows Sync failed as a bug, and throws, on an error that is not a provider failure", async () => {
+		const remote = new FakeRemote();
+		const laptop = connectTestDevice(remote, "Laptop");
+		laptop.provider.beforeNext("list", () => Promise.reject(new Error("broken")));
+
+		await expect(syncNow(laptop)).rejects.toThrow("broken");
+
+		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "bug" });
+	});
+
+	it("shows Sync failed as a bug, and throws, when the login secret cannot be read", async () => {
+		const remote = new FakeRemote();
+		const laptop = connectTestDevice(remote, "Laptop");
+		laptop.secretStore.getSecret = () => {
+			throw new Error("secret storage locked");
+		};
+
+		await expect(syncNow(laptop)).rejects.toThrow("secret storage locked");
+
+		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "bug" });
 	});
 
 	it("joins a sync already running instead of starting a second one", async () => {

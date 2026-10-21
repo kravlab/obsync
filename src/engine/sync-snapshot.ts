@@ -16,6 +16,10 @@ import type { VaultPath } from "./local-vault";
  *   content, so an untouched file need not be hashed again;
  * - a folder: only that it exists on both sides.
  *
+ * A file whose synced content holds Conflict blocks is marked so; the mark
+ * moves with the entry on a rename and goes when the file is recorded
+ * again without them.
+ *
  * Either may carry the Remote entry's stable id, when the provider gives
  * one, which finds the entry again after a rename on the Remote.
  *
@@ -41,6 +45,11 @@ export type SnapshotEntry =
 			 * itself, so the next sync hashes it again.
 			 */
 			readonly stat?: VaultFileStat;
+			/**
+			 * Set when the content both sides hold is text with Conflict blocks
+			 * in it, for the conflicts list (conflicts.ts); absent means none.
+			 */
+			readonly conflicted?: true;
 	  }
 	| {
 			readonly kind: "folder";

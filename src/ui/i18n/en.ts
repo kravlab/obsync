@@ -17,8 +17,10 @@ export const en = {
 	statusOffline: "Offline",
 	/** Sync status after a sync stopped on a failure. */
 	statusSyncFailed: "Sync failed",
+	/** Sync status while sync is paused on this device until the user logs in again. */
+	statusReconnectNeeded: "Reconnect needed",
 	/** Sync status after the Deletion guard prompt was closed without a choice; sync waits for "Sync now". */
-	statusDeletionsOnHold: "Deletions waiting for you",
+	statusDeletionsOnHold: "Paused (confirm deletions)",
 	/** Sync status after the First sync preview was closed without starting; sync waits for "Sync now". */
 	statusFirstSyncWaiting: "First sync waiting for you",
 
@@ -224,6 +226,9 @@ export const en = {
 		"First sync done: {downloaded} downloaded, {uploaded} uploaded, {conflicted} with conflicts to resolve, {copies} conflict copies.",
 	/** Configuration files arrived from another device; Obsidian applies them on restart. */
 	noticeConfigurationChanged: "Settings changed on another device. Restart Obsidian to apply them.",
+	/** Dropbox refused this device's login, so sync is paused on it until the user reconnects. */
+	noticeReconnectNeeded:
+		"Dropbox no longer accepts this device's login, so sync is paused here. Open the sync window and reconnect.",
 	/** Connect window: another device is doing its First sync with the chosen folder; `{device}` is its name. */
 	firstSyncInProgress:
 		"{device} is doing its first sync with this folder. Connect once it has finished, so fewer files conflict.",
@@ -232,8 +237,10 @@ export const en = {
 
 	/** After the sync status: how many files the last sync left out; `{count}` is a number. */
 	skippedCount: "{count} skipped",
-	/** The sync status with the skipped count after it; `{status}` and `{skipped}` are the two texts. */
-	statusWithSkipped: "{status} · {skipped}",
+	/** After the sync status: how many conflicts are left; `{count}` is a number, so the wording does not depend on it. */
+	conflictsCount: "{count} in conflict",
+	/** The sync status with one count after it; `{status}` and `{count}` are the two texts. */
+	statusWithCount: "{status} · {count}",
 	/** One skipped file in the status notice, by why it does not sync; `{file}` is a vault path. */
 	skippedIgnored: "{file} matches the ignore list",
 	skippedNameNotRepresentable: "{file} has a name the cloud cannot store",
@@ -243,8 +250,6 @@ export const en = {
 	skippedMore: "And {count} more",
 	/** The command that restores a local configuration version kept on a configuration conflict. */
 	restoreConfiguration: "Restore local configuration",
-	/** The status notice's line on kept configuration versions; `{count}` is how many, `{command}` the restore command's name. */
-	keptConfigurationLine: "{count} local configuration versions kept; restore them with “{command}”",
 	/** The restore list's entry for a kept version; `{file}` is a vault path, `{time}` the local date and time. */
 	keptConfigurationItem: "{file}, kept {time}",
 	/** The restore list's placeholder. */
@@ -264,6 +269,74 @@ export const en = {
 	settingsCategoryPlugins: "Sync plugins",
 	settingsCategoryPluginsDescription:
 		"Other plugins with their settings and the list of enabled plugins. Warning: other plugins' settings may hold secrets such as API keys or passwords, and they are copied to Dropbox.",
+
+	/** Title of the Sync window. */
+	syncWindowTitle: "Sync",
+	/** The command opening the Sync window. */
+	openSyncWindow: "Open sync window",
+	/** The commands opening the Sync window at one of its tabs. */
+	showConflicts: "Show conflicts",
+	showSkipped: "Show skipped files",
+	showActivity: "Show activity",
+	/** The Sync window's button while sync is paused for a new login. */
+	reconnect: "Reconnect",
+	/** The command logging in again while sync is paused for it. */
+	reconnectCommand: "Reconnect to Dropbox",
+	/** The Sync window's tabs; `{count}` is a number. */
+	tabConflicts: "Conflicts ({count})",
+	tabSkipped: "Skipped ({count})",
+	tabActivity: "Activity",
+	/** Conflicts tab: the files holding Conflict blocks. */
+	conflictedFiles: "Files with conflicts",
+	/** Conflicts tab: the Conflict copies. */
+	conflictCopies: "Conflict copies",
+	/** Conflicts tab: this device's configuration versions kept on configuration conflicts. */
+	keptConfigurations: "Configuration kept from this device",
+	/** Conflicts tab: the button putting a kept configuration version back. */
+	restoreLocal: "Restore local",
+	/** Conflicts tab when nothing is in conflict. */
+	nothingInConflict: "Nothing is in conflict.",
+	/** Skipped tab when no file is skipped. */
+	nothingSkipped: "No files are skipped.",
+	/** Activity tab when nothing was recorded. */
+	nothingRecorded: "No activity is recorded yet.",
+	/** Activity tab: the button copying the bug report. */
+	copyBugReport: "Copy for a bug report",
+	/** Activity tab: what the bug report holds. */
+	copyBugReportHint: "The report lists the events below, with the names of files in this vault.",
+	/** Notice after the bug report was copied. */
+	bugReportCopied: "The bug report is copied.",
+	/** Notice when the clipboard refused the bug report. */
+	bugReportNotCopied: "The bug report could not be copied.",
+	/** Notice when a listed file is gone; `{file}` is a vault path. */
+	fileGone: "{file} is no longer in this vault.",
+
+	/** One event of the activity log; `{time}` is the local date and time, `{text}` what happened. */
+	activityLine: "{time} {text}",
+	/** A failed sync in the activity log; `{cause}` is one of the failure texts below, a sentence without its full stop. */
+	activitySyncFailed: "Sync failed. {cause}.",
+	/** Why a sync failed, by cause. */
+	failureAuth: "Dropbox refused the login",
+	failureThrottled: "Dropbox asked to slow down",
+	failureTransient: "Dropbox could not be reached",
+	failureNotFound: "A file was not found in Dropbox",
+	failurePreconditionFailed: "A file changed in Dropbox during the sync",
+	failureCursorLost: "Dropbox reset its list of changes",
+	failureQuotaExceeded: "Dropbox is full",
+	failureTooLarge: "A file is too large for Dropbox",
+	failureNameNotRepresentable: "Dropbox cannot store a file name",
+	failurePermanent: "Dropbox refused a request",
+	failureUnsupportedProvider: "This provider cannot be synced",
+	failureUnreadableSettings: "The shared settings in Dropbox are missing or unreadable",
+	failureBug: "The plugin hit an error",
+	/** The bug report's lines, always taken from this English table; `{version}`, `{platform}`, `{status}` are filled in. */
+	bugReportTitle: "Obsync bug report",
+	bugReportPluginVersion: "Plugin version: {version}",
+	bugReportObsidianVersion: "Obsidian version: {version}",
+	bugReportPlatform: "Platform: {platform}",
+	bugReportStatus: "Status: {status}",
+	bugReportActivity: "Activity, newest first:",
+	bugReportNoActivity: "No activity recorded.",
 } as const;
 
 /** The shape every language's string table must have: the keys of `en`. */

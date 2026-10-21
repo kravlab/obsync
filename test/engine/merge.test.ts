@@ -20,7 +20,7 @@ describe("shared Remote settings at the start of a sync", () => {
 
 		await syncNow(laptop);
 
-		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed" });
+		expect(laptop.ui.lastStatus).toEqual({ state: "syncFailed", cause: "unreadableSettings" });
 		expect(remote.get("note.md")).toBeUndefined();
 		expect(await vaultText(laptop, "note.md")).toBe("from laptop");
 	});

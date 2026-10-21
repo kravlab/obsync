@@ -1,4 +1,14 @@
 import type { Connection } from "./ports";
+import type { ProviderErrorCategory } from "./provider";
+
+/**
+ * Why a sync failed: the provider failure's category, or
+ * - `unsupportedProvider`: the provider cannot be synced (`isSyncable`);
+ * - `unreadableSettings`: the Remote's shared settings are missing or
+ *   cannot be read, so files could be classified unlike on other devices;
+ * - `bug`: an error that is not a provider failure, a defect in the plugin.
+ */
+export type SyncFailureCause = ProviderErrorCategory | "unsupportedProvider" | "unreadableSettings" | "bug";
 
 /**
  * What the engine reports about sync on this device. It describes facts;
@@ -13,9 +23,13 @@ import type { Connection } from "./ports";
  *   copies it left do not stop this state.
  * - `offline`: the last sync could not reach the Remote (`transient`); it
  *   retries with growing backoff and on the next trigger.
- * - `syncFailed`: the last sync stopped on a failure that is not
- *   `transient`; the next one starts over. It stands in for Reconnect
- *   needed until that exists.
+ * - `syncFailed`: the last sync stopped on a failure that is neither
+ *   `transient` nor `auth`; the next one starts over. `cause` tells why,
+ *   for the activity log and bug reports.
+ * - `reconnectNeeded`: the provider refused this device's login, or its
+ *   secret is gone, so sync is paused on this device until the user logs
+ *   in again (spec, "Status, notices, guidance"). The pause is kept with
+ *   the Connection, so it outlives a restart.
  * - `deletionsOnHold`: the Deletion guard stopped a sync and its prompt
  *   was closed without an answer; nothing syncs until the user asks for a
  *   sync, which asks again.
@@ -29,11 +43,13 @@ export type SyncStatus =
 	| { readonly state: "syncing" }
 	| { readonly state: "synced" }
 	| { readonly state: "offline" }
-	| { readonly state: "syncFailed" }
+	| { readonly state: "syncFailed"; readonly cause: SyncFailureCause }
+	| { readonly state: "reconnectNeeded" }
 	| { readonly state: "deletionsOnHold" }
 	| { readonly state: "firstSyncWaiting" };
 
-/** The status a device shows for its Connection, or for having none. */
+/** The status a device shows for its Connection, or for having none, before it syncs. */
 export function statusOf(connection: Connection | null): SyncStatus {
-	return connection === null ? { state: "notConnected" } : { state: "connected" };
+	if (connection === null) return { state: "notConnected" };
+	return connection.reconnectNeeded === true ? { state: "reconnectNeeded" } : { state: "connected" };
 }

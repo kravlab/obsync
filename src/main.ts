@@ -1,7 +1,9 @@
-import { Notice, Platform, Plugin, getLanguage, requestUrl } from "obsidian";
+import { MarkdownView, Notice, Platform, Plugin, apiVersion, getLanguage, requestUrl } from "obsidian";
+import { withActivityLog } from "./engine/activity-log";
 import { createConnectionService } from "./engine/connection";
 import { createSyncEngine } from "./engine/engine";
 import type { ConfigurationConflictStore, Scheduler } from "./engine/ports";
+import { ObsidianActivityStore } from "./obsidian/activity-store";
 import { ObsidianConfigurationCategoriesStore } from "./obsidian/configuration-categories-store";
 import { ObsidianConfigurationConflicts } from "./obsidian/configuration-conflict-store";
 import { ObsidianDeletionGuardStore } from "./obsidian/deletion-guard-store";
@@ -14,15 +16,19 @@ import { DROPBOX_APP_KEY } from "./providers/dropbox/app-key";
 import { createDropboxConnectStep } from "./providers/dropbox/connect-step";
 import type { DropboxOptions } from "./providers/dropbox/options";
 import { createDropboxConnector } from "./providers/dropbox/provider";
-import { moveToConflict } from "./ui/conflict-commands";
+import { bugReport } from "./ui/bug-report";
+import { moveToConflict, moveToFirstConflict } from "./ui/conflict-commands";
 import { conflictDecorations } from "./ui/conflict-decorations";
 import { ConflictEditModal } from "./ui/conflict-edit-modal";
 import { conflictReadingView } from "./ui/conflict-reading-view";
 import { ConnectModal } from "./ui/connect-modal";
+import { defaultDeviceName } from "./ui/device-name";
+import { fill } from "./ui/i18n/fill";
 import { selectStrings, type Strings } from "./ui/i18n/strings";
 import { RestoreConfigurationModal } from "./ui/restore-configuration-modal";
 import { ObsyncSettingTab } from "./ui/settings-tab";
 import { StatusIndicator } from "./ui/status-indicator";
+import { SyncWindow, type ShownSyncSource, type SyncTab } from "./ui/sync-window";
 
 /**
  * The plugin shell: Obsidian's entry point. It owns only wiring and UI; all
@@ -32,8 +38,10 @@ export default class ObsyncPlugin extends Plugin {
 	/**
 	 * Called by Obsidian when the plugin is enabled or the app starts. Builds
 	 * the connection service and the sync engine over Dropbox and this
-	 * device's vault and stores, adds the status entry point, the "Sync now",
-	 * "Full reconcile" and "Restore local configuration" commands and the
+	 * device's vault and stores, with the activity log in front of the UI,
+	 * adds the status entry point and the Sync window it opens, the
+	 * commands (open the window or one of its tabs, Reconnect while paused
+	 * for it, Sync now, Full reconcile, Restore local configuration) and the
 	 * settings tab, then shows the state of this device's Connection.
 	 * Strings follow Obsidian's language as read at load.
 	 */
@@ -75,7 +83,9 @@ export default class ObsyncPlugin extends Plugin {
 			`${pluginDir}/configuration-conflicts`,
 			() => crypto.randomUUID(),
 		);
-		const ui = new StatusIndicator(this, strings);
+		const indicator = new StatusIndicator(this, strings, () => openSyncWindow("conflicts"));
+		// Every notice and status goes through the activity log on its way to the indicator.
+		const ui = withActivityLog(indicator, new ObsidianActivityStore(this.app), dropbox.clock);
 		const connection = createConnectionService({
 			connectStep: createDropboxConnectStep(dropbox),
 			deviceStore,
@@ -112,6 +122,59 @@ export default class ObsyncPlugin extends Plugin {
 		const fullReconcile = (): void => {
 			engine.reconcile().catch((error: unknown) => console.error("obsync: reconcile failed", error));
 		};
+		const openConnect = (): void => {
+			new ConnectModal(this.app, connection, strings, this.app.vault.getName(), (how) => {
+				void settingTab.reload();
+				// A login again ends a pause for Reconnect needed; syncing goes on at once.
+				if (how === "reconnected") syncNow();
+			}).open();
+		};
+		// One Sync window at a time, closed with the plugin so its buttons never reach an unloaded engine.
+		let syncWindow: SyncWindow | undefined;
+		this.register(() => syncWindow?.close());
+		const openSyncWindow = (tab: SyncTab): void => {
+			syncWindow?.close();
+			syncWindow = new SyncWindow(
+				this.app,
+				strings,
+				indicator,
+				{
+					syncNow,
+					connect: openConnect,
+					openFile: (path, atFirstConflict) => {
+						this.openVaultFile(path, atFirstConflict, strings).catch((error: unknown) =>
+							console.error("obsync: opening a file failed", error),
+						);
+					},
+					restore: (id) => {
+						engine.restoreConfiguration(id).catch((error: unknown) => console.error("obsync: restore failed", error));
+					},
+					copyBugReport: () => {
+						this.copyBugReport(indicator, strings).catch((error: unknown) => {
+							// The clipboard can refuse, e.g. without focus or permission: the user is told, not left waiting.
+							console.error("obsync: copying the bug report failed", error);
+							new Notice(strings.bugReportNotCopied);
+						});
+					},
+				},
+				tab,
+			);
+			syncWindow.open();
+		};
+		this.addCommand({ id: "open-sync-window", name: strings.openSyncWindow, callback: () => openSyncWindow("conflicts") });
+		this.addCommand({ id: "show-conflicts", name: strings.showConflicts, callback: () => openSyncWindow("conflicts") });
+		this.addCommand({ id: "show-skipped", name: strings.showSkipped, callback: () => openSyncWindow("skipped") });
+		this.addCommand({ id: "show-activity", name: strings.showActivity, callback: () => openSyncWindow("activity") });
+		this.addCommand({
+			id: "reconnect",
+			name: strings.reconnectCommand,
+			// Offered only while sync is paused for a new login.
+			checkCallback: (checking) => {
+				if (indicator.shown().status.state !== "reconnectNeeded") return false;
+				if (!checking) openConnect();
+				return true;
+			},
+		});
 		this.addCommand({ id: "sync-now", name: strings.syncNow, callback: syncNow });
 		this.addCommand({ id: "full-reconcile", name: strings.fullReconcile, callback: fullReconcile });
 		this.addCommand({
@@ -144,11 +207,7 @@ export default class ObsyncPlugin extends Plugin {
 			this,
 			connection,
 			strings,
-			() => {
-				new ConnectModal(this.app, connection, strings, this.app.vault.getName(), () => {
-					void settingTab.reload();
-				}).open();
-			},
+			openConnect,
 			syncNow,
 			requestLimit,
 			schedule,
@@ -205,6 +264,38 @@ export default class ObsyncPlugin extends Plugin {
 		new RestoreConfigurationModal(this.app, strings, kept, (version) => {
 			restore(version.id).catch((error: unknown) => console.error("obsync: restore failed", error));
 		}).open();
+	}
+
+	/**
+	 * Opens the vault file at `path` in the current tab, with the cursor on
+	 * its first Conflict block when `atFirstConflict` and it opens in an
+	 * editor. A file gone since the list was shown gets a notice instead.
+	 */
+	private async openVaultFile(path: string, atFirstConflict: boolean, strings: Strings): Promise<void> {
+		const file = this.app.vault.getFileByPath(path);
+		if (file === null) {
+			new Notice(fill(strings.fileGone, { file: path }));
+			return;
+		}
+		const leaf = this.app.workspace.getLeaf(false);
+		await leaf.openFile(file);
+		if (atFirstConflict && leaf.view instanceof MarkdownView) moveToFirstConflict(leaf.view.editor);
+	}
+
+	/**
+	 * Copies the bug report of what `source` shows to the clipboard, with
+	 * this plugin's and Obsidian's versions and the platform, in English,
+	 * and says so in a notice. Rejects when the clipboard refuses the write.
+	 */
+	private async copyBugReport(source: ShownSyncSource, strings: Strings): Promise<void> {
+		const report = bugReport({
+			pluginVersion: this.manifest.version,
+			obsidianVersion: apiVersion,
+			platform: defaultDeviceName(selectStrings("en")),
+			...source.shown(),
+		});
+		await navigator.clipboard.writeText(report);
+		new Notice(strings.bugReportCopied);
 	}
 
 	/**

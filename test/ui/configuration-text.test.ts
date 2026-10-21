@@ -1,26 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { selectStrings } from "../../src/ui/i18n/strings";
-import { keptConfigurationItem, keptConfigurationLine } from "../../src/ui/configuration-text";
-
-const kept = [
-	{ id: "2", path: ".obsidian-mobile/app.json", keptAt: 2_000 },
-	{ id: "1", path: ".obsidian-mobile/hotkeys.json", keptAt: 1_000 },
-];
-
-describe("keptConfigurationLine", () => {
-	it("tells how many configuration versions are kept and the command that restores them, in English and Russian", () => {
-		expect(keptConfigurationLine(kept, selectStrings("en"))).toBe(
-			"2 local configuration versions kept; restore them with “Restore local configuration”",
-		);
-		expect(keptConfigurationLine(kept, selectStrings("ru"))).toBe(
-			"Сохранено локальных версий конфигурации: 2; восстановить их можно командой «Восстановить локальную конфигурацию»",
-		);
-	});
-
-	it("tells nothing when no version is kept", () => {
-		expect(keptConfigurationLine([], selectStrings("en"))).toBeNull();
-	});
-});
+import { keptConfigurationItem } from "../../src/ui/configuration-text";
 
 describe("keptConfigurationItem", () => {
 	it("names a kept version by its file and when it was kept, in local time, in English and Russian", () => {

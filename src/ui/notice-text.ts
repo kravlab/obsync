@@ -23,6 +23,8 @@ export function noticeText(notice: SyncNotice, strings: Strings): string {
 			});
 		case "configurationChanged":
 			return strings.noticeConfigurationChanged;
+		case "reconnectNeeded":
+			return strings.noticeReconnectNeeded;
 		case "renameBeatsDelete":
 			return fill(
 				notice.deletedOn === "thisDevice" ? strings.noticeRenamedDeletedHere : strings.noticeRenamedDeletedThere,

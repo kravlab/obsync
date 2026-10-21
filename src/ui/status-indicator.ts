@@ -1,100 +1,112 @@
-import { Notice, Platform, setTooltip, type Plugin } from "obsidian";
+import { Notice, Platform, setIcon, setTooltip, type Plugin } from "obsidian";
+import type { ActivityEvent, ActivityUi } from "../engine/activity-log";
+import { NO_CONFLICTS, type SyncConflicts } from "../engine/conflicts";
 import type { DeletionAnswer, DeletionPrompt } from "../engine/deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "../engine/first-sync";
 import type { SyncNotice } from "../engine/notices";
-import type { KeptConfiguration, UiPort } from "../engine/ports";
 import type { SyncStatus } from "../engine/status";
 import type { SkippedFile } from "../engine/sync-listing";
-import { keptConfigurationLine } from "./configuration-text";
-import type { Strings } from "./i18n/strings";
 import { DeletionGuardModal } from "./deletion-guard-modal";
 import { FirstSyncModal } from "./first-sync-modal";
+import type { Strings } from "./i18n/strings";
 import { noticeText } from "./notice-text";
-import { skippedLines, withSkippedCount } from "./skipped-text";
-import { statusLabel } from "./status-label";
-
-/** How many skipped files the click notice lists before it says how many more there are. */
-const NOTICE_SKIPPED_LINES = 20;
+import { statusIcon, statusTone } from "./status-look";
+import { statusText } from "./status-text";
+import type { ShownSync, ShownSyncSource } from "./sync-window";
 
 /**
- * Shows the sync status where the platform has room for it: a status bar
- * item on desktop, a ribbon icon on mobile, which has no status bar, with
- * the count of skipped files after it. A click on either shows the status
- * in a notice, with the first skipped files and their reasons and how many
- * local configuration versions are kept to restore, until the Sync window
- * and its Skipped and Conflicts tabs exist. It is the shell's UI port: the
- * engine reports each status, skipped-files list and kept-versions list
- * here, and each sync notice,
- * shown as an Obsidian notice, and asks the Deletion guard's question
+ * The shell's UI port and the status entry point (spec, "Status, notices,
+ * guidance"). It keeps what the engine reported last (status, conflicts,
+ * skipped files, activity log) for the Sync window, which it tells of
+ * every change, and shows the status where the platform has room for it:
+ *
+ * - desktop: a status bar item with a dot coloured by the state, then the
+ *   status with its conflict and skipped counts;
+ * - mobile, which has no status bar: a ribbon icon whose icon follows the
+ *   state, with the same text as its tooltip.
+ *
+ * A click on either opens the Sync window. Each sync notice is shown as an
+ * Obsidian notice, and the Deletion guard and First sync prompts are asked
  * through it.
  */
-export class StatusIndicator implements UiPort {
-	/** The status text, without the skipped count. */
-	private label: string;
-	/** The files the last sync skipped, as the engine reported them. */
-	private skipped: readonly SkippedFile[] = [];
-	/** The local configuration versions kept to restore, as the engine reported them last. */
-	private kept: readonly KeptConfiguration[] = [];
+export class StatusIndicator implements ActivityUi, ShownSyncSource {
+	/** What the engine reported last. */
+	private facts: ShownSync = { status: { state: "notConnected" }, conflicts: NO_CONFLICTS, skipped: [], activity: [] };
+	/** Called after every change of `facts`, while subscribed. */
+	private readonly listeners = new Set<() => void>();
 	/** Deletion guard prompts and First sync previews open now; the plugin's unload closes them, which answers null. */
 	private readonly prompts = new Set<DeletionGuardModal | FirstSyncModal>();
 	/** The status bar item (desktop) or ribbon icon (mobile). */
 	private readonly element: HTMLElement;
+	/** The status bar item's dot; absent on mobile. */
+	private readonly dot: HTMLElement | undefined;
+	/** The status bar item's text; absent on mobile. */
+	private readonly label: HTMLElement | undefined;
 
 	/**
 	 * Adds the entry point to `plugin`, which removes it on unload.
 	 *
 	 * @param plugin the plugin owning the entry point and its events
 	 * @param strings the UI strings in the user's language
+	 * @param openWindow opens the Sync window, on a click of the entry point
 	 */
 	constructor(
 		private readonly plugin: Plugin,
 		private readonly strings: Strings,
+		openWindow: () => void,
 	) {
-		this.label = statusLabel({ state: "notConnected" }, strings);
 		// A prompt left open would let a sync of the unloaded plugin delete files later.
 		plugin.register(() => {
 			for (const prompt of this.prompts) prompt.close();
 		});
-		const showState = (): void => {
-			const kept = keptConfigurationLine(this.kept, this.strings);
-			const lines = [this.text(), ...skippedLines(this.skipped, this.strings, NOTICE_SKIPPED_LINES)];
-			new Notice([...lines, ...(kept === null ? [] : [kept])].join("\n"));
-		};
-
 		if (Platform.isMobile) {
-			this.element = plugin.addRibbonIcon("cloud-off", this.text(), showState);
+			this.element = plugin.addRibbonIcon(statusIcon(this.facts.status), this.text(), openWindow);
 		} else {
 			// A status bar item is a plain div, so it is made a focusable
 			// button that Enter and Space activate, like a click.
 			this.element = plugin.addStatusBarItem();
-			this.element.addClass("mod-clickable");
+			this.element.addClass("mod-clickable", "obsync-status");
 			this.element.setAttribute("role", "button");
 			this.element.setAttribute("tabindex", "0");
-			plugin.registerDomEvent(this.element, "click", showState);
+			this.dot = this.element.createSpan();
+			this.label = this.element.createSpan();
+			plugin.registerDomEvent(this.element, "click", openWindow);
 			plugin.registerDomEvent(this.element, "keydown", (event) => {
 				if (event.key === "Enter" || event.key === " ") {
 					event.preventDefault();
-					showState();
+					openWindow();
 				}
 			});
 		}
 		this.render();
 	}
 
+	shown(): ShownSync {
+		return this.facts;
+	}
+
+	onChange(listener: () => void): () => void {
+		this.listeners.add(listener);
+		return () => this.listeners.delete(listener);
+	}
+
 	showStatus(status: SyncStatus): void {
-		this.label = statusLabel(status, this.strings);
-		this.render();
+		this.update({ status });
 	}
 
-	/** Shows the count of `files` after the status, and the files themselves in the click notice. */
+	/** Shows the count of `files` after the status, and the files in the Sync window's Skipped tab. */
 	showSkipped(files: readonly SkippedFile[]): void {
-		this.skipped = files;
-		this.render();
+		this.update({ skipped: files });
 	}
 
-	/** Keeps `kept` for the click notice, which tells how many versions there are to restore. */
-	showConfigurationConflicts(kept: readonly KeptConfiguration[]): void {
-		this.kept = kept;
+	/** Shows the count of `conflicts` after the status, and each one in the Sync window's Conflicts tab. */
+	showConflicts(conflicts: SyncConflicts): void {
+		this.update({ conflicts });
+	}
+
+	/** Shows `events` in the Sync window's Activity tab. */
+	showActivity(events: readonly ActivityEvent[]): void {
+		this.update({ activity: events });
 	}
 
 	/** Shows `notice` as an Obsidian notice, in the user's language. */
@@ -130,18 +142,33 @@ export class StatusIndicator implements UiPort {
 		}
 	}
 
-	/**
-	 * Puts the label, with the skipped count, on the entry point: the status bar item's text, or the
-	 * ribbon icon's tooltip. The ribbon icon itself stays as it is; whether
-	 * it can change at runtime is checked with the Sync window.
-	 */
-	private render(): void {
-		if (Platform.isMobile) setTooltip(this.element, this.text());
-		else this.element.setText(this.text());
+	/** Takes `change` into what is shown, redraws the entry point and tells every listener. */
+	private update(change: Partial<ShownSync>): void {
+		this.facts = { ...this.facts, ...change };
+		this.render();
+		for (const listener of this.listeners) listener();
 	}
 
-	/** The status text with the skipped count after it. */
+	/**
+	 * Puts the status on the entry point: the dot's colour and the text of
+	 * the status bar item, or the ribbon icon and its tooltip. Whether
+	 * Obsidian mobile shows an icon changed after it was added is checked
+	 * by hand on Android and iOS.
+	 */
+	private render(): void {
+		const { status } = this.facts;
+		if (this.dot === undefined || this.label === undefined) {
+			setIcon(this.element, statusIcon(status));
+			setTooltip(this.element, this.text());
+			return;
+		}
+		this.dot.className = `obsync-dot obsync-dot-${statusTone(status)}`;
+		this.label.setText(this.text());
+	}
+
+	/** The status text with the conflict and skipped counts after it. */
 	private text(): string {
-		return withSkippedCount(this.label, this.skipped, this.strings);
+		const { status, conflicts, skipped } = this.facts;
+		return statusText(status, conflicts, skipped, this.strings);
 	}
 }

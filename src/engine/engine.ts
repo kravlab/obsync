@@ -10,9 +10,11 @@ import type { VaultRename } from "./renames";
 import { providerSecretId, type EnginePorts, type Scheduler } from "./ports";
 import { ProviderError, isSyncable } from "./provider";
 import { beginFirstSync, noteFirstSyncDone } from "./first-sync";
+import { conflictsOf } from "./conflicts";
 import { readRemoteSettings } from "./remote-metadata";
 import { statusOf, type SyncStatus } from "./status";
 import { runSync, type SyncHold } from "./sync-run";
+import type { SyncSnapshot } from "./sync-snapshot";
 
 /** First backoff wait after a transient failure, in milliseconds. */
 const INITIAL_BACKOFF_MS = 5_000;
@@ -45,15 +47,20 @@ export interface SyncEngine {
 	 * Starts the engine once the vault is open (`workspace.onLayoutReady`):
 	 * subscribes at once to vault change hints, for the post-edit pause and
 	 * as rename hints (renames.ts), and schedules periodic polling, then
-	 * shows this device's Connection status and, when connected, runs the
-	 * vault-open sync.
+	 * shows this device's Connection status and, when connected, the
+	 * conflicts its Sync snapshot records, and runs the vault-open sync.
 	 */
 	start(): StartedEngine;
 	/**
 	 * Syncs this device once, showing Syncing… and then Synced, Offline on
 	 * a `transient` failure, or Sync failed on another provider failure or
 	 * a provider that cannot be synced (`isSyncable`). A device without a
-	 * Connection only shows Not connected. Any triggers that fire while a
+	 * Connection only shows Not connected.
+	 *
+	 * An `auth` failure, or a Connection without its secret, pauses sync on
+	 * this device until the user logs in again: the pause is stored with
+	 * the Connection, told once with a notice, and every sync meanwhile
+	 * only shows Reconnect needed, reaching nothing. Any triggers that fire while a
 	 * sync is running collapse into one follow-up sync immediately after it
 	 * finishes. Errors that are not provider failures are bugs: the status
 	 * shows Sync failed and the error is thrown.
@@ -162,6 +169,8 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 	 * order: hints for finding renames, in memory only.
 	 */
 	const renameHints: VaultRename[] = [];
+	/** How many conflicts reports have started, so a late one does not replace a newer one. */
+	let conflictReports = 0;
 	/** The kept configuration versions the user chose to restore, in order, for the next sync to write back. */
 	const restores: string[] = [];
 	/** The engine's own vault renames under way: the rename events they cause are not the user's. */
@@ -204,6 +213,18 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 		return ownRenames.some((own) => isWithin(from, own.from) && to === movedAlong(from, own.from, own.to));
 	}
 
+	/**
+	 * Shows the conflicts `snapshot` records, the stored Sync snapshot when
+	 * none is given, with the kept configuration versions. A report that
+	 * finishes after one started later is stale and not shown.
+	 */
+	async function showConflicts(snapshot?: SyncSnapshot): Promise<void> {
+		conflictReports += 1;
+		const report = conflictReports;
+		const [shown, kept] = await Promise.all([snapshot ?? deviceStore.loadSnapshot(), configurationConflicts.list()]);
+		if (report === conflictReports) ui.showConflicts(conflictsOf(shown, kept));
+	}
+
 	/** Schedules the next periodic poll. */
 	function scheduleNextPoll(): void {
 		poll.schedule(schedule().pollInterval.ms, () => {
@@ -212,11 +233,49 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 		});
 	}
 
+	/**
+	 * Pauses sync until the user logs in again, after the provider refused
+	 * the secret `refused`, or none was stored (null): stores the pause with
+	 * the Connection, tells the user once, and shows Reconnect needed. A
+	 * secret replaced meanwhile, by a login during this sync, is not the one
+	 * refused, so `run` syncs again with it instead, and a pause stored
+	 * while that login ran is lifted again, since the login could not see
+	 * it to clear it; a Connection gone meanwhile, by a disconnect, only has
+	 * its status shown.
+	 */
+	async function pauseForReconnect(run: Run, refused: string | null): Promise<void> {
+		const loggedInAgain = (): boolean => secretStore.getSecret(providerSecretId(providers.providerId)) !== refused;
+		const connection = await deviceStore.loadConnection();
+		if (connection === null) {
+			ui.showStatus(statusOf(connection));
+			return;
+		}
+		if (loggedInAgain()) {
+			run.followUp ??= "sync";
+			return;
+		}
+		if (connection.reconnectNeeded !== true) {
+			await deviceStore.saveConnection({ ...connection, reconnectNeeded: true });
+			if (loggedInAgain()) {
+				const current = await deviceStore.loadConnection();
+				if (current !== null) await deviceStore.saveConnection({ ...current, reconnectNeeded: false });
+				run.followUp ??= "sync";
+				return;
+			}
+			ui.showNotice({ kind: "reconnectNeeded" });
+		}
+		ui.showStatus({ state: "reconnectNeeded" });
+	}
+
 	/** One sync of `run`, from reading the Connection to the final status. */
 	async function syncOnce(run: Run): Promise<void> {
 		const connection = await deviceStore.loadConnection();
 		if (connection === null) {
 			ui.showStatus({ state: "notConnected" });
+			return;
+		}
+		if (connection.reconnectNeeded === true) {
+			ui.showStatus({ state: "reconnectNeeded" });
 			return;
 		}
 		if (held !== undefined) {
@@ -227,23 +286,24 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 		// Renames reported from now on are for the next sync.
 		const hints = [...renameHints];
 		ui.showStatus({ state: "syncing" });
+		/** The secret this sync logs in with, for telling a refused login from one replaced meanwhile. */
+		let secret: string | null = null;
 		try {
-			const secret = secretStore.getSecret(providerSecretId(providers.providerId));
+			secret = secretStore.getSecret(providerSecretId(providers.providerId));
 			if (secret === null) {
-				// A Connection without its secret cannot reach the Remote; a new
-				// login (Reconnect, later) restores it.
-				ui.showStatus({ state: "syncFailed" });
+				// A Connection without its secret cannot reach the Remote; only a new login restores it.
+				await pauseForReconnect(run, secret);
 				return;
 			}
 			const provider = await providers.open(connection, secret);
 			if (!isSyncable(provider)) {
-				ui.showStatus({ state: "syncFailed" });
+				ui.showStatus({ state: "syncFailed", cause: "unsupportedProvider" });
 				return;
 			}
 			// Shared settings this device cannot read could classify files differently from other devices.
 			const settings = await readRemoteSettings(provider);
 			if (settings === null) {
-				ui.showStatus({ state: "syncFailed" });
+				ui.showStatus({ state: "syncFailed", cause: "unreadableSettings" });
 				return;
 			}
 			run.listing = true;
@@ -270,7 +330,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			backoffAttempt = 0;
 			restores.splice(0, restoring.length);
 			ui.showSkipped(result.skipped);
-			ui.showConfigurationConflicts(await configurationConflicts.list());
+			await showConflicts(result.snapshot);
 			if (result.held !== undefined) {
 				// A sync the user asked for meanwhile runs next and asks again.
 				if (userRequests === userRequestsBefore) held = result.held;
@@ -289,8 +349,12 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			}
 		} catch (error) {
 			if (!(error instanceof ProviderError)) {
-				ui.showStatus({ state: "syncFailed" });
+				ui.showStatus({ state: "syncFailed", cause: "bug" });
 				throw error;
+			}
+			if (error.failure.category === "auth") {
+				await pauseForReconnect(run, secret);
+				return;
 			}
 			if (error.failure.category === "transient") {
 				ui.showStatus({ state: "offline" });
@@ -299,7 +363,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				retry.schedule(delayMs, () => void trigger("sync"));
 				return;
 			}
-			ui.showStatus({ state: "syncFailed" });
+			ui.showStatus({ state: "syncFailed", cause: error.failure.category });
 			if (error.failure.category === "throttled") {
 				retry.schedule(error.failure.retryAfterMs, () => void trigger("sync"));
 			}
@@ -365,7 +429,10 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			const opened = (async () => {
 				const connection = await deviceStore.loadConnection();
 				ui.showStatus(statusOf(connection));
-				if (connection !== null && !stopped) await trigger("sync");
+				if (connection === null) return;
+				// What is known from earlier syncs shows at once, without holding up this sync, which may not finish.
+				const outcomes = await Promise.allSettled([showConflicts(), stopped ? Promise.resolve() : trigger("sync")]);
+				for (const outcome of outcomes) if (outcome.status === "rejected") throw outcome.reason;
 			})();
 			return { stop, opened };
 		},

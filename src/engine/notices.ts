@@ -31,6 +31,9 @@ import type { VaultPath } from "./local-vault";
  *   something in the configuration folder, so Obsidian must restart to
  *   apply the settings that arrived; other plugins are not reloaded. It is
  *   told once per sync, when the first such change is made.
+ * - `reconnectNeeded`: the provider refused this device's login, or its
+ *   secret is gone, so sync is paused on this device until the user logs
+ *   in again. It is told once, when the pause begins.
  */
 export type SyncNotice =
 	| {
@@ -54,4 +57,5 @@ export type SyncNotice =
 			readonly deletedOn: "thisDevice" | "otherDevice";
 	  }
 	| ({ readonly kind: "firstSyncDone" } & Readonly<FirstSyncTally>)
-	| { readonly kind: "configurationChanged" };
+	| { readonly kind: "configurationChanged" }
+	| { readonly kind: "reconnectNeeded" };

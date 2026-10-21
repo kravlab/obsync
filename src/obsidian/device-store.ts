@@ -3,6 +3,7 @@ import type { VaultPath } from "../engine/local-vault";
 import type { Connection, DeviceStore, RemoteFeed } from "../engine/ports";
 import type { RemoteEntry } from "../engine/provider";
 import type { SnapshotEntry, SyncSnapshot } from "../engine/sync-snapshot";
+import { isRecord } from "./is-record";
 
 /** The localStorage key of this vault's Connection. */
 const CONNECTION_KEY = "obsync-connection";
@@ -289,7 +290,7 @@ function completion(transaction: IDBTransaction): Promise<void> {
 }
 
 /** The Connection in a stored record, or null if it holds no valid one. */
-function parseConnection(stored: unknown): Connection | null {
+export function parseConnection(stored: unknown): Connection | null {
 	if (!isRecord(stored) || stored.formatVersion !== CONNECTION_FORMAT_VERSION) return null;
 	const { connection } = stored;
 	if (!isRecord(connection) || !isRecord(connection.device)) return null;
@@ -298,13 +299,15 @@ function parseConnection(stored: unknown): Connection | null {
 	if (typeof device.id !== "string" || typeof device.name !== "string") return null;
 	// Records from before First sync was tracked have no flag: not done, which costs at most a re-registration less.
 	const firstSyncDone = connection.firstSyncDone === true;
-	return { accountId, remoteRoot, device: { id: device.id, name: device.name }, firstSyncDone };
+	// Only a stored true pauses: anything else syncs, and a refused login pauses again at once.
+	const reconnectNeeded = connection.reconnectNeeded === true;
+	return { accountId, remoteRoot, device: { id: device.id, name: device.name }, firstSyncDone, reconnectNeeded };
 }
 
 /** The snapshot entry in a stored record, or null if it holds no valid one. */
-function parseEntry(stored: unknown): SnapshotEntry | null {
+export function parseEntry(stored: unknown): SnapshotEntry | null {
 	if (!isRecord(stored)) return null;
-	const { kind, revision, hash, size, stableId, stat } = stored;
+	const { kind, revision, hash, size, stableId, stat, conflicted } = stored;
 	// A missing or invalid stable id or size only costs a rename hint or a hash.
 	const id = typeof stableId === "string" ? { stableId } : {};
 	if (kind === "folder") return { kind, ...id };
@@ -313,7 +316,9 @@ function parseEntry(stored: unknown): SnapshotEntry | null {
 	// An entry without a valid stat stays usable: its file is hashed again on the next sync.
 	const valid = isRecord(stat) && typeof stat.size === "number" && typeof stat.mtime === "number";
 	const statted = valid ? { stat: { size: stat.size as number, mtime: stat.mtime as number } } : {};
-	return { kind, revision, hash, ...sized, ...id, ...statted };
+	// A lost mark only leaves a file with Conflict blocks off the conflicts list until it is synced again.
+	const marked = conflicted === true ? { conflicted: true as const } : {};
+	return { kind, revision, hash, ...sized, ...id, ...statted, ...marked };
 }
 
 /** The Remote feed state in a stored record, or null if it holds no valid one. */
@@ -337,9 +342,4 @@ function parseRemoteEntry(stored: unknown): RemoteEntry | null {
 		return { kind: "file", path: stored.path, revision: stored.revision, size: stored.size, ...id };
 	}
 	return null;
-}
-
-/** Whether `value` is a non-null object, whose fields can be read. */
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }

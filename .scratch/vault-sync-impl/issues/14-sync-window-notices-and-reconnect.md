@@ -12,7 +12,7 @@ All three open a Sync window with Conflicts, Skipped and Activity tabs. Notices 
 
 **Blocked by:** 08 (Conflict copies for binary and JSON files), 12 (Synced file scope rules).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The status entry points show these states: Synced, Syncing…, Offline, Reconnect needed, Paused (confirm deletions). Whether the ribbon icon can show the state at runtime is checked and, if it can, implemented.
 - [ ] The Sync window's Conflicts tab lists files with Conflict blocks (opening at the first block), Conflict copies, and restorable configuration conflicts. The Skipped tab gives each file with its reason. The Activity tab shows the last N events in plain words with "Copy for a bug report".
@@ -24,3 +24,4 @@ All three open a Sync window with Conflicts, Skipped and Activity tabs. Notices 
 ## Comments
 
 - 2026-10-21, from ticket 13 (Configuration folder sync): the engine pushes the restorable configuration conflicts through `UiPort.showConfigurationConflicts` after every sync and every restore, newest first, and restores one with `SyncEngine.restoreConfiguration(id)`. Until the Conflicts tab exists, the status click notice counts them and the "Restore local configuration" command lists them. The restart notice is the `configurationChanged` kind of `SyncNotice`, shown once per sync; the activity log should keep it like the others.
+- 2026-10-21: Implemented in commit "feat(sync): add the Sync window and reconnect" on `feat/sync-window`; plan: `.scratch/vault-sync-impl/plans/14-sync-window.md`. Ticket closed. A refused or missing login pauses sync with Reconnect needed, kept with the Connection; logging in again lifts it and syncs. The Conflicts tab replaces the status click notice; the "Restore local configuration" command stays. The activity log keeps the last 100 notices and status changes in this vault's localStorage; "Copy for a bug report" is always in English. The manual check is postponed and still to do by hand on desktop, Android and iOS, including whether the ribbon icon changes with the state on mobile.

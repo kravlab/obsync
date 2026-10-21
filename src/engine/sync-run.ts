@@ -80,6 +80,7 @@
  */
 import { configurationCategoriesOf, withConfigurationFolder, type ConfigurationCategories, type ConfigurationLayout } from "./configuration";
 import { conflictCopyPath } from "./conflict-copy";
+import { holdsConflictBlocks } from "./conflicts";
 import { contentHash } from "./content-hash";
 import { guardReason, type DeletionGuardSettings } from "./deletion-guard";
 import { findDeletions } from "./deletions";
@@ -104,7 +105,7 @@ import { serverHasher } from "./server-hash";
 import { carryRenames } from "./carry-renames";
 import { findRenames, type VaultRename } from "./renames";
 import { syncListing, type SkippedFile } from "./sync-listing";
-import type { SnapshotEntry, SyncedFile, VaultFileStat } from "./sync-snapshot";
+import type { SnapshotEntry, SyncedFile, SyncSnapshot, VaultFileStat } from "./sync-snapshot";
 import { mergeText } from "./text-merge";
 import { postEditPauseRemainingMs } from "./post-edit-pause";
 import { decodeUtf8 } from "./utf8";
@@ -202,6 +203,8 @@ export interface SyncRunResult {
 	 * too, from its listing.
 	 */
 	readonly skipped: readonly SkippedFile[];
+	/** The Sync snapshot as this sync left it, for the conflicts list (conflicts.ts) without reading it back. */
+	readonly snapshot: SyncSnapshot;
 }
 
 /**
@@ -320,14 +323,17 @@ export async function runSync({
 	/**
 	 * Records the file `path`, now `synced.data` with `hash` on both sides
 	 * and `synced.revision` on the Remote; the data is its Base if it is
-	 * text or JSON in UTF-8, the files that merge. `stat` is the vault file's stat taken before it was read with
+	 * text or JSON in UTF-8, the files that merge, and the entry is marked
+	 * when that text holds Conflict blocks. `stat` is the vault file's stat taken before it was read with
 	 * that content; without one, after the engine wrote the file itself,
 	 * the next sync hashes it again, so an edit saved meanwhile is found.
 	 */
 	async function recordFile(path: VaultPath, synced: RemoteContent, hash: string, stat?: VaultFileStat): Promise<void> {
 		const { data, revision } = synced;
-		const base = contentKindOf(path, settings) !== "other" && decodeUtf8(data) !== null ? data : null;
-		const entry = { kind: "file", revision, hash, size: data.byteLength, ...stableIdAt(path) } as const;
+		const text = contentKindOf(path, settings) !== "other" ? decodeUtf8(data) : null;
+		const base = text !== null ? data : null;
+		const conflicted = text !== null && holdsConflictBlocks(text) ? { conflicted: true as const } : {};
+		const entry = { kind: "file", revision, hash, size: data.byteLength, ...stableIdAt(path), ...conflicted } as const;
 		await record(path, stat === undefined ? entry : { ...entry, stat }, base);
 	}
 
@@ -944,7 +950,7 @@ export async function runSync({
 
 	if (firstSync !== undefined) {
 		const answer = await ui.askFirstSync(await firstSyncPreview());
-		if (answer === null) return { held: "firstSync", skipped: skipped() };
+		if (answer === null) return { held: "firstSync", skipped: skipped(), snapshot };
 		keepRemote = answer.differing === "keepRemote";
 		await firstSync.begin();
 	}
@@ -988,7 +994,7 @@ export async function runSync({
 		reason === null
 			? "apply"
 			: await ui.askDeletions({ reason, toRemote: toRemotePaths, toVault: deletions.toVault });
-	if (answer === null) return { held: "deletions", skipped: skipped() };
+	if (answer === null) return { held: "deletions", skipped: skipped(), snapshot };
 
 	const { deferred, leftRemoteFolders } = await carryRenames(renames, {
 		provider,
@@ -1041,8 +1047,8 @@ export async function runSync({
 		await deviceStore.saveRemoteFeed({ cursor: listed.cursor, entries: listed.entries });
 	}
 	return firstSync === undefined
-		? { nextPostEditPauseMs, skipped: skipped() }
-		: { nextPostEditPauseMs, firstSync: tally, skipped: skipped() };
+		? { nextPostEditPauseMs, skipped: skipped(), snapshot }
+		: { nextPostEditPauseMs, firstSync: tally, skipped: skipped(), snapshot };
 }
 
 /**

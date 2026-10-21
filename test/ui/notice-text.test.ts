@@ -97,4 +97,14 @@ describe("noticeText", () => {
 			"Настройки изменились на другом устройстве. Перезапустите Obsidian, чтобы применить их.",
 		);
 	});
+
+	it("tells that sync is paused until the user reconnects, in English and Russian", () => {
+		const notice = { kind: "reconnectNeeded" } as const;
+		expect(noticeText(notice, selectStrings("en"))).toBe(
+			"Dropbox no longer accepts this device's login, so sync is paused here. Open the sync window and reconnect.",
+		);
+		expect(noticeText(notice, selectStrings("ru"))).toBe(
+			"Dropbox больше не принимает вход с этого устройства, поэтому синхронизация здесь приостановлена. Откройте окно синхронизации и подключитесь заново.",
+		);
+	});
 });

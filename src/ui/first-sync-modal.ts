@@ -2,6 +2,7 @@ import { Modal, Setting, type App } from "obsidian";
 import type { FirstSyncAnswer, FirstSyncPreview } from "../engine/first-sync";
 import { firstSyncPreviewText } from "./first-sync-preview-text";
 import type { Strings } from "./i18n/strings";
+import { fitForPhone } from "./phone-modal";
 
 /**
  * The First sync preview (spec, "First sync"): how many files the first
@@ -27,6 +28,7 @@ export class FirstSyncModal extends Modal {
 		private readonly preview: FirstSyncPreview,
 	) {
 		super(app);
+		fitForPhone(this);
 	}
 
 	/** Opens the preview and resolves with the user's answer, null if it is closed without starting. */

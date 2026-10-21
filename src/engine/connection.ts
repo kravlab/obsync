@@ -7,6 +7,7 @@
  * Remote's Metadata folder, and the local cleanup on disconnect.
  */
 import type { AccountAccess, Authorization, ConnectStep } from "./connect-step";
+import { NO_CONFLICTS } from "./conflicts";
 import { providerSecretId, type Clock, type DeviceIdentity, type DeviceStore, type SecretStore, type UiPort } from "./ports";
 import { ProviderError, isFailure, isSyncable } from "./provider";
 import {
@@ -44,7 +45,7 @@ export interface ConnectionService {
 	/**
 	 * Revokes this device's login at the service, then clears its secret
 	 * and everything it keeps for the Connection, and empties the shown
-	 * skipped-files list. The local cleanup runs
+	 * skipped-files and conflicts lists. The local cleanup runs
 	 * even when the revoke fails, e.g. offline; the outcome then says so,
 	 * since the user has to revoke the app in the service's own settings.
 	 * The vault, the Remote and other devices are left untouched.
@@ -82,7 +83,8 @@ export interface PendingAuthorization {
  *   the login is refused and nothing changes; switching accounts means
  *   disconnecting first;
  * - `reconnected`: the device has a Connection to the same account; the new
- *   secret replaces the old one and the Connection stays as it was.
+ *   secret replaces the old one and the Connection stays as it was, except
+ *   that a pause for Reconnect needed ends.
  */
 export type AuthorizationOutcome =
 	| { readonly kind: "authorized"; readonly remotes: RemoteChooser }
@@ -238,6 +240,10 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 		if (connection === null) return { kind: "authorized", remotes: remoteChooser(authorization) };
 		if (connection.accountId !== authorization.accountId) return { kind: "otherAccount" };
 		secretStore.setSecret(secretId, authorization.secret);
+		// The new secret ends a pause for a refused login; the Snapshot and Bases were kept, so syncing goes on normally.
+		// Read after storing the secret, so a pause a failing sync stored meanwhile ends too.
+		const current = await deviceStore.loadConnection();
+		if (current?.reconnectNeeded === true) await deviceStore.saveConnection({ ...current, reconnectNeeded: false });
 		ui.showStatus({ state: "connected" });
 		return { kind: "reconnected" };
 	}
@@ -285,8 +291,9 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 			secretStore.deleteSecret(secretId);
 			await deviceStore.clear();
 			ui.showStatus({ state: "notConnected" });
-			// What the last sync skipped belonged to the Remote just left.
+			// What the last sync skipped and left in conflict belonged to the Remote just left.
 			ui.showSkipped([]);
+			ui.showConflicts(NO_CONFLICTS);
 			return outcome;
 		},
 	};

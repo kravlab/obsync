@@ -70,7 +70,7 @@ describe("a configuration file changed on both devices", () => {
 		expect(await vaultText(phone, ".phone-config/app.json")).toBe(appJson(2, 1));
 		expect(remoteText(remote, remoteConfig("app.json"))).toBe(appJson(2, 1));
 		expect(await keptTexts(phone)).toEqual([{ path: ".phone-config/app.json", text: appJson(3, 1) }]);
-		expect(phone.ui.lastConfigurationConflicts).toEqual(await phone.configurationConflicts.list());
+		expect(phone.ui.lastConflicts?.configuration).toEqual(await phone.configurationConflicts.list());
 		expect(remoteConfigFiles(remote)).toEqual([remoteConfig("app.json")]);
 		expect(phone.ui.notices.filter((notice) => notice.kind === "conflictCopyCreated")).toEqual([]);
 	});
@@ -148,7 +148,7 @@ describe("Restore local", () => {
 
 		expect(await vaultText(phone, ".phone-config/app.json")).toBe(appJson(3, 1));
 		expect(await phone.configurationConflicts.list()).toEqual([]);
-		expect(phone.ui.lastConfigurationConflicts).toEqual([]);
+		expect(phone.ui.lastConflicts?.configuration).toEqual([]);
 		expect(remoteText(remote, remoteConfig("app.json"))).toBe(appJson(3, 1));
 		await syncNow(laptop);
 		expect(await vaultText(laptop, localConfig(laptop, "app.json"))).toBe(appJson(3, 1));

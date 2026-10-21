@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { selectStrings } from "../../src/ui/i18n/strings";
-import { skippedCount, skippedLines, withSkippedCount } from "../../src/ui/skipped-text";
+import { skippedCount, skippedLines } from "../../src/ui/skipped-text";
 
 const files = [
 	{ path: "Note.md", reason: "caseClash" },
@@ -37,17 +37,6 @@ describe("skippedLines", () => {
 			"big.pdf больше предельного размера",
 			"scratch.tmp подходит под список исключений",
 		]);
-	});
-});
-
-describe("withSkippedCount", () => {
-	it("puts the skipped count after the status", () => {
-		expect(withSkippedCount("Synced", files, selectStrings("en"))).toBe("Synced · 4 skipped");
-		expect(withSkippedCount("Синхронизировано", files, selectStrings("ru"))).toBe("Синхронизировано · пропущено: 4");
-	});
-
-	it("leaves the status alone when no file is skipped", () => {
-		expect(withSkippedCount("Synced", [], selectStrings("en"))).toBe("Synced");
 	});
 });
 

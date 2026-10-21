@@ -7,12 +7,6 @@ export function skippedCount(files: readonly SkippedFile[], strings: Strings): s
 	return files.length === 0 ? null : fill(strings.skippedCount, { count: String(files.length) });
 }
 
-/** The status text `status` with the skipped count after it, or `status` alone when nothing is skipped. */
-export function withSkippedCount(status: string, files: readonly SkippedFile[], strings: Strings): string {
-	const skipped = skippedCount(files, strings);
-	return skipped === null ? status : fill(strings.statusWithSkipped, { status, skipped });
-}
-
 /**
  * One line per skipped file, in the order given: its vault path and why it
  * does not sync. Beyond `limit` files, one last line tells how many more
