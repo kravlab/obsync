@@ -188,6 +188,19 @@ describe("Dropbox provider errors", () => {
 		await expectFailure(provider.delete("note.md", { kind: "revision", revision }), "preconditionFailed");
 	});
 
+	it("maps the real service's answer to a stale parent_rev to preconditionFailed", async () => {
+		const { dropbox, provider } = await setUp();
+		const { revision } = await provider.write("note.md", bytes("one"));
+		// Recorded from delete_v2 with a superseded parent_rev on 2026-10-21.
+		dropbox.interceptions.push(
+			json(409, {
+				error: { ".tag": "path_write", path_write: { ".tag": "conflict", conflict: { ".tag": "file" } } },
+				error_summary: "path_write/conflict/file/",
+			}),
+		);
+		await expectFailure(provider.delete("note.md", { kind: "revision", revision }), "preconditionFailed");
+	});
+
 	it("maps a cursor reset while paging the listing to cursorLost", async () => {
 		const { dropbox, provider } = await setUp();
 		await provider.write("1.md", bytes("1"));

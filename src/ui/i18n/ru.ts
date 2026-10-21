@@ -8,6 +8,7 @@ export const ru: Strings = {
 	statusSynced: "Синхронизировано",
 	statusOffline: "Офлайн",
 	statusSyncFailed: "Ошибка синхронизации",
+	statusDeletionsOnHold: "Удаления ждут вашего решения",
 
 	settingsDropbox: "Dropbox",
 	settingsNotConnected: "Это устройство не подключено.",
@@ -45,6 +46,25 @@ export const ru: Strings = {
 	settingsRequestLimitDescription:
 		"Файлы крупнее передаются частями такого размера, от 1 до 19 МиБ. Уменьшите его, если приложение закрывается при синхронизации больших файлов.",
 	settingsRequestLimitInvalid: "Введите целое число от 1 до 19.",
+	settingsGuardFiles: "Защита от удалений: файлы",
+	settingsGuardFilesDescription: "Спрашивать, прежде чем синхронизация удалит на одной стороне больше файлов, от 1 до 100000.",
+	settingsGuardFilesInvalid: "Введите целое число от 1 до 100000.",
+	settingsGuardPercent: "Защита от удалений: проценты",
+	settingsGuardPercentDescription:
+		"Спрашивать, прежде чем синхронизация удалит на одной стороне большую долю синхронизированных файлов, от 1 до 100 процентов.",
+	settingsGuardPercentInvalid: "Введите целое число от 1 до 100.",
+
+	guardTitle: "Подтвердите удаления",
+	guardReasonThreshold: "Эта синхронизация удалила бы больше файлов, чем позволяет защита от удалений.",
+	guardReasonMissingVault: "В этом хранилище не осталось ни одного синхронизированного файла.",
+	guardReasonEmptyRemote: "В Dropbox не осталось ни одного синхронизированного файла.",
+	guardToRemote: "Удалены на этом устройстве, будут удалены в Dropbox: {count}",
+	guardToVault: "Удалены на другом устройстве, будут перемещены в корзину этого устройства: {count}",
+	guardCloseHint: "Если закрыть это окно, синхронизация остановится, пока вы не запустите её сами.",
+	guardReview: "Показать список",
+	guardHideList: "Скрыть список",
+	guardApply: "Применить удаления",
+	guardRestore: "Восстановить файлы",
 
 	connectTitle: "Подключение к Dropbox",
 	loginInstructions: "Откройте Dropbox, разрешите доступ и вставьте код, который покажет Dropbox.",
@@ -82,4 +102,6 @@ export const ru: Strings = {
 		"Dropbox отключён, но отозвать доступ не удалось: Dropbox недоступен. Удалите приложение из подключённых приложений в настройках Dropbox.",
 	noticeConflictCopyCreated:
 		"{file} изменён и на другом устройстве, объединить версии не удалось. Версия этого устройства сохранена как {copy}.",
+	noticeRestoredDeletedHere: "{file} восстановлен: он был удалён на этом устройстве, но изменён на другом.",
+	noticeRestoredDeletedThere: "{file} сохранён: он был удалён на другом устройстве, но изменён на этом.",
 };

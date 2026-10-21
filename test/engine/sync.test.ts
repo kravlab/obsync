@@ -206,18 +206,6 @@ describe("syncing changed files", () => {
 		expect(await vaultText(laptop, "Note.md")).toBe("v2 from phone");
 		expect(await phone.vault.stat("Note.md")).toBeNull();
 	});
-
-	it("leaves deletions on either side unapplied", async () => {
-		const { remote, laptop, phone } = await syncedPair("v1");
-		await laptop.vault.trash("note.md");
-		await syncNow(laptop);
-		expect(remoteText(remote, "note.md")).toBe("v1");
-		expect(await laptop.vault.stat("note.md")).toBeNull();
-
-		remote.remove("note.md");
-		await syncNow(phone);
-		expect(await vaultText(phone, "note.md")).toBe("v1");
-	});
 });
 
 describe("what a sync leaves out", () => {

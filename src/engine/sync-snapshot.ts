@@ -32,6 +32,9 @@ export type SnapshotEntry =
 	  }
 	| { readonly kind: "folder" };
 
+/** What the snapshot records for a file. */
+export type SyncedFile = Extract<SnapshotEntry, { kind: "file" }>;
+
 /** A vault file's size and modification time, as a vault listing reports them. */
 export interface VaultFileStat {
 	/** Size in bytes. */

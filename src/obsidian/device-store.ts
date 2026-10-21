@@ -96,6 +96,15 @@ export class ObsidianDeviceStore implements DeviceStore {
 		await completion(transaction);
 	}
 
+	async removeSnapshotEntry(path: VaultPath): Promise<void> {
+		const name = this.databaseName();
+		if (name === null) return;
+		const transaction = (await this.open(name)).transaction([ENTRIES, BASES], "readwrite");
+		transaction.objectStore(ENTRIES).delete(path);
+		transaction.objectStore(BASES).delete(path);
+		await completion(transaction);
+	}
+
 	async loadBase(path: VaultPath): Promise<ArrayBuffer | null> {
 		const name = this.databaseName();
 		if (name === null) return null;

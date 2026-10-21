@@ -8,6 +8,7 @@ import {
 	type SecretStore,
 	type UiPort,
 } from "../../src/engine/ports";
+import { DEFAULT_DELETION_GUARD, type DeletionAnswer, type DeletionGuardSettings, type DeletionPrompt } from "../../src/engine/deletion-guard";
 import type { LocalVault, VaultPath } from "../../src/engine/local-vault";
 import type { SyncNotice } from "../../src/engine/notices";
 import {
@@ -62,6 +63,12 @@ export class InMemoryDeviceStore implements DeviceStore {
 		return Promise.resolve();
 	}
 
+	removeSnapshotEntry(path: VaultPath): Promise<void> {
+		this.snapshot.delete(path);
+		this.bases.delete(path);
+		return Promise.resolve();
+	}
+
 	loadBase(path: VaultPath): Promise<ArrayBuffer | null> {
 		return Promise.resolve(this.bases.get(path)?.slice(0) ?? null);
 	}
@@ -105,12 +112,18 @@ export class InMemorySecretStore implements SecretStore {
 	}
 }
 
-/** A UI port that records what the engine showed. */
+/** A UI port that records what the engine showed, and answers its prompts as scripted. */
 export class RecordingUi implements UiPort {
 	/** Every status shown, oldest first. */
 	readonly statuses: SyncStatus[] = [];
 	/** Every notice shown, oldest first. */
 	readonly notices: SyncNotice[] = [];
+	/** Every Deletion guard prompt asked, oldest first. */
+	readonly prompts: DeletionPrompt[] = [];
+	/** The answers to give the next Deletion guard prompts, in order; a prompt with none left fails the sync. */
+	readonly answers: DeletionAnswer[] = [];
+	/** Runs when the next prompt is asked, before it is answered, e.g. the user asking for a sync meanwhile. */
+	onAsk: (() => void) | undefined;
 
 	/** The status shown last, or undefined if none was. */
 	get lastStatus(): SyncStatus | undefined {
@@ -124,6 +137,14 @@ export class RecordingUi implements UiPort {
 	/** Records `notice` instead of showing it. */
 	showNotice(notice: SyncNotice): void {
 		this.notices.push(notice);
+	}
+
+	/** Records `prompt` and gives the next scripted answer; an unscripted prompt is a test failure. */
+	askDeletions(prompt: DeletionPrompt): Promise<DeletionAnswer> {
+		this.prompts.push(prompt);
+		this.onAsk?.();
+		if (this.answers.length === 0) return Promise.reject(new Error("unexpected Deletion guard prompt"));
+		return Promise.resolve(this.answers.shift() ?? null);
 	}
 }
 
@@ -144,6 +165,8 @@ export interface TestDevice {
 	readonly ui: RecordingUi;
 	/** The device's schedule settings; tests may replace it at any time. */
 	schedule: SyncSchedule;
+	/** The device's Deletion guard thresholds; tests may replace them at any time. */
+	deletionGuard: DeletionGuardSettings;
 	readonly ports: EnginePorts;
 }
 
@@ -176,6 +199,7 @@ export function createTestDevice(remote: FakeRemote): TestDevice {
 		scheduler,
 		ui,
 		schedule: DEFAULT_SYNC_SCHEDULE,
+		deletionGuard: DEFAULT_DELETION_GUARD,
 		ports: {
 			providers,
 			vault: crashingVault(vault, crash),
@@ -185,6 +209,7 @@ export function createTestDevice(remote: FakeRemote): TestDevice {
 			scheduler,
 			ui,
 			schedule: () => device.schedule,
+			deletionGuard: () => device.deletionGuard,
 		},
 	};
 	return device;
@@ -236,6 +261,8 @@ function crashingDeviceStore(store: InMemoryDeviceStore, crash: CrashPoints): De
 		loadSnapshot: () => store.loadSnapshot(),
 		saveSnapshotEntry: (path, entry, base) =>
 			crash.step(`save snapshot entry ${path}`, () => store.saveSnapshotEntry(path, entry, base)),
+		removeSnapshotEntry: (path) =>
+			crash.step(`remove snapshot entry ${path}`, () => store.removeSnapshotEntry(path)),
 		loadBase: (path) => store.loadBase(path),
 		loadRemoteFeed: () => store.loadRemoteFeed(),
 		saveRemoteFeed: (feed) => crash.step("save Remote feed", () => store.saveRemoteFeed(feed)),

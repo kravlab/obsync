@@ -1,8 +1,10 @@
 import { Notice, Platform, setTooltip, type Plugin } from "obsidian";
+import type { DeletionAnswer, DeletionPrompt } from "../engine/deletion-guard";
 import type { SyncNotice } from "../engine/notices";
 import type { UiPort } from "../engine/ports";
 import type { SyncStatus } from "../engine/status";
 import type { Strings } from "./i18n/strings";
+import { DeletionGuardModal } from "./deletion-guard-modal";
 import { noticeText } from "./notice-text";
 import { statusLabel } from "./status-label";
 
@@ -11,10 +13,13 @@ import { statusLabel } from "./status-label";
  * item on desktop, a ribbon icon on mobile, which has no status bar. A
  * click on either shows the status in a notice until the Sync window
  * exists. It is the shell's UI port: the engine reports each status here,
- * and each sync notice, shown as an Obsidian notice.
+ * and each sync notice, shown as an Obsidian notice, and asks the Deletion
+ * guard's question through it.
  */
 export class StatusIndicator implements UiPort {
 	private label: string;
+	/** Deletion guard prompts open now; the plugin's unload closes them, which answers null. */
+	private readonly prompts = new Set<DeletionGuardModal>();
 	/** The status bar item (desktop) or ribbon icon (mobile). */
 	private readonly element: HTMLElement;
 
@@ -25,10 +30,14 @@ export class StatusIndicator implements UiPort {
 	 * @param strings the UI strings in the user's language
 	 */
 	constructor(
-		plugin: Plugin,
+		private readonly plugin: Plugin,
 		private readonly strings: Strings,
 	) {
 		this.label = statusLabel({ state: "notConnected" }, strings);
+		// A prompt left open would let a sync of the unloaded plugin delete files later.
+		plugin.register(() => {
+			for (const prompt of this.prompts) prompt.close();
+		});
 		const showState = (): void => {
 			new Notice(this.label);
 		};
@@ -61,6 +70,20 @@ export class StatusIndicator implements UiPort {
 	/** Shows `notice` as an Obsidian notice, in the user's language. */
 	showNotice(notice: SyncNotice): void {
 		new Notice(noticeText(notice, this.strings));
+	}
+
+	/**
+	 * Asks `prompt` in the Deletion guard's modal and resolves with the
+	 * answer; null if the plugin unloads while it is open.
+	 */
+	async askDeletions(prompt: DeletionPrompt): Promise<DeletionAnswer> {
+		const modal = new DeletionGuardModal(this.plugin.app, this.strings, prompt);
+		this.prompts.add(modal);
+		try {
+			return await modal.ask();
+		} finally {
+			this.prompts.delete(modal);
+		}
 	}
 
 	/**

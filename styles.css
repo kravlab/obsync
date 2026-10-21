@@ -107,3 +107,10 @@
 	color: var(--text-accent);
 	font-size: var(--font-ui-small);
 }
+
+/* The Deletion guard prompt's review list: every path, scrolled within
+   the window however many there are. */
+.obsync-guard-list {
+	max-height: 40vh;
+	overflow-y: auto;
+}

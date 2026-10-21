@@ -24,6 +24,7 @@ describe("statusLabel", () => {
 		["synced", "Synced", "Синхронизировано"],
 		["offline", "Offline", "Офлайн"],
 		["syncFailed", "Sync failed", "Ошибка синхронизации"],
+		["deletionsOnHold", "Deletions waiting for you", "Удаления ждут вашего решения"],
 	] as const)("names the %s state in English and Russian", (state, english, russian) => {
 		expect(statusLabel({ state }, selectStrings("en"))).toBe(english);
 		expect(statusLabel({ state }, selectStrings("ru"))).toBe(russian);

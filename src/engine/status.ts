@@ -16,6 +16,9 @@ import type { Connection } from "./ports";
  * - `syncFailed`: the last sync stopped on a failure that is not
  *   `transient`; the next one starts over. It stands in for Reconnect
  *   needed until that exists.
+ * - `deletionsOnHold`: the Deletion guard stopped a sync and its prompt
+ *   was closed without an answer; nothing syncs until the user asks for a
+ *   sync, which asks again.
  */
 export type SyncStatus =
 	| { readonly state: "notConnected" }
@@ -23,7 +26,8 @@ export type SyncStatus =
 	| { readonly state: "syncing" }
 	| { readonly state: "synced" }
 	| { readonly state: "offline" }
-	| { readonly state: "syncFailed" };
+	| { readonly state: "syncFailed" }
+	| { readonly state: "deletionsOnHold" };
 
 /** The status a device shows for its Connection, or for having none. */
 export function statusOf(connection: Connection | null): SyncStatus {

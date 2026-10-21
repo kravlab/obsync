@@ -7,5 +7,10 @@ export function noticeText(notice: SyncNotice, strings: Strings): string {
 	switch (notice.kind) {
 		case "conflictCopyCreated":
 			return fill(strings.noticeConflictCopyCreated, { file: notice.path, copy: notice.copyPath });
+		case "restoredAfterDelete":
+			return fill(
+				notice.deletedOn === "thisDevice" ? strings.noticeRestoredDeletedHere : strings.noticeRestoredDeletedThere,
+				{ file: notice.path },
+			);
 	}
 }

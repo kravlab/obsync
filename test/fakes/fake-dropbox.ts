@@ -35,9 +35,9 @@ export const ACCESS_TOKEN_SECONDS = 14400;
  * - `rev:<rev>` paths for `files/download` and `files/get_metadata`,
  *   over every revision each file has had;
  * - `files/delete_v2`, honouring `parent_rev`. Dropbox does not document
- *   its answer to a `parent_rev` that is not the file's latest; this fake
- *   answers a WriteError conflict (`path_write/conflict/file/`), an
- *   assumption still to be checked against the real service.
+ *   its answer to a `parent_rev` that is not the file's latest; the real
+ *   service, checked on 2026-10-21, answers 409 with a WriteError conflict
+ *   (`path_write/conflict/file/`), and so does this fake.
  *
  * Each account's App Folder is one tree of entries, keyed by lowercased
  * path, since Dropbox paths are case-insensitive.
@@ -327,8 +327,8 @@ export class FakeDropbox {
 	/**
 	 * `files/delete_v2`: removes the entry and everything inside it, or
 	 * answers `path_lookup/not_found`. With `parent_rev`, only a file of
-	 * that revision is removed (see the class comment for the assumed
-	 * answer otherwise).
+	 * that revision is removed (see the class comment for the answer
+	 * otherwise).
 	 */
 	private delete(account: FakeDropboxAccount, arg: { path: string; parent_rev?: string }): HttpResponse {
 		const existing = account.get(arg.path);

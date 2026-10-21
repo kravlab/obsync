@@ -20,6 +20,14 @@ const MAX_BACKOFF_MS = 5 * 60 * 1_000;
 /** What a trigger asks for: a sync, or a Full reconcile, which lists the Remote in full. */
 type SyncKind = "sync" | "reconcile";
 
+/**
+ * Who asked for a sync: the `user` ("Sync now", "Full reconcile"), or an
+ * `automatic` trigger (vault open, the post-edit pause, polling, the app
+ * becoming visible or going online). Only the user lifts a hold of the
+ * Deletion guard.
+ */
+export type SyncSource = "user" | "automatic";
+
 /** A started engine, as `start` returns it. */
 export interface StartedEngine {
 	/** Unsubscribes from the vault and cancels every timer; the shell calls it when the plugin unloads. */
@@ -38,15 +46,20 @@ export interface SyncEngine {
 	 */
 	start(): StartedEngine;
 	/**
-	 * Syncs this device once ("Sync now"), showing Syncing… and then Synced,
-	 * Offline on a `transient` failure, or Sync failed on another provider
-	 * failure or a provider that cannot be synced (`isSyncable`). A device
-	 * without a Connection only shows Not connected. Any triggers that fire
-	 * while a sync is running collapse into one follow-up sync immediately
-	 * after it finishes. Errors that are not provider failures are bugs: the
-	 * status shows Sync failed and the error is thrown.
+	 * Syncs this device once, showing Syncing… and then Synced, Offline on
+	 * a `transient` failure, or Sync failed on another provider failure or
+	 * a provider that cannot be synced (`isSyncable`). A device without a
+	 * Connection only shows Not connected. Any triggers that fire while a
+	 * sync is running collapse into one follow-up sync immediately after it
+	 * finishes. Errors that are not provider failures are bugs: the status
+	 * shows Sync failed and the error is thrown.
+	 *
+	 * When the Deletion guard's prompt was closed without an answer, sync
+	 * is held: it shows Deletions waiting for you and does nothing more
+	 * until a sync from the `user` ("Sync now", the default `source`),
+	 * which asks again. The hold lives in memory only.
 	 */
-	sync(): Promise<void>;
+	sync(source?: SyncSource): Promise<void>;
 	/**
 	 * Syncs this device once, listing the Remote in full instead of using
 	 * its change feed ("Full reconcile").
@@ -99,12 +112,16 @@ function timerOn(scheduler: Scheduler, isStopped: () => boolean): Timer {
 
 /** Builds a sync engine over `ports`. */
 export function createSyncEngine(ports: EnginePorts): SyncEngine {
-	const { deviceStore, secretStore, providers, vault, clock, scheduler, ui, schedule } = ports;
+	const { deviceStore, secretStore, providers, vault, clock, scheduler, ui, schedule, deletionGuard } = ports;
 	/** The sync running now, if any. */
 	let running: Run | undefined;
 	/** How many of the engine's own vault writes are under way; their change hints are not edits. */
 	let ownWrites = 0;
 	let backoffAttempt = 0;
+	/** Whether a closed Deletion guard prompt holds sync until the user asks for one. */
+	let held = false;
+	/** How many syncs the user has asked for; a hold is not set over a request made while its prompt was open. */
+	let userRequests = 0;
 	let stopped = false;
 	const isStopped = (): boolean => stopped;
 	const editPause = timerOn(scheduler, isStopped);
@@ -157,6 +174,11 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			ui.showStatus({ state: "notConnected" });
 			return;
 		}
+		if (held) {
+			ui.showStatus({ state: "deletionsOnHold" });
+			return;
+		}
+		const userRequestsBefore = userRequests;
 		ui.showStatus({ state: "syncing" });
 		try {
 			const secret = secretStore.getSecret(providerSecretId(providers.providerId));
@@ -188,8 +210,15 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				ui,
 				reconcile: run.kind === "reconcile",
 				editPauseMs: schedule().editPause.ms,
+				guard: deletionGuard(),
 			});
 			backoffAttempt = 0;
+			if (result.held === true) {
+				// A sync the user asked for meanwhile runs next and asks again.
+				held = userRequests === userRequestsBefore;
+				ui.showStatus({ state: "deletionsOnHold" });
+				return;
+			}
 			ui.showStatus({ state: "synced" });
 			if (result.nextPostEditPauseMs !== undefined) {
 				editPause.schedule(result.nextPostEditPauseMs, () => void trigger("sync"));
@@ -217,9 +246,13 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 	 * Starts a sync of `kind`, or joins the one running: before it lists,
 	 * it simply becomes `kind` if that is a reconcile; after, every trigger
 	 * collapses into one follow-up sync, a Full reconcile if any of them
-	 * asked for one.
+	 * asked for one. A trigger from the `user` lifts a Deletion guard hold.
 	 */
-	function trigger(kind: SyncKind): Promise<void> {
+	function trigger(kind: SyncKind, source: SyncSource = "automatic"): Promise<void> {
+		if (source === "user") {
+			held = false;
+			userRequests += 1;
+		}
 		retry.cancel();
 		editPause.cancel();
 		if (running !== undefined) {
@@ -270,12 +303,12 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			return { stop, opened };
 		},
 
-		sync(): Promise<void> {
-			return trigger("sync");
+		sync(source: SyncSource = "user"): Promise<void> {
+			return trigger("sync", source);
 		},
 
 		reconcile(): Promise<void> {
-			return trigger("reconcile");
+			return trigger("reconcile", "user");
 		},
 	};
 }

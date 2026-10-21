@@ -28,6 +28,8 @@ export interface FakeVaultOptions {
  */
 export class FakeVault implements LocalVault {
 	private readonly entries = new Map<VaultPath, StoredVaultEntry>();
+	/** Every path moved to the trash, oldest first; trashed entries are gone from the vault. */
+	readonly trashed: VaultPath[] = [];
 	private readonly listeners = new Set<(hint: VaultChangeHint) => void>();
 	/** When each path was last typed into, by the clock. */
 	private readonly typed = new Map<VaultPath, number>();
@@ -155,6 +157,7 @@ export class FakeVault implements LocalVault {
 
 	trash(path: VaultPath): Promise<void> {
 		if (!this.entries.has(path)) return Promise.reject(missing(path));
+		this.trashed.push(path);
 		for (const inside of this.subtree(path)) this.entries.delete(inside);
 		this.emit({ kind: "deleted", path });
 		return Promise.resolve();

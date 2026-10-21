@@ -2,6 +2,7 @@ import { Platform, Plugin, getLanguage, requestUrl } from "obsidian";
 import { createConnectionService } from "./engine/connection";
 import { createSyncEngine } from "./engine/engine";
 import type { Scheduler } from "./engine/ports";
+import { ObsidianDeletionGuardStore } from "./obsidian/deletion-guard-store";
 import { ObsidianDeviceStore } from "./obsidian/device-store";
 import { ObsidianLocalVault } from "./obsidian/local-vault";
 import { ObsidianRequestLimitStore } from "./obsidian/request-limit-store";
@@ -36,6 +37,7 @@ export default class ObsyncPlugin extends Plugin {
 		const strings = selectStrings(getLanguage());
 		const requestLimit = new ObsidianRequestLimitStore(this.app);
 		const schedule = new ObsidianScheduleStore(this.app);
+		const deletionGuard = new ObsidianDeletionGuardStore(this.app);
 		const scheduler = this.scheduler();
 		const dropbox: DropboxOptions = {
 			appKey: DROPBOX_APP_KEY,
@@ -77,11 +79,16 @@ export default class ObsyncPlugin extends Plugin {
 			scheduler,
 			ui,
 			schedule: () => schedule.load(),
+			deletionGuard: () => deletionGuard.load(),
 		});
 		// The engine shows Sync failed itself; an error reaching here is a
 		// bug, logged for the bug report.
 		const syncNow = (): void => {
 			engine.sync().catch((error: unknown) => console.error("obsync: sync failed", error));
+		};
+		// Visibility and network events sync on their own, so they do not lift a Deletion guard hold.
+		const syncAutomatically = (): void => {
+			engine.sync("automatic").catch((error: unknown) => console.error("obsync: sync failed", error));
 		};
 		const fullReconcile = (): void => {
 			engine.reconcile().catch((error: unknown) => console.error("obsync: reconcile failed", error));
@@ -99,10 +106,10 @@ export default class ObsyncPlugin extends Plugin {
 			// Only `visible` is acted on; `hidden` is not relied on, since the OS
 			// may suspend the app before a sync could finish.
 			this.registerDomEvent(mainDocument, "visibilitychange", () => {
-				if (mainDocument.visibilityState === "visible") syncNow();
+				if (mainDocument.visibilityState === "visible") syncAutomatically();
 			});
 			const mainWindow = mainDocument.defaultView;
-			if (mainWindow !== null) this.registerDomEvent(mainWindow, "online", () => syncNow());
+			if (mainWindow !== null) this.registerDomEvent(mainWindow, "online", () => syncAutomatically());
 		});
 		const settingTab = new ObsyncSettingTab(
 			this.app,
@@ -117,6 +124,7 @@ export default class ObsyncPlugin extends Plugin {
 			syncNow,
 			requestLimit,
 			schedule,
+			deletionGuard,
 		);
 		this.addSettingTab(settingTab);
 		await connection.showStatus();

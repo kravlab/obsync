@@ -22,4 +22,28 @@ describe("noticeText", () => {
 				"Версия этого устройства сохранена как photos/Photo (conflict Phone 2026-10-20 1430).png.",
 		);
 	});
+
+	const deletedHere = { kind: "restoredAfterDelete", path: "notes/Plan.md", deletedOn: "thisDevice" } as const;
+	const deletedThere = { kind: "restoredAfterDelete", path: "notes/Plan.md", deletedOn: "otherDevice" } as const;
+
+	it("tells in English that a file deleted here came back because another device edited it", () => {
+		expect(noticeText(deletedHere, selectStrings("en"))).toBe(
+			"notes/Plan.md came back: it was deleted on this device but edited on another one.",
+		);
+	});
+
+	it("tells in English that a file edited here was kept though another device deleted it", () => {
+		expect(noticeText(deletedThere, selectStrings("en"))).toBe(
+			"notes/Plan.md was kept: it was deleted on another device but edited on this one.",
+		);
+	});
+
+	it("tells both in Russian", () => {
+		expect(noticeText(deletedHere, selectStrings("ru"))).toBe(
+			"notes/Plan.md восстановлен: он был удалён на этом устройстве, но изменён на другом.",
+		);
+		expect(noticeText(deletedThere, selectStrings("ru"))).toBe(
+			"notes/Plan.md сохранён: он был удалён на другом устройстве, но изменён на этом.",
+		);
+	});
 });

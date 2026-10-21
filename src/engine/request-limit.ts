@@ -5,6 +5,7 @@
  * 20 MB, since Android crashed on larger bodies; a user whose device fails
  * even below that lowers it.
  */
+import { isWholeNumberIn, parseWholeNumber } from "./whole-number";
 
 /** One MiB, the setting's unit, as the size ceiling also counts. */
 const MEBIBYTE = 1024 * 1024;
@@ -31,15 +32,13 @@ export const DEFAULT_REQUEST_LIMIT: RequestLimit = limitOf(DEFAULT_MEBIBYTES);
 
 /** The limit of `mebibytes` MiB, or null when the setting does not take it. */
 export function requestLimitOf(mebibytes: number): RequestLimit | null {
-	return Number.isInteger(mebibytes) && mebibytes >= MIN_MEBIBYTES && mebibytes <= MAX_MEBIBYTES
-		? limitOf(mebibytes)
-		: null;
+	return isWholeNumberIn(mebibytes, MIN_MEBIBYTES, MAX_MEBIBYTES) ? limitOf(mebibytes) : null;
 }
 
 /** The limit the user typed, or null when it is not one. */
 export function parseRequestLimit(typed: string): RequestLimit | null {
-	const trimmed = typed.trim();
-	return /^\d+$/.test(trimmed) ? requestLimitOf(Number(trimmed)) : null;
+	const mebibytes = parseWholeNumber(typed, MIN_MEBIBYTES, MAX_MEBIBYTES);
+	return mebibytes === null ? null : limitOf(mebibytes);
 }
 
 /** The limit of `mebibytes` MiB, unchecked. */

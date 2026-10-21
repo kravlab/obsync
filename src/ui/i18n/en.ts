@@ -17,6 +17,8 @@ export const en = {
 	statusOffline: "Offline",
 	/** Sync status after a sync stopped on a failure. */
 	statusSyncFailed: "Sync failed",
+	/** Sync status after the Deletion guard prompt was closed without a choice; sync waits for "Sync now". */
+	statusDeletionsOnHold: "Deletions waiting for you",
 
 	/** Settings row naming the provider the device connects to. */
 	settingsDropbox: "Dropbox",
@@ -86,6 +88,42 @@ export const en = {
 		"Larger files move in parts of this size, from 1 to 19 MiB. Lower it if the app closes while syncing large files.",
 	/** The typed Per-request limit is not one. */
 	settingsRequestLimitInvalid: "Enter a whole number from 1 to 19.",
+	/** Settings row of this device's Deletion guard file count N. */
+	settingsGuardFiles: "Deletion guard: files",
+	/** Settings row description of the Deletion guard file count. */
+	settingsGuardFilesDescription: "Ask before a sync deletes more than this many files on one side, from 1 to 100000.",
+	/** The typed Deletion guard file count is not one. */
+	settingsGuardFilesInvalid: "Enter a whole number from 1 to 100000.",
+	/** Settings row of this device's Deletion guard percentage P. */
+	settingsGuardPercent: "Deletion guard: percent",
+	/** Settings row description of the Deletion guard percentage. */
+	settingsGuardPercentDescription:
+		"Ask before a sync deletes more than this share of the synced files on one side, from 1 to 100 percent.",
+	/** The typed Deletion guard percentage is not one. */
+	settingsGuardPercentInvalid: "Enter a whole number from 1 to 100.",
+
+	/** Title of the Deletion guard prompt. */
+	guardTitle: "Confirm deletions",
+	/** Why the guard stopped: more deletions than N or P allow. */
+	guardReasonThreshold: "This sync would delete more files than the deletion guard allows.",
+	/** Why the guard stopped: the vault lost every synced file. */
+	guardReasonMissingVault: "This vault has none of its synced files left.",
+	/** Why the guard stopped: Dropbox lost every synced file. */
+	guardReasonEmptyRemote: "Dropbox has none of the synced files left.",
+	/** How many files deleted here would be deleted in Dropbox; `{count}` is a number. */
+	guardToRemote: "Deleted on this device, to delete in Dropbox: {count}",
+	/** How many files deleted elsewhere would go to this device's trash; `{count}` is a number. */
+	guardToVault: "Deleted on another device, to move to this device's trash: {count}",
+	/** What closing the prompt does. */
+	guardCloseHint: "Closing this window pauses sync until you start a sync yourself.",
+	/** Button showing every file in the prompt. */
+	guardReview: "Review list",
+	/** Button hiding the list again. */
+	guardHideList: "Hide list",
+	/** Button applying the deletions. */
+	guardApply: "Apply deletions",
+	/** Button bringing every file back to the side it was deleted from. */
+	guardRestore: "Restore files",
 
 	/** Title of the connect window. */
 	connectTitle: "Connect to Dropbox",
@@ -139,6 +177,10 @@ export const en = {
 	/** A file changed on two devices could not be merged; `{file}` and `{copy}` are vault paths. */
 	noticeConflictCopyCreated:
 		"{file} changed on another device too and could not be merged. This device's version is kept as {copy}.",
+	/** A file deleted on this device came back, since another device had edited it; `{file}` is a vault path. */
+	noticeRestoredDeletedHere: "{file} came back: it was deleted on this device but edited on another one.",
+	/** A file edited on this device was kept and uploaded again, though another device deleted it; `{file}` is a vault path. */
+	noticeRestoredDeletedThere: "{file} was kept: it was deleted on another device but edited on this one.",
 } as const;
 
 /** The shape every language's string table must have: the keys of `en`. */

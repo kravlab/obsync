@@ -5,6 +5,7 @@
  * is polled while Obsidian is open. Both are per-device settings in whole
  * seconds.
  */
+import { isWholeNumberIn, parseWholeNumber } from "./whole-number";
 
 /** One second in milliseconds. */
 const SECOND_MS = 1000;
@@ -60,35 +61,24 @@ export const DEFAULT_SYNC_SCHEDULE: SyncSchedule = {
 
 /** The post-edit pause of `seconds` s, or null when the setting does not take it. */
 export function editPauseOf(seconds: number): SecondsSetting | null {
-	return inRange(seconds, MIN_EDIT_PAUSE_SECONDS, MAX_EDIT_PAUSE_SECONDS) ? durationOf(seconds) : null;
+	return isWholeNumberIn(seconds, MIN_EDIT_PAUSE_SECONDS, MAX_EDIT_PAUSE_SECONDS) ? durationOf(seconds) : null;
 }
 
 /** The post-edit pause the user typed, or null when it is not one. */
 export function parseEditPause(typed: string): SecondsSetting | null {
-	const seconds = parseWholeSeconds(typed);
-	return seconds === null ? null : editPauseOf(seconds);
+	const seconds = parseWholeNumber(typed, MIN_EDIT_PAUSE_SECONDS, MAX_EDIT_PAUSE_SECONDS);
+	return seconds === null ? null : durationOf(seconds);
 }
 
 /** The polling interval of `seconds` s, or null when the setting does not take it. */
 export function pollIntervalOf(seconds: number): SecondsSetting | null {
-	return inRange(seconds, MIN_POLL_INTERVAL_SECONDS, MAX_POLL_INTERVAL_SECONDS) ? durationOf(seconds) : null;
+	return isWholeNumberIn(seconds, MIN_POLL_INTERVAL_SECONDS, MAX_POLL_INTERVAL_SECONDS) ? durationOf(seconds) : null;
 }
 
 /** The polling interval the user typed, or null when it is not one. */
 export function parsePollInterval(typed: string): SecondsSetting | null {
-	const seconds = parseWholeSeconds(typed);
-	return seconds === null ? null : pollIntervalOf(seconds);
-}
-
-/** Whether `seconds` is a whole number from `min` to `max`. */
-function inRange(seconds: number, min: number, max: number): boolean {
-	return Number.isInteger(seconds) && seconds >= min && seconds <= max;
-}
-
-/** The whole number in `typed`, or null when `typed` is not digits only. */
-function parseWholeSeconds(typed: string): number | null {
-	const trimmed = typed.trim();
-	return /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+	const seconds = parseWholeNumber(typed, MIN_POLL_INTERVAL_SECONDS, MAX_POLL_INTERVAL_SECONDS);
+	return seconds === null ? null : durationOf(seconds);
 }
 
 /** The duration of `seconds` s in seconds and milliseconds. */

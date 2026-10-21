@@ -25,19 +25,40 @@
  *   copy next to it (conflict-copy.ts), uploaded and announced, and R
  *   takes the name on both sides. No clock decides between them.
  *
- * A vault file typed into within the post-edit pause is not written by this
- * sync; a later one writes it.
+ * - S with L or R gone (deletions.ts): a file deleted here and unchanged
+ *   on the Remote is deleted there on condition of S's revision; a file
+ *   deleted on the Remote and unchanged here goes to the user's trash. An
+ *   edit beats a delete: a file deleted here but changed on the Remote
+ *   comes back into the vault, one deleted there but edited here is
+ *   uploaded again, each with a notice. A delete refused by its
+ *   precondition is an edit made meanwhile, and brings the file back too.
+ *   A folder goes after its files, and only once a listing taken then
+ *   shows it empty on that side, so a file another device added meanwhile
+ *   keeps it. S is forgotten once a path is gone from both sides.
+ *
+ * Before anything is written, the Deletion guard (deletion-guard.ts) checks
+ * the files about to be deleted, and may ask the user: Apply deletes them,
+ * Restore brings them back to the side they were deleted from, and a
+ * closed prompt stops this sync with nothing written ("held").
+ *
+ * Uploads run first, then deletions, then downloads.
+ *
+ * A vault file typed into within the post-edit pause is not written or
+ * trashed by this sync; a later one does it.
  *
  * Which paths take part, and their vault paths on a case-insensitive
- * provider, is settled by `syncListing` first.
+ * provider, is settled by `syncListing` first; a path it leaves out is
+ * never taken for a deleted one.
  *
- * Everything else is left as it is on both sides: a path missing on one
- * side while S has it (deletions come later), and a file and a folder at
- * one path. A merged upload refused by its precondition is left too; the
- * next sync merges again.
+ * Everything else is left as it is on both sides: a file and a folder at
+ * one path. A merged
+ * upload refused by its precondition is left too; the next sync merges
+ * again.
  */
 import { conflictCopyPath } from "./conflict-copy";
 import { contentHash } from "./content-hash";
+import { guardReason, type DeletionGuardSettings } from "./deletion-guard";
+import { findDeletions } from "./deletions";
 import type { LocalVault, VaultFile, VaultPath } from "./local-vault";
 import { comparePaths, foldersDownTo, parentOf, pathKey } from "./paths";
 import type { Clock, DeviceIdentity, DeviceStore, RemoteFeed, UiPort } from "./ports";
@@ -53,7 +74,7 @@ import {
 } from "./provider";
 import { contentKindOf, type RemoteSettings } from "./remote-metadata";
 import { syncListing } from "./sync-listing";
-import type { SnapshotEntry, VaultFileStat } from "./sync-snapshot";
+import type { SnapshotEntry, SyncedFile, VaultFileStat } from "./sync-snapshot";
 import { mergeText } from "./text-merge";
 import { postEditPauseRemainingMs } from "./post-edit-pause";
 import { decodeUtf8 } from "./utf8";
@@ -83,6 +104,8 @@ export interface SyncRun {
 	readonly reconcile: boolean;
 	/** The post-edit pause in milliseconds, which holds back writes to the note being typed in. */
 	readonly editPauseMs: number;
+	/** This device's Deletion guard thresholds. */
+	readonly guard: DeletionGuardSettings;
 }
 
 /** What a completed sync reports to the engine. */
@@ -92,6 +115,11 @@ export interface SyncRunResult {
 	 * typing in it, the milliseconds remaining until its post-edit pause ends.
 	 */
 	readonly nextPostEditPauseMs?: number;
+	/**
+	 * True when the Deletion guard's prompt was closed without an answer:
+	 * the sync stopped before writing anything.
+	 */
+	readonly held?: boolean;
 }
 
 /**
@@ -108,14 +136,17 @@ export async function runSync({
 	ui,
 	reconcile,
 	editPauseMs,
+	guard,
 }: SyncRun): Promise<SyncRunResult> {
 	const snapshot = new Map(await deviceStore.loadSnapshot());
 	const previousFeed = await deviceStore.loadRemoteFeed();
 	const listed = await listRemote(provider, previousFeed, snapshot.size > 0, reconcile);
-	const listing = syncListing(await vault.list(), listed.entries, {
-		configDir: vault.configDir,
-		caseInsensitive: provider.nameRules.caseInsensitive,
-	});
+	const listing = syncListing(
+		await vault.list(),
+		listed.entries,
+		{ configDir: vault.configDir, caseInsensitive: provider.nameRules.caseInsensitive },
+		snapshot.keys(),
+	);
 	const remote = new Map(listing.remote.map((entry) => [entry.path, entry] as const));
 	const { local } = listing;
 	/** The vault files of the walk at the start of this sync, by path. */
@@ -386,6 +417,185 @@ export async function runSync({
 		await recordFile(file.path, { data, revision: written.revision }, hash, walkedStat(file.path));
 	}
 
+	/** Whether the vault file `file` still holds the content `synced` records, by its stat or else its hash. */
+	async function unchangedHere(file: VaultFile, synced: SyncedFile): Promise<boolean> {
+		if (synced.stat?.size === file.size && synced.stat.mtime === file.mtime) return true;
+		return (await contentHash(await vault.read(file.path))) === synced.hash;
+	}
+
+	/**
+	 * The revision of the Remote file `path` if it holds the content `synced`
+	 * records; null when its content differs or it is gone.
+	 */
+	async function remoteRevisionIfUnchanged(path: VaultPath, synced: SyncedFile): Promise<string | null> {
+		const remoteVersion = await readRemote(path);
+		if (remoteVersion === undefined) return null;
+		return (await contentHash(remoteVersion.data)) === synced.hash ? remoteVersion.revision : null;
+	}
+
+	/** The snapshot's file entry for `path`, which the deletion rules found there. */
+	function syncedFile(path: VaultPath): SyncedFile {
+		const synced = snapshot.get(path);
+		if (synced?.kind !== "file") throw new Error(`engine bug: no synced file at ${path}`);
+		return synced;
+	}
+
+	/** Forgets `path`, gone from both sides now, with its Base. */
+	async function forget(path: VaultPath): Promise<void> {
+		await deviceStore.removeSnapshotEntry(path);
+		snapshot.delete(path);
+	}
+
+	/** Forgets `path`, deleted here and now gone from the Remote too. */
+	async function forgetGoneRemotely(path: VaultPath): Promise<void> {
+		remote.delete(path);
+		await forget(path);
+	}
+
+	/**
+	 * Deletes on the Remote the file `path`, deleted here, on condition that
+	 * it still has `revision`, then forgets it. Refused because another
+	 * device wrote it since, it comes back (`restoreDeletedHere`); already
+	 * gone there, it is only forgotten.
+	 */
+	async function deleteRemoteFile(path: VaultPath, revision: string): Promise<void> {
+		try {
+			await provider.delete(path, { kind: "revision", revision });
+		} catch (error) {
+			if (isFailure(error, "preconditionFailed")) return restoreDeletedHere(path);
+			if (!isFailure(error, "notFound")) throw error;
+		}
+		await forgetGoneRemotely(path);
+	}
+
+	/**
+	 * Brings back into the vault the file `path`, deleted here but edited
+	 * on the Remote, and tells the user: an edit beats a delete. One gone
+	 * meanwhile is forgotten; a vault path taken meanwhile is left for the
+	 * next sync. Whatever the Remote holds now comes back, never deleted
+	 * here: only deletions the Deletion guard counted are applied.
+	 */
+	async function restoreDeletedHere(path: VaultPath): Promise<void> {
+		const remoteVersion = await readRemote(path);
+		if (remoteVersion === undefined) return forgetGoneRemotely(path);
+		if (await putBackInVault(path, remoteVersion, await contentHash(remoteVersion.data))) {
+			ui.showNotice({ kind: "restoredAfterDelete", path, deletedOn: "thisDevice" });
+		}
+	}
+
+	/**
+	 * Brings back into the vault the file `path`, deleted here, as the
+	 * Remote has it now: the Deletion guard's Restore. One gone from the
+	 * Remote meanwhile is forgotten.
+	 */
+	async function downloadBack(path: VaultPath): Promise<void> {
+		const remoteVersion = await readRemote(path);
+		if (remoteVersion === undefined) return forgetGoneRemotely(path);
+		await putBackInVault(path, remoteVersion, await contentHash(remoteVersion.data));
+	}
+
+	/**
+	 * Writes `remoteVersion`, with `hash`, back to the vault path `path` and
+	 * records it, if the path is still free; returns whether it did. A path
+	 * taken meanwhile is left for the next sync.
+	 */
+	async function putBackInVault(path: VaultPath, remoteVersion: RemoteContent, hash: string): Promise<boolean> {
+		await ensureVaultFolder(parentOf(path));
+		if ((await vault.stat(path)) !== null) return false;
+		await vault.write(path, remoteVersion.data);
+		remote.set(path, { kind: "file", path, revision: remoteVersion.revision, size: remoteVersion.data.byteLength });
+		await recordFile(path, remoteVersion, hash);
+		return true;
+	}
+
+	/**
+	 * Moves to the user's trash the vault file `path`, deleted on the
+	 * Remote, then forgets it; it is checked again just before, by its stat
+	 * and only if that changed by its content, and an edit found then is
+	 * kept (`keepEditedHere`). A file being typed into
+	 * is left for a later sync. There is no "trash only if unchanged" in one
+	 * step, so an edit saved between that check and the trash goes to the
+	 * trash with the file.
+	 */
+	async function trashDeletedThere(path: VaultPath): Promise<void> {
+		if (pausedForTyping(path)) return;
+		const here = await vault.stat(path);
+		if (here === null) return forget(path);
+		if (here.kind !== "file") return;
+		if (!(await unchangedHere(here, syncedFile(path)))) return keepEditedHere(path, true);
+		await vault.trash(path);
+		await forget(path);
+	}
+
+	/**
+	 * Uploads again the vault file `path`, deleted on the Remote, on
+	 * condition that the Remote path is still free, and records it: for a
+	 * file edited here, an edit beats a delete, and `announce` tells the
+	 * user; for the Deletion guard's Restore, it is not announced. A file
+	 * another device put there meanwhile is merged with it, as one created
+	 * on both sides.
+	 */
+	async function keepEditedHere(path: VaultPath, announce: boolean): Promise<void> {
+		const here = await vault.stat(path);
+		if (here?.kind !== "file") return;
+		const data = await vault.read(path);
+		const hash = await contentHash(data);
+		await ensureRemoteFolder(parentOf(path));
+		const written = await writeRemote(path, data, { kind: "absent" });
+		if (written === undefined) {
+			const remoteVersion = await readRemote(path);
+			if (remoteVersion !== undefined) await merge(path, remoteVersion, undefined);
+			return;
+		}
+		remote.set(path, written);
+		await recordFile(path, { data, revision: written.revision }, hash, { size: here.size, mtime: here.mtime });
+		if (announce) ui.showNotice({ kind: "restoredAfterDelete", path, deletedOn: "otherDevice" });
+	}
+
+	/**
+	 * Deletes on the Remote the `folders` deleted here, deepest first, each
+	 * only if a listing taken now shows nothing inside it, and forgets
+	 * them. A folder another device added to meanwhile stays, and what it
+	 * holds downloads. Folders have no revision, so a file added between
+	 * this listing and the delete is not protected by a precondition.
+	 */
+	async function deleteRemoteFolders(folders: readonly VaultPath[]): Promise<void> {
+		const { caseInsensitive } = provider.nameRules;
+		const keyOf = (path: string): string => pathKey(path, caseInsensitive);
+		// Changes since this sync's own listing where the provider has a feed, else a full listing.
+		const since = listed.cursor === undefined ? null : { cursor: listed.cursor, entries: listed.entries };
+		const current = await listRemote(provider, since, true, false);
+		const contents = folderContents(current.entries.map((entry) => keyOf(entry.path)));
+		for (const folder of deepestFirst(folders)) {
+			if (!contents.isEmpty(keyOf(folder))) continue;
+			try {
+				await provider.delete(folder);
+			} catch (error) {
+				if (!isFailure(error, "notFound")) throw error;
+			}
+			contents.remove(keyOf(folder));
+			remote.delete(folder);
+			await forget(folder);
+		}
+	}
+
+	/**
+	 * Moves to the user's trash the vault `folders` deleted on the Remote,
+	 * deepest first, each only if the vault lists nothing inside it now and
+	 * the Remote did not get it back from this sync's uploads, and forgets
+	 * them. A folder holding a new file stays; the file's upload brought
+	 * the folder back to the Remote.
+	 */
+	async function trashVaultFolders(folders: readonly VaultPath[]): Promise<void> {
+		const contents = folderContents((await vault.list()).map((entry) => entry.path));
+		for (const folder of deepestFirst(folders)) {
+			if (remote.has(folder) || !contents.isEmpty(folder)) continue;
+			if (contents.has(folder)) await vault.trash(folder);
+			contents.remove(folder);
+			await forget(folder);
+		}
+	}
+
 	/** Brings a Remote folder to the vault, or records it if it is there. */
 	async function downloadFolder(path: VaultPath): Promise<void> {
 		if (snapshot.has(path)) return;
@@ -446,11 +656,47 @@ export async function runSync({
 		await recordFile(file.path, remoteVersion, hash);
 	}
 
+	const deletions = await findDeletions(snapshot, listing, { unchangedHere, remoteRevisionIfUnchanged });
+	/** Vault files the deletion rules handle instead of the upload pass. */
+	const deletedThere = new Set([...deletions.toVault, ...deletions.localChanged]);
+	const syncedPaths = [...snapshot].filter(([, entry]) => entry.kind === "file").map(([path]) => path);
+	const toRemotePaths = deletions.toRemote.map(({ path }) => path);
+	const reason = guardReason(
+		{
+			syncedFiles: syncedPaths.length,
+			vaultFiles: syncedPaths.filter((path) => !listing.goneLocally(path)).length,
+			remoteFiles: syncedPaths.filter((path) => !listing.goneRemotely(path)).length,
+			toRemote: toRemotePaths.length,
+			toVault: deletions.toVault.length,
+		},
+		guard,
+	);
+	const answer =
+		reason === null
+			? "apply"
+			: await ui.askDeletions({ reason, toRemote: toRemotePaths, toVault: deletions.toVault });
+	if (answer === null) return { held: true };
+
 	for (const file of sortedForUpload([...localFiles.values()], settings)) {
-		await uploadFile(file);
+		if (!deletedThere.has(file.path)) await uploadFile(file);
 	}
 	for (const entry of sortedByPath(local)) {
 		if (entry.kind === "folder") await uploadFolder(entry.path);
+	}
+	for (const path of deletions.forgotten) await forget(path);
+	for (const path of deletions.remoteChanged) await restoreDeletedHere(path);
+	for (const path of deletions.localChanged) await keepEditedHere(path, true);
+	if (answer === "apply") {
+		for (const { path, revision } of deletions.toRemote) await deleteRemoteFile(path, revision);
+		for (const path of deletions.toVault) await trashDeletedThere(path);
+		if (deletions.foldersToRemote.length > 0) await deleteRemoteFolders(deletions.foldersToRemote);
+		if (deletions.foldersToVault.length > 0) await trashVaultFolders(deletions.foldersToVault);
+	} else {
+		// Restore: each deleted file and folder goes back to the side it was deleted from.
+		for (const path of toRemotePaths) await downloadBack(path);
+		for (const path of deletions.toVault) await keepEditedHere(path, false);
+		for (const path of deletions.foldersToRemote) await ensureVaultFolder(path);
+		for (const path of deletions.foldersToVault) await ensureRemoteFolder(path);
 	}
 	for (const entry of sortedByPath([...remote.values()])) {
 		if (entry.kind === "folder") await downloadFolder(entry.path);
@@ -538,6 +784,38 @@ function sortedForUpload(files: readonly VaultFile[], settings: RemoteSettings):
 		if (a.size !== b.size) return a.size - b.size;
 		return comparePaths(a.path, b.path);
 	});
+}
+
+/** Which of a listing's paths exist and how many entries each folder holds directly. */
+interface FolderContents {
+	/** Whether the listing has `path`. */
+	has(path: string): boolean;
+	/** Whether the folder `path` holds nothing, as listed and after what `remove` took away. */
+	isEmpty(path: string): boolean;
+	/** Takes `path` out of the listing, so its parent may become empty; a path not listed changes nothing. */
+	remove(path: string): void;
+}
+
+/** The contents of the folders in a listing of `paths`, counted once so each check is a lookup. */
+function folderContents(paths: readonly string[]): FolderContents {
+	const present = new Set(paths);
+	const counts = new Map<string, number>();
+	for (const path of present) counts.set(parentOf(path), (counts.get(parentOf(path)) ?? 0) + 1);
+	return {
+		has: (path) => present.has(path),
+		isEmpty: (path) => (counts.get(path) ?? 0) === 0,
+		remove(path) {
+			if (!present.delete(path)) return;
+			counts.set(parentOf(path), (counts.get(parentOf(path)) ?? 1) - 1);
+		},
+	};
+}
+
+/** `folders` ordered so every folder comes after the folders inside it. */
+function deepestFirst(folders: readonly VaultPath[]): VaultPath[] {
+	return sortedByPath(folders.map((path) => ({ path })))
+		.reverse()
+		.map(({ path }) => path);
 }
 
 /** `entries` ordered by path, so every folder comes before what it holds. */

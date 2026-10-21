@@ -4,8 +4,9 @@
  *
  * On a case-insensitive provider, paths that differ only by case address
  * one entry, so they are matched by a folded key: a Remote entry takes the
- * vault path of the vault entry it matches, and an unmatched one its
- * parent's vault path plus its own name. The rest of the sync then works
+ * vault path of the vault entry it matches, else the Sync snapshot's path
+ * it matches (a file deleted here keeps the path it was synced under), and
+ * an unmatched one its parent's vault path plus its own name. The rest of the sync then works
  * in vault paths alone, every provider call addresses the Remote entry it
  * means, and each side keeps the case it has. Paths are folded with
  * `toLowerCase`, as Dropbox's `path_lower` is taken to fold ordinary names.
@@ -18,6 +19,10 @@
  *   job, later);
  * - every entry below a path that is a file on the other side: syncing it
  *   would need a folder where a file is.
+ *
+ * A path left out is not gone: `goneLocally` and `goneRemotely` tell a
+ * side that no longer has a path at all, so the deletion rules never take
+ * a path left out here for a deleted one.
  */
 import type { VaultEntry, VaultPath } from "./local-vault";
 import { ancestorsOf, foldersDownTo, isWithin, nameOf, parentOf, pathKey } from "./paths";
@@ -28,6 +33,10 @@ import { METADATA_FOLDER } from "./remote-metadata";
 export interface SyncListing {
 	readonly local: readonly VaultEntry[];
 	readonly remote: readonly RemoteEntry[];
+	/** Whether the vault listing has no entry at `path`, matched as the provider matches paths. */
+	goneLocally(path: VaultPath): boolean;
+	/** Whether the Remote listing has no entry at `path`, matched as the provider matches paths. */
+	goneRemotely(path: VaultPath): boolean;
 }
 
 /** What narrowing the listings depends on besides the listings. */
@@ -40,12 +49,15 @@ export interface ListingRules {
 
 /**
  * Narrows the vault listing `local` and the Remote listing `remote` to the
- * paths a sync may touch, with the Remote entries moved to vault paths.
+ * paths a sync may touch, with the Remote entries moved to vault paths;
+ * `syncedPaths`, the Sync snapshot's paths, name Remote entries the vault
+ * no longer has.
  */
 export function syncListing(
 	local: readonly VaultEntry[],
 	remote: readonly RemoteEntry[],
 	{ configDir, caseInsensitive }: ListingRules,
+	syncedPaths: Iterable<VaultPath> = [],
 ): SyncListing {
 	/** The key paths are matched by. */
 	const key = (path: string): string => pathKey(path, caseInsensitive);
@@ -60,6 +72,9 @@ export function syncListing(
 	const localShown = localKept.filter((entry) => !clashes(entry.path));
 
 	const vaultPaths = new Map(localShown.map((entry) => [key(entry.path), entry.path] as const));
+	for (const path of syncedPaths) {
+		if (!vaultPaths.has(key(path)) && !clashes(path)) vaultPaths.set(key(path), path);
+	}
 	/** The vault path of the Remote path `path`. */
 	const vaultPathOf = (path: RemotePath): VaultPath => {
 		const matched = vaultPaths.get(key(path));
@@ -73,9 +88,13 @@ export function syncListing(
 
 	const localFiles = filePaths(localShown);
 	const remoteFiles = filePaths(remoteShown);
+	const localKeys = new Set(local.map((entry) => key(entry.path)));
+	const remoteKeys = new Set(remote.map((entry) => key(entry.path)));
 	return {
 		local: localShown.filter((entry) => !belowAny(entry.path, remoteFiles)),
 		remote: remoteShown.filter((entry) => !belowAny(entry.path, localFiles)),
+		goneLocally: (path) => !localKeys.has(key(path)),
+		goneRemotely: (path) => !remoteKeys.has(key(path)),
 	};
 }
 

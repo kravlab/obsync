@@ -3,6 +3,7 @@
  * "Architecture and modules"). The shell supplies the real adapters, tests
  * supply fakes; the engine never imports Obsidian.
  */
+import type { DeletionAnswer, DeletionGuardSettings, DeletionPrompt } from "./deletion-guard";
 import type { LocalVault, VaultPath } from "./local-vault";
 import type { SyncNotice } from "./notices";
 import type { Provider, RemoteEntry } from "./provider";
@@ -80,6 +81,12 @@ export interface DeviceStore {
 	 * after it keeps both, and one never outlives the other.
 	 */
 	saveSnapshotEntry(path: VaultPath, entry: SnapshotEntry, base: ArrayBuffer | null): Promise<void>;
+	/**
+	 * Forgets `path`, gone from both sides: removes its entry and its Base
+	 * together, durable once the returned promise resolves. A path not
+	 * recorded is left as it is.
+	 */
+	removeSnapshotEntry(path: VaultPath): Promise<void>;
 	/** Returns the Base recorded for `path`, or null if there is none. */
 	loadBase(path: VaultPath): Promise<ArrayBuffer | null>;
 	/**
@@ -134,14 +141,20 @@ export interface Scheduler {
 }
 
 /**
- * The engine's calls into the UI. Prompts arrive with the tickets that
- * raise them and will be awaited for the user's answer.
+ * The engine's calls into the UI. Prompts are awaited for the user's
+ * answer; more arrive with the tickets that raise them.
  */
 export interface UiPort {
 	/** Shows the current sync status. */
 	showStatus(status: SyncStatus): void;
 	/** Tells the user `notice` once, without waiting for an answer. */
 	showNotice(notice: SyncNotice): void;
+	/**
+	 * Asks the user what to do about the deletions the Deletion guard
+	 * stopped, with the list to review, and resolves with the answer; null
+	 * when the prompt was closed without one.
+	 */
+	askDeletions(prompt: DeletionPrompt): Promise<DeletionAnswer>;
 }
 
 /** Everything the engine is built from. */
@@ -155,4 +168,6 @@ export interface EnginePorts {
 	readonly ui: UiPort;
 	/** This device's current schedule settings, read each time they are needed. */
 	readonly schedule: () => SyncSchedule;
+	/** This device's current Deletion guard thresholds, read at the start of each sync. */
+	readonly deletionGuard: () => DeletionGuardSettings;
 }

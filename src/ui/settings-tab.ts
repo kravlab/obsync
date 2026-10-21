@@ -1,8 +1,10 @@
 import { Notice, PluginSettingTab, Setting, requireApiVersion, type App, type Plugin, type SettingDefinitionItem } from "obsidian";
 import type { ConnectionService } from "../engine/connection";
+import { parseMaxDeletedFiles, parseMaxDeletedPercent } from "../engine/deletion-guard";
 import type { DeviceIdentity } from "../engine/ports";
 import { parseRequestLimit } from "../engine/request-limit";
 import { parseEditPause, parsePollInterval } from "../engine/sync-schedule";
+import type { ObsidianDeletionGuardStore } from "../obsidian/deletion-guard-store";
 import type { ObsidianRequestLimitStore } from "../obsidian/request-limit-store";
 import type { ObsidianScheduleStore } from "../obsidian/schedule-store";
 import { fill } from "./i18n/fill";
@@ -44,8 +46,9 @@ interface Row {
 
 /**
  * The plugin's settings tab: this device's Connection, with Connect or
- * Disconnect, "Sync now" while connected, and this device's per-request
- * limit. It renders declaratively on
+ * Disconnect, "Sync now" while connected, and this device's number
+ * settings: the post-edit pause, the polling interval, the per-request
+ * limit and the Deletion guard thresholds. It renders declaratively on
  * Obsidian 1.13 and later (`getSettingDefinitions`, also indexed for
  * settings search) and through `display` before that; both draw the same
  * rows.
@@ -65,6 +68,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	 * @param syncNow starts a sync of this device
 	 * @param requestLimit keeps this device's Per-request limit
 	 * @param schedule keeps this device's post-edit pause and polling interval
+	 * @param deletionGuard keeps this device's Deletion guard thresholds
 	 */
 	constructor(
 		app: App,
@@ -75,6 +79,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 		private readonly syncNow: () => void,
 		private readonly requestLimit: ObsidianRequestLimitStore,
 		private readonly schedule: ObsidianScheduleStore,
+		private readonly deletionGuard: ObsidianDeletionGuardStore,
 	) {
 		super(app, plugin);
 	}
@@ -114,9 +119,12 @@ export class ObsyncSettingTab extends PluginSettingTab {
 		for (const field of this.numberFields()) drawNumberField(new Setting(this.containerEl), field);
 	}
 
-	/** This device's number settings: the post-edit pause, the polling interval and the Per-request limit. */
+	/**
+	 * This device's number settings: the post-edit pause, the polling
+	 * interval, the Per-request limit and the Deletion guard's N and P.
+	 */
 	private numberFields(): NumberField[] {
-		const { strings, schedule, requestLimit } = this;
+		const { strings, schedule, requestLimit, deletionGuard } = this;
 		return [
 			{
 				name: strings.settingsEditPause,
@@ -149,6 +157,28 @@ export class ObsyncSettingTab extends PluginSettingTab {
 					const limit = parseRequestLimit(typed);
 					if (limit !== null) requestLimit.save(limit);
 					return limit !== null;
+				},
+			},
+			{
+				name: strings.settingsGuardFiles,
+				description: strings.settingsGuardFilesDescription,
+				invalid: strings.settingsGuardFilesInvalid,
+				current: () => deletionGuard.load().maxFiles,
+				save: (typed) => {
+					const maxFiles = parseMaxDeletedFiles(typed);
+					if (maxFiles !== null) deletionGuard.save({ ...deletionGuard.load(), maxFiles });
+					return maxFiles !== null;
+				},
+			},
+			{
+				name: strings.settingsGuardPercent,
+				description: strings.settingsGuardPercentDescription,
+				invalid: strings.settingsGuardPercentInvalid,
+				current: () => deletionGuard.load().maxPercent,
+				save: (typed) => {
+					const maxPercent = parseMaxDeletedPercent(typed);
+					if (maxPercent !== null) deletionGuard.save({ ...deletionGuard.load(), maxPercent });
+					return maxPercent !== null;
 				},
 			},
 		];

@@ -195,10 +195,10 @@ function writeMode(precondition: Precondition | undefined): unknown {
 }
 
 /**
- * The failure for a `delete_v2` route error (DeleteError). What Dropbox
- * answers to a `parent_rev` that is not the file's latest is not
- * documented; it is taken to be a WriteError conflict, as the fake service
- * answers, until it is checked against the real service.
+ * The failure for a `delete_v2` route error (DeleteError). Dropbox does not
+ * document its answer to a `parent_rev` that is not the file's latest;
+ * checked against the real service on 2026-10-21, it is 409
+ * `path_write/conflict/file/`, a WriteError conflict, so `preconditionFailed`.
  */
 function deleteFailure(error: Tagged): ProviderError {
 	switch (error[".tag"]) {
