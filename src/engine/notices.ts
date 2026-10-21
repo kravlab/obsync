@@ -16,6 +16,12 @@ import type { VaultPath } from "./local-vault";
  *   this device's edited file was kept and uploaded again. The other
  *   device is not named: without Device journals the writer of a Remote
  *   revision is unknown.
+ * - `renamedOnBoth`: the entry this device had renamed to `localPath` was
+ *   renamed differently on the Remote; the Remote's name wins, so it is
+ *   now at `path` here too.
+ * - `renameBeatsDelete`: the entry now at `path` was renamed on one side
+ *   and deleted on the other, and the rename won: it is kept under its new
+ *   name. `deletedOn` tells where it was deleted, as above.
  */
 export type SyncNotice =
 	| {
@@ -25,6 +31,16 @@ export type SyncNotice =
 	  }
 	| {
 			readonly kind: "restoredAfterDelete";
+			readonly path: VaultPath;
+			readonly deletedOn: "thisDevice" | "otherDevice";
+	  }
+	| {
+			readonly kind: "renamedOnBoth";
+			readonly path: VaultPath;
+			readonly localPath: VaultPath;
+	  }
+	| {
+			readonly kind: "renameBeatsDelete";
 			readonly path: VaultPath;
 			readonly deletedOn: "thisDevice" | "otherDevice";
 	  };

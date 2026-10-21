@@ -12,7 +12,7 @@ import {
 	type RemotePath,
 	type RemoteContent,
 } from "../../src/engine/provider";
-import { toRemoteFile, type FakeRemote, type StoredFile } from "./fake-remote";
+import { toRemoteEntry, toRemoteFile, type FakeRemote, type StoredFile } from "./fake-remote";
 import { CrashPoints } from "./crash-points";
 import { parentOf } from "../../src/engine/paths";
 
@@ -139,9 +139,8 @@ export class FakeProvider implements Provider {
 			if (!this.remote.isFolder(parentOf(path))) throw notFound(parentOf(path));
 			if (this.remote.isFolder(path)) throw preconditionFailed(path);
 			if (!this.holds(path, precondition)) throw preconditionFailed(path);
-			const stored: StoredFile = { kind: "file", data: data.slice(0), revision: this.remote.nextRevision() };
-			this.remote.put(path, stored);
-			return Promise.resolve(toRemoteFile(path, stored));
+			const file: StoredFile = { kind: "file", data: data.slice(0), revision: this.remote.nextRevision() };
+			return Promise.resolve(toRemoteEntry(path, this.remote.put(path, file)) as RemoteFile);
 		});
 	}
 
@@ -163,8 +162,8 @@ export class FakeProvider implements Provider {
 			this.checkName(path);
 			if (!this.remote.isFolder(parentOf(path))) throw notFound(parentOf(path));
 			if (this.remote.get(path)?.kind === "file") throw preconditionFailed(path);
-			if (!this.remote.get(path)) this.remote.put(path, { kind: "folder" });
-			return Promise.resolve({ kind: "folder", path });
+			const stored = this.remote.get(path) ?? this.remote.put(path, { kind: "folder" });
+			return Promise.resolve(toRemoteEntry(path, stored) as RemoteFolder);
 		});
 	}
 

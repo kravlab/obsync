@@ -81,6 +81,41 @@ describe("FakeProvider Capability toggles", () => {
 		});
 	});
 
+	describe("stable ids", () => {
+		it("lists no stable ids by default", async () => {
+			const provider = new FakeRemote().openProvider();
+			const written = await provider.write("note.md", bytes("a"));
+			expect(written.stableId).toBeUndefined();
+			expect((await provider.list()).entries[0]?.stableId).toBeUndefined();
+		});
+
+		it("gives each new entry its own id, kept when the file is overwritten and when it moves", async () => {
+			const provider = new FakeRemote({ stableIds: true, fileMove: true, folderMove: true }).openProvider();
+			const folder = await provider.createFolder("old");
+			const first = await provider.write("old/a.md", bytes("a"));
+			const other = await provider.write("b.md", bytes("b"));
+			const overwritten = await provider.write("old/a.md", bytes("a2"));
+			await reported<FolderMove>(provider.capabilities.folderMove).moveFolder("old", "new");
+			const moved = await reported<FileMove>(provider.capabilities.fileMove).moveFile("new/a.md", "c.md");
+
+			expect(first.stableId).toBeDefined();
+			expect(other.stableId).not.toBe(first.stableId);
+			expect(overwritten.stableId).toBe(first.stableId);
+			expect(moved.stableId).toBe(first.stableId);
+			const listed = new Map((await provider.list()).entries.map((entry) => [entry.path, entry.stableId]));
+			expect(listed.get("new")).toBe(folder.stableId);
+			expect(listed.get("c.md")).toBe(first.stableId);
+		});
+
+		it("gives a file deleted and written again a new id", async () => {
+			const provider = new FakeRemote({ stableIds: true }).openProvider();
+			const first = await provider.write("note.md", bytes("a"));
+			await provider.delete("note.md");
+			const second = await provider.write("note.md", bytes("a"));
+			expect(second.stableId).not.toBe(first.stableId);
+		});
+	});
+
 	describe("file move", () => {
 		it("moves a file with its content", async () => {
 			const provider = new FakeRemote({ fileMove: true }).openProvider();

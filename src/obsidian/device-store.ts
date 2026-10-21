@@ -105,6 +105,23 @@ export class ObsidianDeviceStore implements DeviceStore {
 		await completion(transaction);
 	}
 
+	async moveSnapshotEntry(from: VaultPath, to: VaultPath, entry: SnapshotEntry): Promise<void> {
+		const name = this.databaseName() ?? this.newDatabase();
+		const transaction = (await this.open(name)).transaction([ENTRIES, BASES], "readwrite");
+		const bases = transaction.objectStore(BASES);
+		const base = bases.get(from);
+		base.onsuccess = () => {
+			const found: unknown = base.result;
+			if (found instanceof ArrayBuffer) bases.put(found, to);
+			else bases.delete(to);
+			bases.delete(from);
+		};
+		const entries = transaction.objectStore(ENTRIES);
+		entries.delete(from);
+		entries.put(entry, to);
+		await completion(transaction);
+	}
+
 	async loadBase(path: VaultPath): Promise<ArrayBuffer | null> {
 		const name = this.databaseName();
 		if (name === null) return null;
@@ -254,12 +271,16 @@ function parseConnection(stored: unknown): Connection | null {
 /** The snapshot entry in a stored record, or null if it holds no valid one. */
 function parseEntry(stored: unknown): SnapshotEntry | null {
 	if (!isRecord(stored)) return null;
-	if (stored.kind === "folder") return { kind: "folder" };
-	const { kind, revision, hash, stat } = stored;
+	const { kind, revision, hash, size, stableId, stat } = stored;
+	// A missing or invalid stable id or size only costs a rename hint or a hash.
+	const id = typeof stableId === "string" ? { stableId } : {};
+	if (kind === "folder") return { kind, ...id };
 	if (kind !== "file" || typeof revision !== "string" || typeof hash !== "string") return null;
+	const sized = typeof size === "number" ? { size } : {};
 	// An entry without a valid stat stays usable: its file is hashed again on the next sync.
 	const valid = isRecord(stat) && typeof stat.size === "number" && typeof stat.mtime === "number";
-	return valid ? { kind, revision, hash, stat: { size: stat.size as number, mtime: stat.mtime as number } } : { kind, revision, hash };
+	const statted = valid ? { stat: { size: stat.size as number, mtime: stat.mtime as number } } : {};
+	return { kind, revision, hash, ...sized, ...id, ...statted };
 }
 
 /** The Remote feed state in a stored record, or null if it holds no valid one. */
@@ -277,9 +298,10 @@ function parseRemoteFeed(stored: unknown): RemoteFeed | null {
 /** One listed Remote entry in a stored feed record, or null if invalid. */
 function parseRemoteEntry(stored: unknown): RemoteEntry | null {
 	if (!isRecord(stored) || typeof stored.path !== "string") return null;
-	if (stored.kind === "folder") return { kind: "folder", path: stored.path };
+	const id = typeof stored.stableId === "string" ? { stableId: stored.stableId } : {};
+	if (stored.kind === "folder") return { kind: "folder", path: stored.path, ...id };
 	if (stored.kind === "file" && typeof stored.revision === "string" && typeof stored.size === "number") {
-		return { kind: "file", path: stored.path, revision: stored.revision, size: stored.size };
+		return { kind: "file", path: stored.path, revision: stored.revision, size: stored.size, ...id };
 	}
 	return null;
 }

@@ -46,4 +46,36 @@ describe("noticeText", () => {
 			"notes/Plan.md сохранён: он был удалён на другом устройстве, но изменён на этом.",
 		);
 	});
+
+	const renamedOnBoth = { kind: "renamedOnBoth", path: "notes/Their name.md", localPath: "notes/My name.md" } as const;
+
+	it("names both names of a file renamed differently on two devices", () => {
+		expect(noticeText(renamedOnBoth, selectStrings("en"))).toBe(
+			"notes/My name.md was renamed differently on another device and is now notes/Their name.md.",
+		);
+		expect(noticeText(renamedOnBoth, selectStrings("ru"))).toBe(
+			"notes/My name.md переименован на другом устройстве иначе и теперь называется notes/Their name.md.",
+		);
+	});
+
+	const renamedThere = { kind: "renameBeatsDelete", path: "notes/New.md", deletedOn: "thisDevice" } as const;
+	const renamedHere = { kind: "renameBeatsDelete", path: "notes/New.md", deletedOn: "otherDevice" } as const;
+
+	it("tells that a rename beat a delete, on either side, in English", () => {
+		expect(noticeText(renamedThere, selectStrings("en"))).toBe(
+			"notes/New.md came back: it was deleted on this device but renamed on another one.",
+		);
+		expect(noticeText(renamedHere, selectStrings("en"))).toBe(
+			"notes/New.md was kept: it was deleted on another device but renamed on this one.",
+		);
+	});
+
+	it("tells that a rename beat a delete, on either side, in Russian", () => {
+		expect(noticeText(renamedThere, selectStrings("ru"))).toBe(
+			"notes/New.md восстановлен: он был удалён на этом устройстве, но переименован на другом.",
+		);
+		expect(noticeText(renamedHere, selectStrings("ru"))).toBe(
+			"notes/New.md сохранён: он был удалён на другом устройстве, но переименован на этом.",
+		);
+	});
 });

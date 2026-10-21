@@ -8,11 +8,15 @@ export interface StoredFile {
 	readonly kind: "file";
 	readonly data: ArrayBuffer;
 	readonly revision: string;
+	/** The entry's stable id, when the service gives stable ids. */
+	readonly id?: string;
 }
 
 /** A folder as the fake service stores it. */
 export interface StoredFolder {
 	readonly kind: "folder";
+	/** The entry's stable id, when the service gives stable ids. */
+	readonly id?: string;
 }
 
 /** One entry of the fake service. */
@@ -31,6 +35,11 @@ export interface FakeServiceOptions {
 	readonly fileMove?: boolean;
 	/** Offer server-side folder move; off by default. */
 	readonly folderMove?: boolean;
+	/**
+	 * List entries with a stable id, kept when a file is overwritten or
+	 * moved, new for a new entry; off by default.
+	 */
+	readonly stableIds?: boolean;
 	/** Names the service refuses or folds; by default it accepts any name. */
 	readonly nameRules?: Partial<NameRules>;
 	/** Largest file the service accepts, in bytes; unlimited by default. */
@@ -52,6 +61,7 @@ export class FakeRemote {
 	/** Paths in the order they changed; a cursor is a position in it. */
 	private readonly changeLog: RemotePath[] = [];
 	private lastRevision = 0;
+	private lastId = 0;
 
 	/** @param service what the fake service supports */
 	constructor(readonly service: FakeServiceOptions = {}) {
@@ -77,13 +87,18 @@ export class FakeRemote {
 	/**
 	 * Stores `entry` at `path`, replacing what was there under the path it
 	 * already had, and logs it. A new entry goes under the path its folder
-	 * is stored with, as a case-insensitive service files it.
+	 * is stored with, as a case-insensitive service files it. With stable
+	 * ids, an entry without one keeps the id of the entry it replaces, or
+	 * gets a new one. Returns the entry as stored.
 	 */
-	put(path: RemotePath, entry: StoredEntry): void {
+	put(path: RemotePath, entry: StoredEntry): StoredEntry {
 		const key = this.key(path);
-		const storedPath = this.entries.get(key)?.path ?? this.storedPathOf(path);
-		this.entries.set(key, { path: storedPath, entry });
+		const existing = this.entries.get(key);
+		const storedPath = existing?.path ?? this.storedPathOf(path);
+		const stored = this.withId(entry, existing?.entry.id);
+		this.entries.set(key, { path: storedPath, entry: stored });
 		this.changeLog.push(storedPath);
+		return stored;
 	}
 
 	/**
@@ -169,6 +184,13 @@ export class FakeRemote {
 		return `rev-${this.lastRevision}`;
 	}
 
+	/** `entry` with an id, `previous` or a new one, when the service gives stable ids. */
+	private withId(entry: StoredEntry, previous: string | undefined): StoredEntry {
+		if (this.service.stableIds !== true || entry.id !== undefined) return entry;
+		this.lastId += 1;
+		return { ...entry, id: previous ?? `id-${this.lastId}` };
+	}
+
 	/** Whether `path` is the root or an existing folder. */
 	isFolder(path: RemotePath): boolean {
 		return path === "" || this.get(path)?.kind === "folder";
@@ -210,10 +232,12 @@ export class FakeRemote {
 
 /** The listing entry of a stored entry. */
 export function toRemoteEntry(path: RemotePath, stored: StoredEntry): RemoteEntry {
-	return stored.kind === "file" ? toRemoteFile(path, stored) : { kind: "folder", path };
+	if (stored.kind === "file") return toRemoteFile(path, stored);
+	return stored.id === undefined ? { kind: "folder", path } : { kind: "folder", path, stableId: stored.id };
 }
 
 /** The listing entry of a stored file. */
 export function toRemoteFile(path: RemotePath, stored: StoredFile): RemoteFile {
-	return { kind: "file", path, revision: stored.revision, size: stored.data.byteLength };
+	const file: RemoteFile = { kind: "file", path, revision: stored.revision, size: stored.data.byteLength };
+	return stored.id === undefined ? file : { ...file, stableId: stored.id };
 }

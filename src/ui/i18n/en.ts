@@ -181,6 +181,12 @@ export const en = {
 	noticeRestoredDeletedHere: "{file} came back: it was deleted on this device but edited on another one.",
 	/** A file edited on this device was kept and uploaded again, though another device deleted it; `{file}` is a vault path. */
 	noticeRestoredDeletedThere: "{file} was kept: it was deleted on another device but edited on this one.",
+	/** A file this device renamed to `{local}` took the name `{file}` another device gave it; both are vault paths. */
+	noticeRenamedOnBoth: "{local} was renamed differently on another device and is now {file}.",
+	/** A file deleted on this device came back under the name another device gave it; `{file}` is a vault path. */
+	noticeRenamedDeletedHere: "{file} came back: it was deleted on this device but renamed on another one.",
+	/** A file renamed on this device was kept, though another device deleted it; `{file}` is a vault path. */
+	noticeRenamedDeletedThere: "{file} was kept: it was deleted on another device but renamed on this one.",
 } as const;
 
 /** The shape every language's string table must have: the keys of `en`. */

@@ -69,6 +69,16 @@ export class InMemoryDeviceStore implements DeviceStore {
 		return Promise.resolve();
 	}
 
+	moveSnapshotEntry(from: VaultPath, to: VaultPath, entry: SnapshotEntry): Promise<void> {
+		const base = this.bases.get(from);
+		this.snapshot.delete(from);
+		this.bases.delete(from);
+		this.snapshot.set(to, entry);
+		if (base === undefined) this.bases.delete(to);
+		else this.bases.set(to, base);
+		return Promise.resolve();
+	}
+
 	loadBase(path: VaultPath): Promise<ArrayBuffer | null> {
 		return Promise.resolve(this.bases.get(path)?.slice(0) ?? null);
 	}
@@ -263,6 +273,8 @@ function crashingDeviceStore(store: InMemoryDeviceStore, crash: CrashPoints): De
 			crash.step(`save snapshot entry ${path}`, () => store.saveSnapshotEntry(path, entry, base)),
 		removeSnapshotEntry: (path) =>
 			crash.step(`remove snapshot entry ${path}`, () => store.removeSnapshotEntry(path)),
+		moveSnapshotEntry: (from, to, entry) =>
+			crash.step(`move snapshot entry ${from}`, () => store.moveSnapshotEntry(from, to, entry)),
 		loadBase: (path) => store.loadBase(path),
 		loadRemoteFeed: () => store.loadRemoteFeed(),
 		saveRemoteFeed: (feed) => crash.step("save Remote feed", () => store.saveRemoteFeed(feed)),

@@ -5,6 +5,8 @@
  * `createSyncEngine`.
  */
 import type { LocalVault } from "./local-vault";
+import { isWithin, movedAlong } from "./paths";
+import type { VaultRename } from "./renames";
 import { providerSecretId, type EnginePorts, type Scheduler } from "./ports";
 import { ProviderError, isSyncable } from "./provider";
 import { readRemoteSettings } from "./remote-metadata";
@@ -40,9 +42,10 @@ export interface StartedEngine {
 export interface SyncEngine {
 	/**
 	 * Starts the engine once the vault is open (`workspace.onLayoutReady`):
-	 * subscribes at once to vault change hints for the post-edit pause and
-	 * schedules periodic polling, then shows this device's Connection
-	 * status and, when connected, runs the vault-open sync.
+	 * subscribes at once to vault change hints, for the post-edit pause and
+	 * as rename hints (renames.ts), and schedules periodic polling, then
+	 * shows this device's Connection status and, when connected, runs the
+	 * vault-open sync.
 	 */
 	start(): StartedEngine;
 	/**
@@ -122,6 +125,13 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 	let held = false;
 	/** How many syncs the user has asked for; a hold is not set over a request made while its prompt was open. */
 	let userRequests = 0;
+	/**
+	 * The user's renames in the vault since the last completed sync, in
+	 * order: hints for finding renames, in memory only.
+	 */
+	const renameHints: VaultRename[] = [];
+	/** The engine's own vault renames under way: the rename events they cause are not the user's. */
+	const ownRenames: VaultRename[] = [];
 	let stopped = false;
 	const isStopped = (): boolean => stopped;
 	const editPause = timerOn(scheduler, isStopped);
@@ -151,13 +161,26 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				case "trash":
 					return (...args: Parameters<LocalVault["trash"]>) => ownWrite(() => target.trash(...args));
 				case "rename":
-					return (...args: Parameters<LocalVault["rename"]>) => ownWrite(() => target.rename(...args));
+					return async (from: string, to: string) => {
+						const own = { from, to };
+						ownRenames.push(own);
+						try {
+							await ownWrite(() => target.rename(from, to));
+						} finally {
+							ownRenames.splice(ownRenames.indexOf(own), 1);
+						}
+					};
 			}
 			const value: unknown = Reflect.get(target, property, receiver);
 			// Methods run on the vault itself, which may keep state on `this`.
 			return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
 		},
 	});
+
+	/** Whether the rename of `from` to `to` is one of the engine's own, or inside a folder it renames. */
+	function isOwnRename(from: string, to: string): boolean {
+		return ownRenames.some((own) => isWithin(from, own.from) && to === movedAlong(from, own.from, own.to));
+	}
 
 	/** Schedules the next periodic poll. */
 	function scheduleNextPoll(): void {
@@ -179,6 +202,8 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			return;
 		}
 		const userRequestsBefore = userRequests;
+		// Renames reported from now on are for the next sync.
+		const hints = [...renameHints];
 		ui.showStatus({ state: "syncing" });
 		try {
 			const secret = secretStore.getSecret(providerSecretId(providers.providerId));
@@ -211,6 +236,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				reconcile: run.kind === "reconcile",
 				editPauseMs: schedule().editPause.ms,
 				guard: deletionGuard(),
+				renameHints: hints,
 			});
 			backoffAttempt = 0;
 			if (result.held === true) {
@@ -219,6 +245,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				ui.showStatus({ state: "deletionsOnHold" });
 				return;
 			}
+			renameHints.splice(0, hints.length);
 			ui.showStatus({ state: "synced" });
 			if (result.nextPostEditPauseMs !== undefined) {
 				editPause.schedule(result.nextPostEditPauseMs, () => void trigger("sync"));
@@ -284,7 +311,10 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 	return {
 		start(): StartedEngine {
 			stopped = false;
-			const unsubscribeVault = vault.onChange(() => {
+			const unsubscribeVault = vault.onChange((hint) => {
+				if (hint.kind === "renamed" && !isOwnRename(hint.oldPath, hint.path)) {
+					renameHints.push({ from: hint.oldPath, to: hint.path });
+				}
 				if (ownWrites === 0) editPause.schedule(schedule().editPause.ms, () => void trigger("sync"));
 			});
 			scheduleNextPoll();

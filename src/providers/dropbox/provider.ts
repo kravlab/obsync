@@ -7,6 +7,11 @@
  *   `write` is `files/upload`, or an upload session for a file above the
  *   Per-request limit, which downloads also keep to (transfers.ts).
  * - `delete` is `delete_v2`.
+ * - File move and folder move are `move_v2` without `autorename`, so an
+ *   occupied target is refused. Dropbox's `id` is each entry's stable id:
+ *   "a unique file reference that persists if files are moved or renamed".
+ *   Whether a moved file keeps its `rev` is not documented; the engine
+ *   does not rely on it.
  * - Conditional writes are upload modes (`add` for "absent", `update` with
  *   the known `rev`) and `delete_v2` with `parent_rev`, files only.
  *
@@ -30,7 +35,16 @@ import { DropboxClient } from "./client";
 import type { DropboxOptions, DropboxTransfers } from "./options";
 import { WRITE_RETRY_AFTER_MS, writeFailure, type Tagged } from "./errors";
 import { downloadFile, uploadFile, type TransferRules } from "./transfers";
-import { fileRevision, listFolder, listFolderContinue, routeFailure, summary, writeErrorOf, type Metadata } from "./routes";
+import {
+	fileRevision,
+	listFolder,
+	listFolderContinue,
+	routeFailure,
+	stableIdOf,
+	summary,
+	writeErrorOf,
+	type Metadata,
+} from "./routes";
 
 /**
  * The largest file this provider accepts: the most an upload session
@@ -71,6 +85,13 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 	/** The App-Folder path of a Remote path. */
 	const full = (path: RemotePath): string => `${root}/${path}`;
 
+	/** Moves the entry at `from` to `to` with `move_v2`, refusing an occupied `to`; returns the moved entry's metadata. */
+	async function move(from: RemotePath, to: RemotePath): Promise<Metadata> {
+		const result = await client.rpc("files/move_v2", { from_path: full(from), to_path: full(to), autorename: false });
+		if (!result.ok) throw moveFailure(result.error);
+		return (result.value as { metadata: Metadata }).metadata;
+	}
+
 	return {
 		capabilities: {
 			conditionalWrite: true,
@@ -78,6 +99,17 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 				async changes(cursor: string): Promise<ChangeBatch> {
 					const batch = await listFolderContinue(client, cursor);
 					return { changes: remoteChanges(root, batch.entries, "list_folder/continue"), cursor: batch.cursor };
+				},
+			},
+			fileMove: {
+				async moveFile(from, to): Promise<RemoteFile> {
+					const { rev, size, id } = fileRevision(await move(from, to), "move_v2");
+					return { kind: "file", path: to, revision: rev, size, ...(id === undefined ? {} : { stableId: id }) };
+				},
+			},
+			folderMove: {
+				async moveFolder(from, to): Promise<void> {
+					await move(from, to);
 				},
 			},
 		},
@@ -95,8 +127,8 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 
 		async write(path, data, precondition): Promise<RemoteFile> {
 			const commit = { path: full(path), mode: writeMode(precondition), autorename: false, strict_conflict: true };
-			const { rev, size } = await uploadFile(client, commit, data, rules);
-			return { kind: "file", path, revision: rev, size };
+			const { rev, size, id } = await uploadFile(client, commit, data, rules);
+			return { kind: "file", path, revision: rev, size, ...(id === undefined ? {} : { stableId: id }) };
 		},
 
 		async delete(path, precondition) {
@@ -110,12 +142,11 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 
 		async createFolder(path) {
 			const result = await client.rpc("files/create_folder_v2", { path: full(path), autorename: false });
-			if (!result.ok) {
-				const reason = writeErrorOf(result.error);
-				// An existing folder is returned as it is (Provider contract).
-				const inTheWay = reason?.[".tag"] === "conflict" ? (reason.conflict as Tagged | undefined) : undefined;
-				if (inTheWay?.[".tag"] !== "folder") throw new ProviderError(writeFailure(reason), summary(result.error));
-			}
+			if (result.ok) return { kind: "folder", path, ...stableIdOf((result.value as { metadata: Metadata }).metadata) };
+			const reason = writeErrorOf(result.error);
+			// An existing folder is returned as it is (Provider contract).
+			const inTheWay = reason?.[".tag"] === "conflict" ? (reason.conflict as Tagged | undefined) : undefined;
+			if (inTheWay?.[".tag"] !== "folder") throw new ProviderError(writeFailure(reason), summary(result.error));
 			return { kind: "folder", path };
 		},
 	};
@@ -168,10 +199,10 @@ function remoteChanges(root: string, listed: readonly Metadata[], route: string)
 		if (!lower.startsWith(`${rootLower}/`)) continue;
 		const path = pathOf(lower, entry);
 		if (entry[".tag"] === "deleted") changes.push({ kind: "deleted", path });
-		else if (entry[".tag"] === "folder") changes.push({ kind: "folder", path });
+		else if (entry[".tag"] === "folder") changes.push({ kind: "folder", path, ...stableIdOf(entry) });
 		else if (entry[".tag"] === "file") {
 			const { rev, size } = fileRevision(entry, route);
-			changes.push({ kind: "file", path, revision: rev, size });
+			changes.push({ kind: "file", path, revision: rev, size, ...stableIdOf(entry) });
 		}
 	}
 	return changes;
@@ -191,6 +222,29 @@ function writeMode(precondition: Precondition | undefined): unknown {
 			return "add";
 		case "revision":
 			return { ".tag": "update", update: precondition.revision };
+	}
+}
+
+/**
+ * The failure for a `move_v2` route error (RelocationError): a missing
+ * source is `notFound`; the target's WriteError, an occupied path
+ * included, maps as for a write; no room left is `quotaExceeded`;
+ * anything else, such as `too_many_files` (over 10,000 entries), is
+ * permanent.
+ */
+function moveFailure(error: Tagged): ProviderError {
+	switch (error[".tag"]) {
+		case "from_lookup": {
+			const lookup = (error.from_lookup as Tagged | undefined)?.[".tag"];
+			return new ProviderError({ category: lookup === "not_found" ? "notFound" : "permanent" }, summary(error));
+		}
+		case "from_write":
+		case "to":
+			return new ProviderError(writeFailure(error[error[".tag"]] as Tagged | undefined), summary(error));
+		case "insufficient_quota":
+			return new ProviderError({ category: "quotaExceeded" }, summary(error));
+		default:
+			return routeFailure("move_v2", error);
 	}
 }
 

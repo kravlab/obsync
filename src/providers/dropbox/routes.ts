@@ -19,16 +19,19 @@ export interface Metadata {
 	 * component only.
 	 */
 	readonly path_display: string;
+	/** Files and folders: "a unique identifier", which survives moves and renames. */
+	readonly id?: string;
 	/** Files only. */
 	readonly rev?: string;
 	/** Files only, in bytes. */
 	readonly size?: number;
 }
 
-/** What the plugin needs of a file's metadata: its revision and size. */
+/** What the plugin needs of a file's metadata: its revision and size, and its id when given. */
 export interface FileRevision {
 	readonly rev: string;
 	readonly size: number;
+	readonly id?: string;
 }
 
 /**
@@ -39,7 +42,12 @@ export function fileRevision(file: Metadata, route: string): FileRevision {
 	if (file.rev === undefined || file.size === undefined) {
 		throw new ProviderError({ category: "permanent" }, `${route}: a file without rev or size: ${file.path_lower}`);
 	}
-	return { rev: file.rev, size: file.size };
+	return file.id === undefined ? { rev: file.rev, size: file.size } : { rev: file.rev, size: file.size, id: file.id };
+}
+
+/** The entry's id as a stable id field, when Dropbox gave one. */
+export function stableIdOf(entry: Metadata): { readonly stableId?: string } {
+	return typeof entry.id === "string" ? { stableId: entry.id } : {};
 }
 
 /** A `list_folder` page. */

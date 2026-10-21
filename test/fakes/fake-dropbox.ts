@@ -34,6 +34,10 @@ export const ACCESS_TOKEN_SECONDS = 14400;
  *   `Dropbox-API-Result`, or `206` with the bytes a `Range` asks for;
  * - `rev:<rev>` paths for `files/download` and `files/get_metadata`,
  *   over every revision each file has had;
+ * - `files/move_v2` without `autorename`: moves an entry with everything
+ *   inside it, keeping ids and, since Dropbox does not document it either
+ *   way, revisions; a missing source is `from_lookup/not_found`, an
+ *   occupied target `to/conflict`;
  * - `files/delete_v2`, honouring `parent_rev`. Dropbox does not document
  *   its answer to a `parent_rev` that is not the file's latest; the real
  *   service, checked on 2026-10-21, answers 409 with a WriteError conflict
@@ -197,6 +201,8 @@ export class FakeDropbox {
 				return this.createFolder(account, arg as { path: string; autorename?: boolean });
 			case "files/delete_v2":
 				return this.delete(account, arg as { path: string; parent_rev?: string });
+			case "files/move_v2":
+				return this.move(account, arg as { from_path: string; to_path: string });
 			default:
 				return status(404, `unknown route ${route}`);
 		}
@@ -344,6 +350,22 @@ export class FakeDropbox {
 		const metadata = account.metadata(arg.path);
 		account.remove(arg.path);
 		return json(200, { metadata });
+	}
+
+	/** `files/move_v2`: moves the entry and everything inside it, or answers a RelocationError. */
+	private move(account: FakeDropboxAccount, arg: { from_path: string; to_path: string }): HttpResponse {
+		if (!account.get(arg.from_path)) {
+			return routeError("from_lookup/not_found/", { ".tag": "from_lookup", from_lookup: { ".tag": "not_found" } });
+		}
+		const inTheWay = account.get(arg.to_path);
+		if (inTheWay) {
+			return routeError(`to/conflict/${inTheWay.kind}/`, {
+				".tag": "to",
+				to: { ".tag": "conflict", conflict: { ".tag": inTheWay.kind } },
+			});
+		}
+		account.move(arg.from_path, arg.to_path);
+		return json(200, { metadata: account.metadata(arg.to_path) });
 	}
 
 	/**
@@ -635,6 +657,26 @@ export class FakeDropboxAccount {
 				this.entries.delete(key);
 				this.changeLog.push(entry.path);
 			}
+		}
+	}
+
+	/**
+	 * Moves the entry at `from` and everything inside it to `to`, with any
+	 * missing parents, keeping ids and revisions, and logs every path it
+	 * frees and fills.
+	 */
+	move(from: string, to: string): void {
+		this.putParents(to);
+		const lower = from.toLowerCase();
+		const moving = [...this.entries].filter(([key]) => key === lower || key.startsWith(`${lower}/`));
+		for (const [key, entry] of moving) {
+			this.entries.delete(key);
+			this.changeLog.push(entry.path);
+		}
+		for (const [, entry] of moving) {
+			const path = to + entry.path.slice(from.length);
+			this.entries.set(path.toLowerCase(), { ...entry, path });
+			this.changeLog.push(path);
 		}
 	}
 

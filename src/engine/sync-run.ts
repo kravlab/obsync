@@ -36,12 +36,19 @@
  *   shows it empty on that side, so a file another device added meanwhile
  *   keeps it. S is forgotten once a path is gone from both sides.
  *
+ * - S with L or R at another path (renames.ts): the entry was renamed. The
+ *   rename is carried to the side that does not have it yet and S, with
+ *   its Base, moves to the new path (carry-renames.ts); the content is then
+ *   compared there as above, so an edit on either side survives the
+ *   rename. Cut off half way, the next sync finds the rename again and
+ *   finishes it.
+ *
  * Before anything is written, the Deletion guard (deletion-guard.ts) checks
  * the files about to be deleted, and may ask the user: Apply deletes them,
  * Restore brings them back to the side they were deleted from, and a
  * closed prompt stops this sync with nothing written ("held").
  *
- * Uploads run first, then deletions, then downloads.
+ * Renames run first, then uploads, then deletions, then downloads.
  *
  * A vault file typed into within the post-edit pause is not written or
  * trashed by this sync; a later one does it.
@@ -73,6 +80,8 @@ import {
 	type RemoteFile,
 } from "./provider";
 import { contentKindOf, type RemoteSettings } from "./remote-metadata";
+import { carryRenames } from "./carry-renames";
+import { findRenames, type VaultRename } from "./renames";
 import { syncListing } from "./sync-listing";
 import type { SnapshotEntry, SyncedFile, VaultFileStat } from "./sync-snapshot";
 import { mergeText } from "./text-merge";
@@ -106,6 +115,8 @@ export interface SyncRun {
 	readonly editPauseMs: number;
 	/** This device's Deletion guard thresholds. */
 	readonly guard: DeletionGuardSettings;
+	/** The vault's renames since the last completed sync, in order: hints for finding renames. */
+	readonly renameHints: readonly VaultRename[];
 }
 
 /** What a completed sync reports to the engine. */
@@ -137,6 +148,7 @@ export async function runSync({
 	reconcile,
 	editPauseMs,
 	guard,
+	renameHints,
 }: SyncRun): Promise<SyncRunResult> {
 	const snapshot = new Map(await deviceStore.loadSnapshot());
 	const previousFeed = await deviceStore.loadRemoteFeed();
@@ -148,11 +160,8 @@ export async function runSync({
 		snapshot.keys(),
 	);
 	const remote = new Map(listing.remote.map((entry) => [entry.path, entry] as const));
-	const { local } = listing;
-	/** The vault files of the walk at the start of this sync, by path. */
-	const localFiles = new Map(
-		local.filter((entry): entry is VaultFile => entry.kind === "file").map((file) => [file.path, file] as const),
-	);
+	/** The vault's entries as walked at the start of this sync, by path, moved along with this sync's renames. */
+	const localEntries = new Map(listing.local.map((entry) => [entry.path, entry] as const));
 	/** Content hashes of the vault files, as read or taken from the snapshot for the uploads. */
 	const localHashes = new Map<VaultPath, string>();
 	let nextPostEditPauseMs: number | undefined;
@@ -181,13 +190,20 @@ export async function runSync({
 	async function recordFile(path: VaultPath, synced: RemoteContent, hash: string, stat?: VaultFileStat): Promise<void> {
 		const { data, revision } = synced;
 		const base = contentKindOf(path, settings) !== "other" && decodeUtf8(data) !== null ? data : null;
-		await record(path, { kind: "file", revision, hash, ...(stat === undefined ? {} : { stat }) }, base);
+		const entry = { kind: "file", revision, hash, size: data.byteLength, ...stableIdAt(path) } as const;
+		await record(path, stat === undefined ? entry : { ...entry, stat }, base);
+	}
+
+	/** The stable id of the Remote entry at `path`, as a snapshot entry field, if the provider gave one. */
+	function stableIdAt(path: VaultPath): { readonly stableId?: string } {
+		const stableId = remote.get(path)?.stableId;
+		return stableId === undefined ? {} : { stableId };
 	}
 
 	/** The stat of the vault file at `path` as the walk at the start of this sync listed it. */
 	function walkedStat(path: VaultPath): VaultFileStat | undefined {
-		const file = localFiles.get(path);
-		return file === undefined ? undefined : { size: file.size, mtime: file.mtime };
+		const file = localEntries.get(path);
+		return file?.kind === "file" ? { size: file.size, mtime: file.mtime } : undefined;
 	}
 
 	/** The Base of `path` if it is the true one: the content its snapshot entry records as `hash`. */
@@ -294,7 +310,7 @@ export async function runSync({
 		ui.showNotice({ kind: "conflictCopyCreated", path, copyPath: copy.path });
 		if (pausedForTyping(path) || !(await vault.replace(path, localData, remoteVersion.data))) return;
 		// The listing's revision is older when another device wrote `path` since: this one is now synced.
-		remote.set(path, { kind: "file", path, revision: remoteVersion.revision, size: remoteVersion.data.byteLength });
+		setRemoteFile(path, remoteVersion);
 		await recordFile(path, remoteVersion, remoteHash);
 	}
 
@@ -376,7 +392,7 @@ export async function runSync({
 		const there = remote.get(path);
 		if (there?.kind === "file") return;
 		if (there === undefined) await ensureRemoteFolder(path);
-		await record(path, { kind: "folder" }, null);
+		await record(path, { kind: "folder", ...stableIdAt(path) }, null);
 	}
 
 	/** Uploads a vault file that is new or edited here only since the snapshot. */
@@ -406,15 +422,39 @@ export async function runSync({
 			if (there?.kind !== "file" || there.revision !== synced.revision) return;
 			precondition = { kind: "revision", revision: synced.revision };
 		}
-		const written = await writeRemote(file.path, data, precondition);
+		await uploadOrMerge(file.path, data, hash, precondition, synced);
+	}
+
+	/**
+	 * Uploads `data`, the vault file `path` with `hash`, on `precondition`
+	 * and records it. Refused because another device wrote the file since,
+	 * it is merged with what that device wrote, against `synced`.
+	 */
+	async function uploadOrMerge(
+		path: VaultPath,
+		data: ArrayBuffer,
+		hash: string,
+		precondition: Precondition,
+		synced: SnapshotEntry | undefined,
+	): Promise<void> {
+		const written = await writeRemote(path, data, precondition);
 		if (written === undefined) {
-			// Another device wrote the file since the listing: merge with what it wrote.
-			const remoteVersion = await readRemote(file.path);
-			if (remoteVersion !== undefined) await merge(file.path, remoteVersion, synced);
+			const remoteVersion = await readRemote(path);
+			if (remoteVersion !== undefined) await merge(path, remoteVersion, synced);
 			return;
 		}
-		remote.set(file.path, written);
-		await recordFile(file.path, { data, revision: written.revision }, hash, walkedStat(file.path));
+		remote.set(path, written);
+		await recordFile(path, { data, revision: written.revision }, hash, walkedStat(path));
+	}
+
+	/**
+	 * Uploads the vault file `path`, edited here only, over the Remote's
+	 * `revision`, a new revision that still holds the content `synced`
+	 * records: there is nothing on the Remote to merge.
+	 */
+	async function uploadEditOver(path: VaultPath, revision: string, synced: SyncedFile): Promise<void> {
+		const data = await vault.read(path);
+		await uploadOrMerge(path, data, await contentHash(data), { kind: "revision", revision }, synced);
 	}
 
 	/** Whether the vault file `file` still holds the content `synced` records, by its stat or else its hash. */
@@ -503,9 +543,15 @@ export async function runSync({
 		await ensureVaultFolder(parentOf(path));
 		if ((await vault.stat(path)) !== null) return false;
 		await vault.write(path, remoteVersion.data);
-		remote.set(path, { kind: "file", path, revision: remoteVersion.revision, size: remoteVersion.data.byteLength });
+		setRemoteFile(path, remoteVersion);
 		await recordFile(path, remoteVersion, hash);
 		return true;
+	}
+
+	/** Notes that the Remote file `path` now holds `content`, keeping its stable id. */
+	function setRemoteFile(path: VaultPath, content: RemoteContent): void {
+		const { revision, data } = content;
+		remote.set(path, { kind: "file", path, revision, size: data.byteLength, ...stableIdAt(path) });
 	}
 
 	/**
@@ -602,7 +648,7 @@ export async function runSync({
 		const here = await vault.stat(path);
 		if (here?.kind === "file") return;
 		if (here === null) await ensureVaultFolder(path);
-		await record(path, { kind: "folder" }, null);
+		await record(path, { kind: "folder", ...stableIdAt(path) }, null);
 	}
 
 	/**
@@ -621,8 +667,10 @@ export async function runSync({
 			const hash = await contentHash(remoteVersion.data);
 			if (localHash !== synced.hash) {
 				// Edited here too: the same content, e.g. an upload cut off before
-				// it was recorded, is simply recorded; other content is merged.
+				// it was recorded, is simply recorded; the synced content under a
+				// new revision, e.g. after a move, takes the edit; other content is merged.
 				if (hash === localHash) await recordFile(file.path, remoteVersion, hash, walkedStat(file.path));
+				else if (hash === synced.hash) await uploadEditOver(file.path, remoteVersion.revision, synced);
 				else await merge(file.path, remoteVersion, synced);
 				return;
 			}
@@ -656,16 +704,37 @@ export async function runSync({
 		await recordFile(file.path, remoteVersion, hash);
 	}
 
-	const deletions = await findDeletions(snapshot, listing, { unchangedHere, remoteRevisionIfUnchanged });
+	const renames = await findRenames(
+		snapshot,
+		listing,
+		renameHints,
+		{
+			localHash: async (path) => contentHash(await vault.read(path)),
+			async remoteContent(path) {
+				const content = await readRemote(path);
+				return content === undefined ? null : { hash: await contentHash(content.data), revision: content.revision };
+			},
+		},
+		{ caseInsensitive: provider.nameRules.caseInsensitive, folderMove: provider.capabilities.folderMove !== undefined },
+	);
+	const unrenamed = new Map([...snapshot].filter(([path]) => !renames.paths.has(path)));
+	const deletions = await findDeletions(unrenamed, listing, { unchangedHere, remoteRevisionIfUnchanged });
 	/** Vault files the deletion rules handle instead of the upload pass. */
 	const deletedThere = new Set([...deletions.toVault, ...deletions.localChanged]);
 	const syncedPaths = [...snapshot].filter(([, entry]) => entry.kind === "file").map(([path]) => path);
 	const toRemotePaths = deletions.toRemote.map(({ path }) => path);
+	// A renamed file is still there, under its new name.
+	const renamedHere = new Set([...renames.toRemote, ...renames.sameOnBoth, ...renames.keptHere].map(({ from }) => from));
+	const renamedThere = new Set([...renames.toVault, ...renames.sameOnBoth, ...renames.keptThere].map(({ from }) => from));
+	for (const { from } of renames.differentOnBoth) {
+		renamedHere.add(from);
+		renamedThere.add(from);
+	}
 	const reason = guardReason(
 		{
 			syncedFiles: syncedPaths.length,
-			vaultFiles: syncedPaths.filter((path) => !listing.goneLocally(path)).length,
-			remoteFiles: syncedPaths.filter((path) => !listing.goneRemotely(path)).length,
+			vaultFiles: syncedPaths.filter((path) => renamedHere.has(path) || !listing.goneLocally(path)).length,
+			remoteFiles: syncedPaths.filter((path) => renamedThere.has(path) || !listing.goneRemotely(path)).length,
 			toRemote: toRemotePaths.length,
 			toVault: deletions.toVault.length,
 		},
@@ -677,10 +746,28 @@ export async function runSync({
 			: await ui.askDeletions({ reason, toRemote: toRemotePaths, toVault: deletions.toVault });
 	if (answer === null) return { held: true };
 
-	for (const file of sortedForUpload([...localFiles.values()], settings)) {
-		if (!deletedThere.has(file.path)) await uploadFile(file);
+	const { deferred, leftRemoteFolders } = await carryRenames(renames, {
+		provider,
+		vault,
+		deviceStore,
+		ui,
+		snapshot,
+		remote,
+		walked: localEntries,
+		readRemote,
+		writeRemote,
+		setRemoteFile,
+		ensureRemoteFolder,
+		ensureVaultFolder,
+		conflictCopyPath: async (path) => (await freeCopyPath(path, clock.now(), 1)).path,
+		unchangedHere,
+		forget,
+	});
+	const localFiles = [...localEntries.values()].filter((entry): entry is VaultFile => entry.kind === "file");
+	for (const file of sortedForUpload(localFiles, settings)) {
+		if (!deletedThere.has(file.path) && !deferred.has(file.path)) await uploadFile(file);
 	}
-	for (const entry of sortedByPath(local)) {
+	for (const entry of sortedByPath([...localEntries.values()])) {
 		if (entry.kind === "folder") await uploadFolder(entry.path);
 	}
 	for (const path of deletions.forgotten) await forget(path);
@@ -698,6 +785,7 @@ export async function runSync({
 		for (const path of deletions.foldersToRemote) await ensureVaultFolder(path);
 		for (const path of deletions.foldersToVault) await ensureRemoteFolder(path);
 	}
+	if (leftRemoteFolders.length > 0) await deleteRemoteFolders(leftRemoteFolders);
 	for (const entry of sortedByPath([...remote.values()])) {
 		if (entry.kind === "folder") await downloadFolder(entry.path);
 		else await downloadFile(entry);

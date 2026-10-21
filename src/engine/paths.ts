@@ -20,6 +20,22 @@ export function isWithin(path: string, folder: string): boolean {
 	return path === folder || path.startsWith(`${folder}/`);
 }
 
+/** An entry moved, or renamed, from one path to another. */
+export interface Move {
+	readonly from: string;
+	readonly to: string;
+}
+
+/** Where `path` is once the entry at `from` moved to `to`, taking what is inside it along; `path` itself otherwise. */
+export function movedAlong(path: string, from: string, to: string): string {
+	return isWithin(path, from) ? to + path.slice(from.length) : path;
+}
+
+/** Where `moves`, in order, took `path`, a folder's taking everything inside it. */
+export function followMoves(path: string, moves: readonly Move[]): string {
+	return moves.reduce((current, { from, to }) => movedAlong(current, from, to), path);
+}
+
 /** The folders from the top down to `path` itself, none for the root: "a/b" gives "a", "a/b". */
 export function foldersDownTo(path: string): string[] {
 	return path === "" ? [] : [...ancestorsOf(path), path];

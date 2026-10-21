@@ -1,5 +1,5 @@
 import { describe, expect, it, type TestContext } from "vitest";
-import type { Provider } from "../../src/engine/provider";
+import type { FileMove, FolderMove, Provider, RemoteFile } from "../../src/engine/provider";
 import { bytes, patterned, text } from "../support/bytes";
 import { expectFailure } from "../support/provider-failure";
 import { readText, readBytes } from "../support/provider-read";
@@ -193,6 +193,114 @@ export function describeProviderContract(
 		it("fails an unknown cursor with cursorLost", async (context) => {
 			const provider = await openFeed(context);
 			await expectFailure(provider.capabilities.changeFeed!.changes("unknown-cursor"), "cursorLost");
+		});
+	});
+
+	describe(`Provider contract: ${name}, stable ids`, () => {
+		/** Opens a Remote and writes `note.md`, skipping the test if the provider gives no stable ids. */
+		async function openWithIds(context: TestContext): Promise<{ provider: Provider; written: RemoteFile }> {
+			const provider = await openEmptyRemote();
+			const written = await provider.write("note.md", bytes("one"));
+			if (written.stableId === undefined) context.skip();
+			return { provider, written };
+		}
+
+		it("lists a file and a folder with the stable ids they were created with", async (context) => {
+			const { provider, written } = await openWithIds(context);
+			const folder = await provider.createFolder("notes");
+			const listed = new Map((await provider.list()).entries.map((entry) => [entry.path, entry.stableId]));
+			expect(listed.get("note.md")).toBe(written.stableId);
+			expect(folder.stableId).toEqual(expect.any(String));
+			expect(listed.get("notes")).toBe(folder.stableId);
+		});
+
+		it("keeps a file's stable id when it is overwritten, and gives another file another one", async (context) => {
+			const { provider, written } = await openWithIds(context);
+			const overwritten = await provider.write("note.md", bytes("two"));
+			const other = await provider.write("other.md", bytes("one"));
+			expect(overwritten.stableId).toBe(written.stableId);
+			expect(other.stableId).not.toBe(written.stableId);
+		});
+
+		it("gives a file deleted and written again a new stable id", async (context) => {
+			const { provider, written } = await openWithIds(context);
+			await provider.delete("note.md");
+			const again = await provider.write("note.md", bytes("one"));
+			expect(again.stableId).not.toBe(written.stableId);
+		});
+	});
+
+	describe(`Provider contract: ${name}, file move`, () => {
+		/** Opens a Remote, skipping the test if the provider lacks the Capability. */
+		async function openMove(context: TestContext): Promise<{ provider: Provider; move: FileMove }> {
+			const provider = await openEmptyRemote();
+			const move = provider.capabilities.fileMove;
+			if (move === undefined) context.skip();
+			return { provider, move };
+		}
+
+		it("moves a file with its content and stable id, into an existing folder", async (context) => {
+			const { provider, move } = await openMove(context);
+			const written = await provider.write("old.md", bytes("content"));
+			await provider.createFolder("archive");
+			const moved = await move.moveFile("old.md", "archive/new.md");
+			expect(moved).toMatchObject({ kind: "file", path: "archive/new.md", size: 7 });
+			expect(moved.stableId).toBe(written.stableId);
+			expect(await readText(provider, "archive/new.md")).toBe("content");
+			await expectFailure(provider.read("old.md"), "notFound");
+			const paths = (await provider.list()).entries.map((entry) => entry.path).sort();
+			expect(paths).toEqual(["archive", "archive/new.md"]);
+		});
+
+		it("refuses to move a file onto an occupied path with preconditionFailed, replacing nothing", async (context) => {
+			const { provider, move } = await openMove(context);
+			await provider.write("old.md", bytes("mine"));
+			await provider.write("new.md", bytes("theirs"));
+			await expectFailure(move.moveFile("old.md", "new.md"), "preconditionFailed");
+			expect(await readText(provider, "new.md")).toBe("theirs");
+			expect(await readText(provider, "old.md")).toBe("mine");
+		});
+
+		it("fails moving a missing file with notFound", async (context) => {
+			const { move } = await openMove(context);
+			await expectFailure(move.moveFile("missing.md", "new.md"), "notFound");
+		});
+	});
+
+	describe(`Provider contract: ${name}, folder move`, () => {
+		/** Opens a Remote, skipping the test if the provider lacks the Capability. */
+		async function openMove(context: TestContext): Promise<{ provider: Provider; move: FolderMove }> {
+			const provider = await openEmptyRemote();
+			const move = provider.capabilities.folderMove;
+			if (move === undefined) context.skip();
+			return { provider, move };
+		}
+
+		it("moves a folder with everything inside it, keeping each file's revision and stable id", async (context) => {
+			const { provider, move } = await openMove(context);
+			await provider.createFolder("old");
+			await provider.createFolder("old/sub");
+			const written = await provider.write("old/sub/a.md", bytes("a"));
+			await move.moveFolder("old", "new");
+			const entries = (await provider.list()).entries;
+			expect(entries.map((entry) => entry.path).sort()).toEqual(["new", "new/sub", "new/sub/a.md"]);
+			const moved = entries.find((entry) => entry.path === "new/sub/a.md");
+			expect(moved?.stableId).toBe(written.stableId);
+			expect(await readText(provider, "new/sub/a.md")).toBe("a");
+		});
+
+		it("refuses to move a folder onto an occupied path with preconditionFailed, replacing nothing", async (context) => {
+			const { provider, move } = await openMove(context);
+			await provider.createFolder("old");
+			await provider.createFolder("new");
+			await provider.write("new/kept.md", bytes("kept"));
+			await expectFailure(move.moveFolder("old", "new"), "preconditionFailed");
+			expect((await provider.list()).entries.map((entry) => entry.path).sort()).toEqual(["new", "new/kept.md", "old"]);
+		});
+
+		it("fails moving a missing folder with notFound", async (context) => {
+			const { move } = await openMove(context);
+			await expectFailure(move.moveFolder("missing", "new"), "notFound");
 		});
 	});
 

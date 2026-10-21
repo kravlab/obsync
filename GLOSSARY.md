@@ -28,6 +28,10 @@ _Avoid_: Drive, cloud copy, server
 The path of a vault entry relative to the Remote root after the Remote's name policy is applied; it equals the vault path unless a name had to be encoded.
 _Avoid_: Cloud path, provider path, key (S3 term), id
 
+**Stable id**:
+An opaque identifier a provider may give an entry of a Remote that stays the same when the entry is renamed or moved; it only helps recognise a rename and never addresses the entry.
+_Avoid_: File id, native id, inode
+
 **Capability**:
 An optional ability a provider reports for a Remote after connecting (such as a change feed, conditional writes or server-side move); anything not reported is treated as absent.
 _Avoid_: Feature, flag

@@ -29,11 +29,13 @@ describe("Dropbox provider", () => {
 		expect(connector.providerId).toBe("dropbox");
 	});
 
-	it("reports conditional writes, the change feed, case-insensitive names and the upload-session size limit", async () => {
+	it("reports conditional writes, the change feed, file and folder move, case-insensitive names and the upload-session size limit", async () => {
 		const { provider } = await setUp();
 		expect(provider.capabilities).toEqual({
 			conditionalWrite: true,
 			changeFeed: { changes: expect.any(Function) as unknown },
+			fileMove: { moveFile: expect.any(Function) as unknown },
+			folderMove: { moveFolder: expect.any(Function) as unknown },
 		});
 		expect(provider.nameRules.caseInsensitive).toBe(true);
 		// 2^41 - 2^22 bytes (Dropbox API spec, upload_session/append:2).
@@ -45,16 +47,16 @@ describe("Dropbox provider", () => {
 		const { cursor } = await provider.list();
 		account.putFolder("/Other vault");
 		account.putFile("/Other vault/outside.md", bytes("out"), "rev90");
-		await provider.createFolder("Notes");
+		const folder = await provider.createFolder("Notes");
 		const first = await provider.write("Notes/a.md", bytes("a"));
 		const second = await provider.write("Notes/b.md", bytes("b"));
 		dropbox.listPageSize = 1;
 
 		const batch = await provider.capabilities.changeFeed!.changes(cursor!);
 		expect(batch.changes).toEqual([
-			{ kind: "folder", path: "Notes" },
-			{ kind: "file", path: "Notes/a.md", revision: first.revision, size: 1 },
-			{ kind: "file", path: "Notes/b.md", revision: second.revision, size: 1 },
+			{ kind: "folder", path: "Notes", stableId: folder.stableId },
+			{ kind: "file", path: "Notes/a.md", revision: first.revision, size: 1, stableId: first.stableId },
+			{ kind: "file", path: "Notes/b.md", revision: second.revision, size: 1, stableId: second.stableId },
 		]);
 	});
 
@@ -137,6 +139,29 @@ describe("Dropbox provider", () => {
 		expect(await readText(provider, "ноты.md")).toBe("ноты");
 		const upload = dropbox.requests.find((request) => request.url.endsWith("/files/upload"));
 		expect(upload?.headers?.["Dropbox-API-Arg"]).toMatch(/^\{"path":"\/My vault\/\\u043d\\u043e\\u0442\\u044b\.md",/);
+	});
+
+	it("lists, writes and moves entries with Dropbox's id as their stable id", async () => {
+		const { account, provider } = await setUp();
+		const written = await provider.write("note.md", bytes("one"));
+		const id = account.get("/My vault/note.md")?.id;
+		expect(id).toMatch(/^id:/);
+		expect(written.stableId).toBe(id);
+		const moved = await provider.capabilities.fileMove?.moveFile("note.md", "moved.md");
+		expect(moved?.stableId).toBe(id);
+		expect((await provider.list()).entries.find((entry) => entry.path === "moved.md")?.stableId).toBe(id);
+	});
+
+	it("moves with move_v2, never renaming automatically", async () => {
+		const { dropbox, provider } = await setUp();
+		await provider.createFolder("old");
+		await provider.capabilities.folderMove?.moveFolder("old", "new");
+		const request = dropbox.requests.find((sent) => sent.url.endsWith("/files/move_v2"));
+		expect(typeof request?.body === "string" && JSON.parse(request.body)).toEqual({
+			from_path: "/My vault/old",
+			to_path: "/My vault/new",
+			autorename: false,
+		});
 	});
 
 	it("deletes a file on condition of its revision with delete_v2 and parent_rev", async () => {
@@ -234,6 +259,25 @@ describe("Dropbox provider errors", () => {
 			routeError("path/disallowed_name/", { ".tag": "path", reason: { ".tag": "disallowed_name" }, upload_session_id: "s" }),
 		);
 		await expectFailure(provider.write("desktop.ini", bytes("x")), "nameNotRepresentable");
+	});
+
+	it("maps move_v2's route errors: a missing source, an occupied target, a full Dropbox, too many files", async () => {
+		const { dropbox, provider } = await setUp();
+		await provider.write("a.md", bytes("a"));
+		const move = (): Promise<unknown> =>
+			provider.capabilities.fileMove?.moveFile("a.md", "b.md") ?? Promise.reject(new Error("no file move"));
+		dropbox.interceptions.push(
+			routeError("from_lookup/not_found/", { ".tag": "from_lookup", from_lookup: { ".tag": "not_found" } }),
+			routeError("to/conflict/file/", { ".tag": "to", to: { ".tag": "conflict", conflict: { ".tag": "file" } } }),
+			routeError("insufficient_quota/", { ".tag": "insufficient_quota" }),
+			routeError("too_many_files/", { ".tag": "too_many_files" }),
+			routeError("to/too_many_write_operations/", { ".tag": "to", to: { ".tag": "too_many_write_operations" } }),
+		);
+		await expectFailure(move(), "notFound");
+		await expectFailure(move(), "preconditionFailed");
+		await expectFailure(move(), "quotaExceeded");
+		await expectFailure(move(), "permanent");
+		await expectFailure(move(), "throttled");
 	});
 
 	it("maps a request Dropbox rejects as malformed to permanent", async () => {

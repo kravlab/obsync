@@ -135,6 +135,20 @@ describe("Conflict copies of files that are not text", () => {
 		expect(await vaultText(phone, "Photo.png")).toBe("same photo");
 	});
 
+	it("uploads an edit made here over a new Remote revision of the synced content, making no copy", async () => {
+		const { remote, laptop, phone } = await syncedPairWith("Photo.png", bytes("original"));
+		await laptop.provider.write("Photo.png", bytes("original"));
+		await phone.vault.write("Photo.png", bytes("edited on phone"));
+
+		await syncNow(phone);
+		await syncNow(laptop);
+
+		expect(remoteFiles(remote)).toEqual(["Photo.png"]);
+		expect(remoteText(remote, "Photo.png")).toBe("edited on phone");
+		expect(await vaultText(laptop, "Photo.png")).toBe("edited on phone");
+		expect(phone.ui.notices).toEqual([]);
+	});
+
 	it("makes a Conflict copy of a note whose versions are not all UTF-8", async () => {
 		const { remote, laptop, phone } = await syncedPairWith("note.md", bytes("original\n"));
 		const latin1 = new Uint8Array([0x63, 0x61, 0x66, 0xe9, 0x0a]).buffer;

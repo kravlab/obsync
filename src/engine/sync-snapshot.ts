@@ -11,10 +11,18 @@ import type { VaultPath } from "./local-vault";
 /**
  * What the snapshot records for one path, written only once both sides
  * hold the same content:
- * - a file: its revision on the Remote, the content hash of its bytes, and
- *   the vault file's stat when it was read with that content, so an
- *   untouched file need not be hashed again;
+ * - a file: its revision on the Remote, the content hash of its bytes and
+ *   their size, and the vault file's stat when it was read with that
+ *   content, so an untouched file need not be hashed again;
  * - a folder: only that it exists on both sides.
+ *
+ * Either may carry the Remote entry's stable id, when the provider gives
+ * one, which finds the entry again after a rename on the Remote.
+ *
+ * After a rename the entry moves to the new path keeping its revision,
+ * unless the Remote is known to hold the synced content there under
+ * another one: a revision the new path may not have, so the next
+ * comparison reads the Remote file instead of trusting it.
  */
 export type SnapshotEntry =
 	| {
@@ -23,6 +31,10 @@ export type SnapshotEntry =
 			readonly revision: string;
 			/** The content hash of the bytes both sides hold. */
 			readonly hash: string;
+			/** The size in bytes of the content `hash` is of; absent in entries recorded before it was kept. */
+			readonly size?: number;
+			/** The Remote file's stable id, when the provider gives one. */
+			readonly stableId?: string;
 			/**
 			 * The vault file's size and modification time, taken before it was
 			 * read with the content `hash`; absent when the engine wrote the file
@@ -30,7 +42,11 @@ export type SnapshotEntry =
 			 */
 			readonly stat?: VaultFileStat;
 	  }
-	| { readonly kind: "folder" };
+	| {
+			readonly kind: "folder";
+			/** The Remote folder's stable id, when the provider gives one. */
+			readonly stableId?: string;
+	  };
 
 /** What the snapshot records for a file. */
 export type SyncedFile = Extract<SnapshotEntry, { kind: "file" }>;

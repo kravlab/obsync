@@ -87,6 +87,12 @@ export interface DeviceStore {
 	 * recorded is left as it is.
 	 */
 	removeSnapshotEntry(path: VaultPath): Promise<void>;
+	/**
+	 * Moves what is recorded for `from` to `to` after a rename: records
+	 * `entry` for `to` with `from`'s Base, and forgets `from`, in one
+	 * step, durable once the returned promise resolves.
+	 */
+	moveSnapshotEntry(from: VaultPath, to: VaultPath, entry: SnapshotEntry): Promise<void>;
 	/** Returns the Base recorded for `path`, or null if there is none. */
 	loadBase(path: VaultPath): Promise<ArrayBuffer | null>;
 	/**

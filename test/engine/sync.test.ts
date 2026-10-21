@@ -150,6 +150,7 @@ describe("syncing changed files", () => {
 			kind: "file",
 			revision: stored?.kind === "file" ? stored.revision : undefined,
 			hash: expect.any(String) as unknown,
+			size: 2,
 			stat: { size: 2, mtime: 1 },
 		});
 	});

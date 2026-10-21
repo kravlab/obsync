@@ -12,5 +12,12 @@ export function noticeText(notice: SyncNotice, strings: Strings): string {
 				notice.deletedOn === "thisDevice" ? strings.noticeRestoredDeletedHere : strings.noticeRestoredDeletedThere,
 				{ file: notice.path },
 			);
+		case "renamedOnBoth":
+			return fill(strings.noticeRenamedOnBoth, { file: notice.path, local: notice.localPath });
+		case "renameBeatsDelete":
+			return fill(
+				notice.deletedOn === "thisDevice" ? strings.noticeRenamedDeletedHere : strings.noticeRenamedDeletedThere,
+				{ file: notice.path },
+			);
 	}
 }
