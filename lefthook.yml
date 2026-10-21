@@ -1,4 +1,16 @@
 # Git hooks, installed by `lefthook install`.
+
+# Nothing is committed unless the types check, lint is clean and every
+# test passes; a flaky test blocks too, since it is a failing test.
+pre-commit:
+  jobs:
+    - name: typecheck
+      run: pnpm typecheck
+    - name: lint
+      run: pnpm lint
+    - name: tests
+      run: pnpm test
+
 commit-msg:
   jobs:
     # A Claude Code session link must not reach the history. {1} is the path
