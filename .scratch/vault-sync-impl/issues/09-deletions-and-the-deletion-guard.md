@@ -6,7 +6,7 @@ Parent spec: `.scratch/vault-sync/spec.md`, "Deletions and renames" (deletions, 
 
 **Blocked by:** 03 (Two-way sync of new and changed files).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Deletions are detected from the Sync snapshot, with no tombstones on the Remote.
 - [ ] A remote deletion is applied with `FileManager.trashFile`. A local deletion is applied on the Remote with `delete` and the `parent_rev` precondition.
@@ -15,3 +15,7 @@ Parent spec: `.scratch/vault-sync/spec.md`, "Deletions and renames" (deletions, 
 - [ ] The Deletion guard prompt (apply / restore / review list) appears above N files or P% in either direction, and always for a missing vault or Remote root. N and P are settings.
 - [ ] The `delete_v2` response to a `parent_rev` mismatch is confirmed and mapped to `preconditionFailed`.
 - [ ] Engine tests cover delete propagation, delete versus edit, folder delete racing an add, and guard thresholds.
+
+## Comments
+
+- 2026-10-21: Implemented in commit `5d0d8a4` (feat(sync): carry deletions, with a guard) on `feat/deletions`; plan: `.scratch/vault-sync-impl/plans/09-deletions.md`. Ticket closed. Dropbox's answer to a stale `parent_rev` was checked on the real service: 409 `path_write/conflict/file/`. The Deletion guard prompt, its closing on plugin unload and the trash setting are still to be checked by hand in Obsidian.

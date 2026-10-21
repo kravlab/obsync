@@ -58,7 +58,7 @@ The modal itself and the trash setting are checked by hand in Obsidian.
 - [x] 6. Engine: Deletion guard prompt, Apply / Restore / on hold (seam 2). `SyncEngine.sync` takes a source; only `user` lifts a hold.
 - [x] 7. Shell: modal, settings fields, notice and status texts EN/RU, wiring in `main.ts` (seam 4). Visibility and online events sync as `automatic`. Restore is the highlighted button: `setWarning` is deprecated and `setDestructive` needs Obsidian 1.13, above `minAppVersion`.
 - [x] 8. Full test run, typecheck, lint, build with a stand-in key: 448 passed, 4 skipped (as before), all clean.
-- [ ] 9. Code review, then commit and ticket closed on your go-ahead. Review done 2026-10-21; the chosen fixes are below.
+- [x] 9. Code review, then commit and ticket closed on your go-ahead. Review done 2026-10-21; the chosen fixes are below. Committed in `5d0d8a4`.
 
 ## Open before step 1
 
