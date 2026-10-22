@@ -9,6 +9,7 @@ import type {
 } from "../engine/connection";
 import { ProviderError } from "../engine/provider";
 import { defaultDeviceName } from "./device-name";
+import { copiedError, type ScreenMessage } from "./connect-error-text";
 import { providerErrorDetailLine, providerErrorMessage } from "./error-message";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
@@ -33,6 +34,8 @@ export class ConnectModal extends Modal {
 	private messageEl: HTMLElement | undefined;
 	/** Under the message: what the provider answered on a failure. */
 	private detailLineEl: HTMLElement | undefined;
+	/** Under the detail line: the "Copy error" button while a provider failure is shown. */
+	private copyEl: HTMLElement | undefined;
 	private busy = false;
 	/** The folders listed last, kept when listing them again fails. */
 	private candidates: readonly RemoteCandidate[] = [];
@@ -210,13 +213,32 @@ export class ConnectModal extends Modal {
 		this.contentEl.empty();
 		this.messageEl = this.contentEl.createEl("p", { cls: "obsync-message" });
 		this.detailLineEl = this.contentEl.createEl("p", { cls: "obsync-message-detail" });
+		this.copyEl = this.contentEl.createDiv();
 		if (message) this.showMessage(message);
 	}
 
-	/** Shows `message` at the top of the current screen, replacing the one shown, its detail line included. */
+	/**
+	 * Shows `message` at the top of the current screen, replacing the one
+	 * shown, its detail line included; a provider failure gets a "Copy
+	 * error" button, since its text is what a bug report needs.
+	 */
 	private showMessage(message: ScreenMessage): void {
 		this.messageEl?.setText(message.text);
 		this.detailLineEl?.setText(message.detailLine ?? "");
+		this.copyEl?.empty();
+		if (!message.copyable || !this.copyEl) return;
+		new Setting(this.copyEl).addButton((button) =>
+			button.setButtonText(this.strings.copyError).onClick(() => {
+				// The clipboard can refuse, e.g. without permission: the text stays selectable for copying by hand.
+				navigator.clipboard.writeText(copiedError(message)).then(
+					() => new Notice(this.strings.errorCopied),
+					(error: unknown) => {
+						console.error("obsync: copying the connect error failed", error);
+						new Notice(this.strings.errorNotCopied);
+					},
+				);
+			}),
+		);
 	}
 
 	/**
@@ -248,16 +270,14 @@ export class ConnectModal extends Modal {
 			if (!(error instanceof ProviderError)) throw error;
 			return {
 				ok: false,
-				message: { text: providerErrorMessage(error, this.strings), detailLine: providerErrorDetailLine(error, this.strings) },
+				message: {
+					text: providerErrorMessage(error, this.strings),
+					detailLine: providerErrorDetailLine(error, this.strings),
+					copyable: true,
+				},
 			};
 		} finally {
 			this.busy = false;
 		}
 	}
-}
-
-/** A message at the top of a screen: its text, and for a provider failure the line telling what the provider answered. */
-interface ScreenMessage {
-	readonly text: string;
-	readonly detailLine?: string;
 }

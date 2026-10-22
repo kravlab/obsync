@@ -176,6 +176,12 @@ export const en = {
 	errorFailed: "Dropbox refused the request. Try again later.",
 	/** Under a failure's message: what Dropbox answered, `{detail}`, untranslated. */
 	errorDetails: "Details: {detail}",
+	/** The connect window's button copying the failure shown. */
+	copyError: "Copy error",
+	/** Notice after the failure was copied. */
+	errorCopied: "The error is copied.",
+	/** Notice when the clipboard refused the failure. */
+	errorNotCopied: "The error could not be copied. Select it and copy it by hand.",
 
 	/** Remote step: what to choose. */
 	chooseInstructions: "Choose the folder this vault syncs with, or create a new one.",

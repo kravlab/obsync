@@ -6,6 +6,7 @@ import type { ConfigurationConflictStore, Scheduler } from "./engine/ports";
 import { ObsidianActivityStore } from "./obsidian/activity-store";
 import { ObsidianConfigurationCategoriesStore } from "./obsidian/configuration-categories-store";
 import { ObsidianConfigurationConflicts } from "./obsidian/configuration-conflict-store";
+import { ObsidianConnectErrorLog } from "./obsidian/connect-error-log";
 import { ObsidianDeletionGuardStore } from "./obsidian/deletion-guard-store";
 import { ObsidianDeviceStore } from "./obsidian/device-store";
 import { ObsidianLocalVault } from "./obsidian/local-vault";
@@ -21,6 +22,7 @@ import { moveToConflict, moveToFirstConflict } from "./ui/conflict-commands";
 import { conflictDecorations } from "./ui/conflict-decorations";
 import { ConflictEditModal } from "./ui/conflict-edit-modal";
 import { conflictReadingView } from "./ui/conflict-reading-view";
+import { withConnectErrorLog } from "./ui/connect-error-text";
 import { ConnectModal } from "./ui/connect-modal";
 import { defaultDeviceName } from "./ui/device-name";
 import { fill } from "./ui/i18n/fill";
@@ -90,7 +92,8 @@ export default class ObsyncPlugin extends Plugin {
 			connectStep: createDropboxConnectStep(dropbox),
 			deviceStore,
 			secretStore,
-			ui,
+			// A failure while connecting also goes to a file in the plugin's folder, to be taken off a phone.
+			ui: withConnectErrorLog(ui, new ObsidianConnectErrorLog(this.app.vault.adapter, pluginDir), dropbox.clock),
 			newDeviceId: () => crypto.randomUUID(),
 			clock: dropbox.clock,
 		});

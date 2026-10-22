@@ -19,6 +19,14 @@
 	display: none;
 }
 
+/* A failure's text can be selected and copied by hand, long press on a
+   phone included, even where the clipboard button is refused. */
+.obsync-message,
+.obsync-message-detail {
+	-webkit-user-select: text;
+	user-select: text;
+}
+
 /* Conflict blocks in the editor: markers stay visible but quiet, each
    side gets a light tint of its own, and a row of actions sits above. */
 .obsync-conflict-marker {
