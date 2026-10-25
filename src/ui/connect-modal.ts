@@ -10,10 +10,16 @@ import type {
 import { ProviderError } from "../engine/provider";
 import { defaultDeviceName } from "./device-name";
 import { copiedError, type ScreenMessage } from "./connect-error-text";
-import { providerErrorDetailLine, providerErrorMessage } from "./error-message";
+import { detailLine, errorDetailLine, providerErrorMessage } from "./error-message";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
 import { fitForPhone } from "./phone-modal";
+
+/** A button that belongs to one message of the connect window: its text, and what pressing it does. */
+interface MessageAction {
+	readonly label: string;
+	readonly run: () => void;
+}
 
 /**
  * The connect window. Two screens, each driving the connection service:
@@ -24,18 +30,19 @@ import { fitForPhone } from "./phone-modal";
  *    vault are marked), or create a new one, named after the vault by
  *    default; the device name is edited here too.
  *
- * Failures show as a message at the top of the current screen, a provider
- * failure with what the provider answered under it; a failed Remote choice
- * also lists the folders again, since it may have left a new folder
- * behind. While a request runs, further clicks are ignored, so a code is
- * never sent twice.
+ * Failures show as a message at the top of the current screen, with what
+ * went wrong under it when there is something to tell, and a "Copy error"
+ * button: every one is a failure to connect, which the connection service
+ * also records. A failed Remote choice also lists the folders again, since
+ * it may have left a new folder behind. While a request runs, further
+ * clicks are ignored, so a code is never sent twice.
  */
 export class ConnectModal extends Modal {
 	private messageEl: HTMLElement | undefined;
-	/** Under the message: what the provider answered on a failure. */
+	/** Under the message: what went wrong, when there is something to tell. */
 	private detailLineEl: HTMLElement | undefined;
-	/** Under the detail line: the "Copy error" button while a provider failure is shown. */
-	private copyEl: HTMLElement | undefined;
+	/** Under the detail line: the buttons of the failure shown, its own action if it has one, then "Copy error". */
+	private actionsEl: HTMLElement | undefined;
 	private busy = false;
 	/** The folders listed last, kept when listing them again fails. */
 	private candidates: readonly RemoteCandidate[] = [];
@@ -56,7 +63,7 @@ export class ConnectModal extends Modal {
 		private readonly service: ConnectionService,
 		private readonly strings: Strings,
 		private readonly vaultName: string,
-		private readonly onConnected: (how: "connected" | "reconnected") => void,
+		private readonly onConnected: () => void,
 	) {
 		super(app);
 		fitForPhone(this);
@@ -105,12 +112,12 @@ export class ConnectModal extends Modal {
 			case undefined:
 				return;
 			case "codeRejected":
-				return this.showLogin({ text: this.strings.codeRejected });
+				return this.showLogin({ text: this.strings.codeRejected, detailLine: detailLine(outcome.detail, this.strings) });
 			case "otherAccount":
 				this.showMessage({ text: this.strings.otherAccount });
 				return;
 			case "reconnected":
-				this.done(this.strings.noticeReconnected, "reconnected");
+				this.done(this.strings.noticeReconnected);
 				return;
 			case "authorized":
 				return this.showRemotes(outcome.remotes);
@@ -169,7 +176,8 @@ export class ConnectModal extends Modal {
 	 * device's First sync. A refused name or a folder that cannot be synced
 	 * is shown on the same screen; a failure lists the folders again with
 	 * its message. Another device's First sync in progress is shown with a
-	 * button that runs the choice again, connecting anyway.
+	 * button that runs the choice again, connecting anyway; it goes with
+	 * that message.
 	 */
 	private async connectWith(
 		remotes: RemoteChooser,
@@ -181,7 +189,7 @@ export class ConnectModal extends Modal {
 		if (!result.ok) return this.showRemotes(remotes, result.message);
 		switch (result.value.kind) {
 			case "connected":
-				this.done(this.strings.noticeConnected, "connected");
+				this.done(this.strings.noticeConnected);
 				return;
 			case "nameTaken":
 				this.showMessage({ text: this.strings.folderTaken });
@@ -193,18 +201,18 @@ export class ConnectModal extends Modal {
 				this.showMessage({ text: this.strings.providerUnsupported });
 				return;
 			case "firstSyncInProgress":
-				this.showMessage({ text: fill(this.strings.firstSyncInProgress, { device: result.value.deviceName }) });
-				new Setting(this.contentEl).addButton((button) =>
-					button.setButtonText(this.strings.connectAnyway).onClick(() => void this.connectWith(remotes, choice, true)),
+				this.showMessage(
+					{ text: fill(this.strings.firstSyncInProgress, { device: result.value.deviceName }) },
+					{ label: this.strings.connectAnyway, run: () => void this.connectWith(remotes, choice, true) },
 				);
 				return;
 		}
 	}
 
-	/** Tells the user the device is connected, `how`, and closes the window. */
-	private done(notice: string, how: "connected" | "reconnected"): void {
+	/** Tells the user the device is connected with `notice`, says so to `onConnected`, and closes the window. */
+	private done(notice: string): void {
 		new Notice(notice);
-		this.onConnected(how);
+		this.onConnected();
 		this.close();
 	}
 
@@ -213,21 +221,25 @@ export class ConnectModal extends Modal {
 		this.contentEl.empty();
 		this.messageEl = this.contentEl.createEl("p", { cls: "obsync-message" });
 		this.detailLineEl = this.contentEl.createEl("p", { cls: "obsync-message-detail" });
-		this.copyEl = this.contentEl.createDiv();
+		this.actionsEl = this.contentEl.createDiv();
 		if (message) this.showMessage(message);
 	}
 
 	/**
 	 * Shows `message` at the top of the current screen, replacing the one
-	 * shown, its detail line included; a provider failure gets a "Copy
-	 * error" button, since its text is what a bug report needs.
+	 * shown with its detail line and buttons, with a "Copy error" button:
+	 * every message is a failure to connect, whose text is what a bug report
+	 * needs. `action`, when given, is a button of this message's own, gone
+	 * with it once another message replaces it.
 	 */
-	private showMessage(message: ScreenMessage): void {
+	private showMessage(message: ScreenMessage, action?: MessageAction): void {
 		this.messageEl?.setText(message.text);
 		this.detailLineEl?.setText(message.detailLine ?? "");
-		this.copyEl?.empty();
-		if (!message.copyable || !this.copyEl) return;
-		new Setting(this.copyEl).addButton((button) =>
+		this.actionsEl?.empty();
+		if (!this.actionsEl) return;
+		const row = new Setting(this.actionsEl);
+		if (action) row.addButton((button) => button.setButtonText(action.label).onClick(action.run));
+		row.addButton((button) =>
 			button.setButtonText(this.strings.copyError).onClick(() => {
 				// The clipboard can refuse, e.g. without permission: the text stays selectable for copying by hand.
 				navigator.clipboard.writeText(copiedError(message)).then(
@@ -242,8 +254,8 @@ export class ConnectModal extends Modal {
 	}
 
 	/**
-	 * Runs one request and shows its provider failure, if any, at the top of
-	 * the current screen; yields undefined on a failure or when another
+	 * Runs one request and shows its failure, if any, at the top of the
+	 * current screen; yields undefined on a failure or when another
 	 * request is running.
 	 */
 	private async run<T>(request: () => Promise<T>): Promise<T | undefined> {
@@ -256,8 +268,10 @@ export class ConnectModal extends Modal {
 
 	/**
 	 * Runs one request unless another is running (then yields undefined). A
-	 * provider failure comes back with the message telling it and what the
-	 * provider answered; any other error is a bug and propagates.
+	 * failure comes back with the message telling it and what went wrong:
+	 * a provider failure as the provider answered, any other error, a bug,
+	 * as "connecting failed unexpectedly" with its name and message, also
+	 * logged to the console for the bug report.
 	 */
 	private async attempt<T>(
 		request: () => Promise<T>,
@@ -267,15 +281,9 @@ export class ConnectModal extends Modal {
 		try {
 			return { ok: true, value: await request() };
 		} catch (error) {
-			if (!(error instanceof ProviderError)) throw error;
-			return {
-				ok: false,
-				message: {
-					text: providerErrorMessage(error, this.strings),
-					detailLine: providerErrorDetailLine(error, this.strings),
-					copyable: true,
-				},
-			};
+			if (!(error instanceof ProviderError)) console.error("obsync: connecting failed unexpectedly", error);
+			const text = error instanceof ProviderError ? providerErrorMessage(error, this.strings) : this.strings.connectUnexpected;
+			return { ok: false, message: { text, detailLine: errorDetailLine(error, this.strings) } };
 		} finally {
 			this.busy = false;
 		}

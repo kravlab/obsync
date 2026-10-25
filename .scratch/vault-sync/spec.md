@@ -231,11 +231,11 @@ From the map's Provider contract ticket, refined by the mobile runtime checks:
 - **What counts as text:**
   - an extension from the shared text-extension list, with defaults `.md`, `.txt`, `.canvas`, `.csv` and similar plus user additions;
   - and all three versions decode as UTF-8.
-- **Normalisation.** Versions are compared and merged with LF line endings and no BOM; the result is written in the local file's style.
+- **Normalisation.** Versions are compared and merged with LF line endings and no BOM; the result is written in the local file's style. Versions that differ only in whether the file ends with a line break (an empty file and one holding only a line break included) merge without a Conflict block, keeping the line break; a version that also differs in other lines is not covered by this.
 - **No true Base.** Without a true Base (First sync, lost Sync snapshot), a 2-way merge marks every differing region as a Conflict block and never picks a side. Identical content is no conflict. A Base that is not the true common ancestor is never used.
 - **Old markers** are plain text; blocks may nest.
 - **JSON files** (`.canvas`, `.json`) never get markers. A clean merge is applied only if it parses as JSON; otherwise the Remote version goes into the file and the local version becomes a Conflict copy.
-- **Conflict copy** name: `Name (conflict <device name> YYYY-MM-DD HHmm).ext`, in the same folder, with the time from the device clock. It is an ordinary synced file.
+- **Conflict copy** name: `Name (conflict <device name> YYYY-MM-DD HHmm).ext`, in the same folder, with the time from the device clock. It is an ordinary synced file. A name longer than the provider allows (its longest name, and its longest path less the folder) is cut: the original name first, down to one character, then the device name, then the extension from its end; the date stays whole, and characters are cut as the user sees them. When even the shortest copy name does not fit, no copy is made, the file is skipped as a name the provider cannot store, and both versions stay as they are.
 
 ### Binary conflicts
 

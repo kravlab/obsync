@@ -65,9 +65,37 @@ describe("stored activity log", () => {
 		expect(storedActivity(storableActivity(withDetails))).toEqual(withDetails);
 	});
 
+	it("keeps every connect failure that is not a provider failure", () => {
+		const refusals: ActivityEvent[] = [
+			{ at: 7, kind: "connectFailed", cause: "codeRejected", detail: "invalid_grant" },
+			{ at: 6, kind: "connectFailed", cause: "otherAccount" },
+			{ at: 5, kind: "connectFailed", cause: "nameTaken" },
+			{ at: 4, kind: "connectFailed", cause: "invalidName" },
+			{ at: 3, kind: "connectFailed", cause: "unsupportedProvider" },
+			{ at: 2, kind: "connectFailed", cause: "firstSyncInProgress", detail: "Tablet" },
+			{ at: 1, kind: "connectFailed", cause: "bug", detail: "TypeError: boom" },
+		];
+
+		expect(storedActivity(storableActivity(refusals))).toEqual(refusals);
+	});
+
+	it("keeps a revoke that failed on disconnect, with or without its detail, a bug included", () => {
+		const revokes: ActivityEvent[] = [
+			{ at: 3, kind: "revokeFailed", cause: "transient", detail: "no response" },
+			{ at: 2, kind: "revokeFailed", cause: "permanent" },
+			{ at: 1, kind: "revokeFailed", cause: "bug", detail: "TypeError: boom" },
+		];
+
+		expect(storedActivity(storableActivity(revokes))).toEqual(revokes);
+	});
+
+	it("leaves out a revoke failure with a cause only connecting has", () => {
+		expect(storedActivity({ formatVersion: 1, events: [{ at: 1, kind: "revokeFailed", cause: "codeRejected" }] })).toEqual([]);
+	});
+
 	it.each([
 		["an unknown cause", { at: 5, kind: "connectFailed", cause: "gremlins" }],
-		["a cause that is not a provider failure", { at: 5, kind: "connectFailed", cause: "bug" }],
+		["a cause only a sync has", { at: 5, kind: "connectFailed", cause: "unreadableSettings" }],
 		["a detail that is not text", { at: 5, kind: "connectFailed", cause: "permanent", detail: 400 }],
 	])("leaves out a failure while connecting with %s", (_, event) => {
 		expect(storedActivity({ formatVersion: 1, events: [event] })).toEqual([]);

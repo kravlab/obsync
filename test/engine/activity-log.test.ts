@@ -94,6 +94,18 @@ describe("the activity log", () => {
 		expect(inner.connectFailures).toEqual([]);
 	});
 
+	it("keeps a revoke that failed on disconnect, with its detail, without a notice", () => {
+		const { clock, inner, store, ui } = loggedUi();
+		clock.advance(7_000);
+		ui.reportRevokeFailure({ cause: "transient", detail: "no response" });
+
+		const expected: ActivityEvent[] = [{ at: 7_000, kind: "revokeFailed", cause: "transient", detail: "no response" }];
+		expect(inner.lastActivity).toEqual(expected);
+		expect(store.events).toEqual(expected);
+		expect(inner.notices).toEqual([]);
+		expect(inner.revokeFailures).toEqual([]);
+	});
+
 	it("keeps only the newest events up to its limit", () => {
 		const { clock, inner, ui } = loggedUi();
 		for (let index = 0; index < ACTIVITY_LIMIT + 5; index += 1) {

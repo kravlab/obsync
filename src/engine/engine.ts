@@ -4,11 +4,12 @@
  * triggers and lifecycle"). The shell builds one per device with
  * `createSyncEngine`.
  */
+import { ConnectionChanged, boundToEpoch } from "./connection-epoch";
 import { detailField } from "./failure-detail";
 import { withVaultWrites } from "./local-vault";
 import { isWithin, movedAlong } from "./paths";
 import type { VaultRename } from "./renames";
-import { providerSecretId, type EnginePorts, type Scheduler } from "./ports";
+import { providerSecretId, type DeviceStore, type EnginePorts, type Scheduler } from "./ports";
 import { ProviderError, isSyncable } from "./provider";
 import { beginFirstSync, noteFirstSyncDone } from "./first-sync";
 import { conflictsOf } from "./conflicts";
@@ -69,7 +70,9 @@ export interface SyncEngine {
 	 * When the Deletion guard's prompt was closed without an answer, sync
 	 * is held: it shows Deletions waiting for you and does nothing more
 	 * until a sync from the `user` ("Sync now", the default `source`),
-	 * which asks again. The hold lives in memory only.
+	 * which asks again. The hold lives in memory only, and ends with the
+	 * Connection: after Disconnect (the Connection epoch), the next sync
+	 * asks afresh.
 	 */
 	sync(source?: SyncSource): Promise<void>;
 	/**
@@ -160,9 +163,13 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 		pluginDir,
 		pluginId,
 		newDeviceId,
+		epoch,
+		reportError,
 	} = ports;
 	/** The sync running now, if any. */
 	let running: Run | undefined;
+	/** The Connection epoch the hold and the rename hints belong to; Disconnect moves past it. */
+	let stateEpoch = epoch.current();
 	/** How many of the engine's own vault writes are under way; their change hints are not edits. */
 	let ownWrites = 0;
 	let backoffAttempt = 0;
@@ -222,36 +229,55 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 	/**
 	 * Shows the conflicts `snapshot` records, the stored Sync snapshot when
 	 * none is given, with the kept configuration versions. A report that
-	 * finishes after one started later is stale and not shown.
+	 * finishes after one started later is stale and not shown, nor is one
+	 * that finishes once `stillShown` says its Connection was disconnected.
 	 */
-	async function showConflicts(snapshot?: SyncSnapshot): Promise<void> {
+	async function showConflicts(snapshot?: SyncSnapshot, stillShown: () => boolean = () => true): Promise<void> {
 		conflictReports += 1;
 		const report = conflictReports;
 		const [shown, kept] = await Promise.all([snapshot ?? deviceStore.loadSnapshot(), configurationConflicts.list()]);
-		if (report === conflictReports) ui.showConflicts(conflictsOf(shown, kept));
+		if (report === conflictReports && stillShown()) ui.showConflicts(conflictsOf(shown, kept));
 	}
 
 	/** Schedules the next periodic poll. */
 	function scheduleNextPoll(): void {
 		poll.schedule(schedule().pollInterval.ms, () => {
 			scheduleNextPoll();
-			void trigger("sync");
+			syncOnItsOwn();
 		});
+	}
+
+	/**
+	 * Drops what the engine kept in memory for a Connection since
+	 * disconnected: a hold, which the next Connection must not inherit; the
+	 * restores asked for, of versions kept under that Connection; the
+	 * backoff of its failures; and the rename hints, which name paths of
+	 * the Remote left. The hints can do no harm anyway, since Disconnect
+	 * cleared the Sync snapshot they are matched against: dropping them is
+	 * defensive only.
+	 */
+	function forgetDisconnected(): void {
+		if (epoch.isCurrent(stateEpoch)) return;
+		stateEpoch = epoch.current();
+		held = undefined;
+		restores.length = 0;
+		backoffAttempt = 0;
+		renameHints.length = 0;
 	}
 
 	/**
 	 * Pauses sync until the user logs in again, after the provider refused
 	 * the secret `refused`, or none was stored (null): stores the pause with
-	 * the Connection, tells the user once, and shows Reconnect needed. A
-	 * secret replaced meanwhile, by a login during this sync, is not the one
-	 * refused, so `run` syncs again with it instead, and a pause stored
-	 * while that login ran is lifted again, since the login could not see
-	 * it to clear it; a Connection gone meanwhile, by a disconnect, only has
-	 * its status shown.
+	 * the Connection in `store`, tells the user once, and shows Reconnect
+	 * needed. A secret replaced meanwhile, by a login during this sync, is
+	 * not the one refused, so `run` syncs again with it instead, and a pause
+	 * stored while that login ran is lifted again, since the login could not
+	 * see it to clear it; a Connection gone meanwhile, by a disconnect, only
+	 * has its status shown.
 	 */
-	async function pauseForReconnect(run: Run, refused: string | null): Promise<void> {
+	async function pauseForReconnect(run: Run, refused: string | null, store: DeviceStore): Promise<void> {
 		const loggedInAgain = (): boolean => secretStore.getSecret(providerSecretId(providers.providerId)) !== refused;
-		const connection = await deviceStore.loadConnection();
+		const connection = await store.loadConnection();
 		if (connection === null) {
 			ui.showStatus(statusOf(connection));
 			return;
@@ -261,10 +287,10 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			return;
 		}
 		if (connection.reconnectNeeded !== true) {
-			await deviceStore.saveConnection({ ...connection, reconnectNeeded: true });
+			await store.saveConnection({ ...connection, reconnectNeeded: true });
 			if (loggedInAgain()) {
-				const current = await deviceStore.loadConnection();
-				if (current !== null) await deviceStore.saveConnection({ ...current, reconnectNeeded: false });
+				const current = await store.loadConnection();
+				if (current !== null) await store.saveConnection({ ...current, reconnectNeeded: false });
 				run.followUp ??= "sync";
 				return;
 			}
@@ -273,9 +299,22 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 		ui.showStatus({ state: "reconnectNeeded" });
 	}
 
-	/** One sync of `run`, from reading the Connection to the final status. */
+	/**
+	 * One sync of `run`, from reading the Connection to the final status.
+	 * It belongs to the Connection epoch it starts in: its writes to this
+	 * device's state go through a store bound to that epoch, and the epoch
+	 * is checked after each wait that ends in something shown and after each
+	 * prompt answered. Once Disconnect has moved past it, the sync ends
+	 * showing nothing more (no status, list or notice), since Disconnect
+	 * set what to show; a bug is still thrown.
+	 */
 	async function syncOnce(run: Run): Promise<void> {
-		const connection = await deviceStore.loadConnection();
+		forgetDisconnected();
+		const runEpoch = epoch.current();
+		const store = boundToEpoch(deviceStore, epoch, runEpoch);
+		/** Whether the epoch is still the one this sync started in. */
+		const inRunEpoch = (): boolean => epoch.isCurrent(runEpoch);
+		const connection = await store.loadConnection();
 		if (connection === null) {
 			ui.showStatus({ state: "notConnected" });
 			return;
@@ -298,7 +337,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			secret = secretStore.getSecret(providerSecretId(providers.providerId));
 			if (secret === null) {
 				// A Connection without its secret cannot reach the Remote; only a new login restores it.
-				await pauseForReconnect(run, secret);
+				await pauseForReconnect(run, secret, store);
 				return;
 			}
 			const provider = await providers.open(connection, secret);
@@ -315,11 +354,11 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 			run.listing = true;
 			// Restores asked for from now on are for the follow-up sync.
 			const restoring = [...restores];
-			const isFirstSync = !(await deviceStore.hasSnapshot());
+			const isFirstSync = !(await store.hasSnapshot());
 			const result = await runSync({
 				provider,
 				vault: syncVault,
-				deviceStore,
+				deviceStore: store,
 				configurationConflicts,
 				settings,
 				device: connection.device,
@@ -331,12 +370,15 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				configuration: { layout: { configDir: vault.configDir, pluginDir, pluginId }, categories: configurationCategories() },
 				renameHints: hints,
 				restores: restoring,
-				...(isFirstSync ? { firstSync: { begin: () => beginFirstSync(deviceStore, provider, newDeviceId, clock) } } : {}),
+				inRunEpoch,
+				...(isFirstSync ? { firstSync: { begin: () => beginFirstSync(store, provider, newDeviceId, clock) } } : {}),
 			});
+			if (!inRunEpoch()) return;
 			backoffAttempt = 0;
 			restores.splice(0, restoring.length);
 			ui.showSkipped(result.skipped);
-			await showConflicts(result.snapshot);
+			await showConflicts(result.snapshot, inRunEpoch);
+			if (!inRunEpoch()) return;
 			if (result.held !== undefined) {
 				// A sync the user asked for meanwhile runs next and asks again.
 				if (userRequests === userRequestsBefore) held = result.held;
@@ -344,36 +386,54 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				return;
 			}
 			if (result.firstSync !== undefined) {
-				await deviceStore.markSnapshotComplete();
+				await store.markSnapshotComplete();
 				ui.showNotice({ kind: "firstSyncDone", ...result.firstSync });
 			}
-			await noteFirstSyncDone(deviceStore, provider);
+			await noteFirstSyncDone(store, provider);
+			if (!inRunEpoch()) return;
 			renameHints.splice(0, hints.length);
 			ui.showStatus({ state: "synced" });
 			if (result.nextPostEditPauseMs !== undefined) {
-				editPause.schedule(result.nextPostEditPauseMs, () => void trigger("sync"));
+				editPause.schedule(result.nextPostEditPauseMs, () => syncOnItsOwn());
 			}
 		} catch (error) {
+			// The Connection was disconnected meanwhile: Disconnect showed the status, a bug is still thrown.
+			if (error instanceof ConnectionChanged) return;
+			if (!inRunEpoch() && error instanceof ProviderError) return;
 			if (!(error instanceof ProviderError)) {
-				ui.showStatus(failedOn("bug", error));
+				if (inRunEpoch()) ui.showStatus(failedOn("bug", error));
 				throw error;
 			}
 			if (error.failure.category === "auth") {
-				await pauseForReconnect(run, secret);
+				try {
+					await pauseForReconnect(run, secret, store);
+				} catch (pauseError) {
+					// Disconnected while pausing: nothing is left to pause.
+					if (!(pauseError instanceof ConnectionChanged)) throw pauseError;
+				}
 				return;
 			}
 			if (error.failure.category === "transient") {
 				ui.showStatus({ state: "offline" });
 				const delayMs = Math.min(MAX_BACKOFF_MS, INITIAL_BACKOFF_MS * 2 ** backoffAttempt);
 				backoffAttempt += 1;
-				retry.schedule(delayMs, () => void trigger("sync"));
+				retry.schedule(delayMs, () => syncOnItsOwn());
 				return;
 			}
 			ui.showStatus(failedOn(error.failure.category, error));
 			if (error.failure.category === "throttled") {
-				retry.schedule(error.failure.retryAfterMs, () => void trigger("sync"));
+				retry.schedule(error.failure.retryAfterMs, () => syncOnItsOwn());
 			}
 		}
+	}
+
+	/**
+	 * Starts an automatic sync that no caller waits for: a bug it hits,
+	 * shown as Sync failed already, goes to `reportError`, not into an
+	 * unhandled rejection.
+	 */
+	function syncOnItsOwn(): void {
+		trigger("sync").catch((error: unknown) => reportError(error));
 	}
 
 	/**
@@ -422,7 +482,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				if (hint.kind === "renamed" && !isOwnRename(hint.oldPath, hint.path)) {
 					renameHints.push({ from: hint.oldPath, to: hint.path });
 				}
-				if (ownWrites === 0) editPause.schedule(schedule().editPause.ms, () => void trigger("sync"));
+				if (ownWrites === 0) editPause.schedule(schedule().editPause.ms, () => syncOnItsOwn());
 			});
 			scheduleNextPoll();
 			const stop = (): void => {

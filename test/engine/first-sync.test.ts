@@ -90,6 +90,25 @@ describe("the First sync preview", () => {
 		expect(phone.ui.lastStatus).toEqual({ state: "firstSyncWaiting" });
 	});
 
+	it("tells a JSON file both sides hold differently as merged, or a conflict copy if it cannot be merged", async () => {
+		const remote = new FakeRemote();
+		const laptop = connectTestDevice(remote, "Laptop");
+		await laptop.vault.write("board.canvas", bytes('{"nodes":["laptop"]}'));
+		await laptop.vault.write("data.json", bytes('{"from":"laptop"}'));
+		await syncNow(laptop);
+		const phone = connectTestDevice(remote, "Phone");
+		await phone.vault.write("board.canvas", bytes('{"nodes":["phone"]}'));
+		await phone.vault.write("data.json", bytes('{"from":"phone"}'));
+		phone.ui.firstSyncAnswers.push(null);
+
+		await syncNow(phone);
+
+		expect(phone.ui.previews[0]?.differing).toEqual([
+			{ path: "board.canvas", outcome: "mergedOrConflictCopy" },
+			{ path: "data.json", outcome: "mergedOrConflictCopy" },
+		]);
+	});
+
 	it("asks again only when the user asks for a sync, not on automatic triggers", async () => {
 		const { phone } = await bothFull();
 		const engine = createSyncEngine(phone.ports);

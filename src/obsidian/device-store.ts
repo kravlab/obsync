@@ -3,6 +3,7 @@ import type { VaultPath } from "../engine/local-vault";
 import type { Connection, DeviceStore, RemoteFeed } from "../engine/ports";
 import type { RemoteEntry } from "../engine/provider";
 import type { SnapshotEntry, SyncSnapshot } from "../engine/sync-snapshot";
+import { isArrayBuffer } from "./is-array-buffer";
 import { isRecord } from "./is-record";
 
 /** The localStorage key of this vault's Connection. */
@@ -55,6 +56,8 @@ const COMPLETE_KEY = "complete";
  *   the database gets a random name, kept in the vault's localStorage;
  * - the Bases in a second object store of that database, written in the
  *   same transaction as their entries and read one at a time when merging;
+ * - the Remote change-feed state of the last completed sync (its cursor
+ *   and the listing it builds on, server hashes included), in a third;
  * - whether a First sync completed the snapshot, as a mark in that same
  *   database, so it is lost together with the snapshot.
  *
@@ -122,7 +125,7 @@ export class ObsidianDeviceStore implements DeviceStore {
 		const base = bases.get(from);
 		base.onsuccess = () => {
 			const found: unknown = base.result;
-			if (found instanceof ArrayBuffer) bases.put(found, to);
+			if (isArrayBuffer(found)) bases.put(found, to);
 			else bases.delete(to);
 			bases.delete(from);
 		};
@@ -140,7 +143,7 @@ export class ObsidianDeviceStore implements DeviceStore {
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error ?? new Error("Base read failed"));
 		});
-		return stored instanceof ArrayBuffer ? stored : null;
+		return isArrayBuffer(stored) ? stored : null;
 	}
 
 	async hasSnapshot(): Promise<boolean> {
@@ -185,7 +188,8 @@ export class ObsidianDeviceStore implements DeviceStore {
 		this.app.saveLocalStorage(CONNECTION_KEY, null);
 		const stored = this.storedDatabase();
 		this.app.saveLocalStorage(SNAPSHOT_DATABASE_KEY, null);
-		if (stored !== null) await this.deleteDatabase(stored.name);
+		// No longer named, the database is erased for this device even if deleting it fails.
+		if (stored !== null) await this.discardDatabase(stored.name);
 	}
 
 	/** The snapshot database named in localStorage, of any format version, or null. */
@@ -206,12 +210,12 @@ export class ObsidianDeviceStore implements DeviceStore {
 
 	/**
 	 * Names a new, empty snapshot database and records it. A database of
-	 * another format version that was named before is deleted, unawaited:
+	 * another format version that was named before is discarded, unawaited:
 	 * nothing reads it any more.
 	 */
 	private newDatabase(): string {
 		const stored = this.storedDatabase();
-		if (stored !== null) void this.deleteDatabase(stored.name);
+		if (stored !== null) void this.discardDatabase(stored.name);
 		const name = `obsync-snapshot-${crypto.randomUUID()}`;
 		this.app.saveLocalStorage(SNAPSHOT_DATABASE_KEY, { formatVersion: SNAPSHOT_FORMAT_VERSION, name });
 		return name;
@@ -230,12 +234,15 @@ export class ObsidianDeviceStore implements DeviceStore {
 	 * schema version; a database from before the marks store gets the
 	 * "complete" mark. An upgrade another connection blocks fails instead of
 	 * waiting, and this connection closes when another one needs to upgrade,
-	 * so neither side hangs.
+	 * so neither side hangs. A blocked open that succeeds after it was given
+	 * up is closed at once, so it leaves no connection behind.
 	 */
 	private open(name: string): Promise<IDBDatabase> {
 		if (this.database?.name !== name) {
 			const opened = new Promise<IDBDatabase>((resolve, reject) => {
 				const request = indexedDB.open(name, SNAPSHOT_SCHEMA_VERSION);
+				/** Whether the open was given up while blocked: it may still succeed once unblocked, and nothing holds it then. */
+				let givenUp = false;
 				request.onupgradeneeded = (event) => {
 					const database = request.result;
 					const marksAdded = !database.objectStoreNames.contains(MARKS);
@@ -245,9 +252,16 @@ export class ObsidianDeviceStore implements DeviceStore {
 					// A snapshot from before First syncs were tracked was made by syncs that completed: no First sync again.
 					if (marksAdded && event.oldVersion > 0) request.transaction?.objectStore(MARKS).put(true, COMPLETE_KEY);
 				};
-				request.onblocked = () => reject(new Error(`upgrading ${name} is blocked by another connection`));
+				request.onblocked = () => {
+					givenUp = true;
+					reject(new Error(`upgrading ${name} is blocked by another connection`));
+				};
 				request.onsuccess = () => {
 					const database = request.result;
+					if (givenUp) {
+						database.close();
+						return;
+					}
 					database.onversionchange = () => {
 						database.close();
 						if (this.database?.name === name) this.database = undefined;
@@ -265,7 +279,25 @@ export class ObsidianDeviceStore implements DeviceStore {
 		return this.database.opened;
 	}
 
-	/** Closes the database `name` if it is open here, then deletes it. */
+	/**
+	 * Deletes the database `name`, no longer named in localStorage, so no
+	 * store reads it again. A delete that fails, or that another connection
+	 * blocks, is reported in the console and leaves it behind unread; it
+	 * never rejects, nor waits for the other connection to close.
+	 */
+	private async discardDatabase(name: string): Promise<void> {
+		try {
+			await this.deleteDatabase(name);
+		} catch (error) {
+			console.error("obsync: deleting a snapshot database failed", error);
+		}
+	}
+
+	/**
+	 * Closes the database `name` if it is open here, then deletes it;
+	 * rejects when another connection blocks the delete, instead of
+	 * waiting for it to close.
+	 */
 	private async deleteDatabase(name: string): Promise<void> {
 		if (this.database?.name === name) {
 			const { opened } = this.database;
@@ -276,6 +308,7 @@ export class ObsidianDeviceStore implements DeviceStore {
 			const request = indexedDB.deleteDatabase(name);
 			request.onsuccess = () => resolve();
 			request.onerror = () => reject(request.error ?? new Error(`cannot delete ${name}`));
+			request.onblocked = () => reject(new Error(`deleting ${name} is blocked by another connection`));
 		});
 	}
 }
@@ -322,7 +355,7 @@ export function parseEntry(stored: unknown): SnapshotEntry | null {
 }
 
 /** The Remote feed state in a stored record, or null if it holds no valid one. */
-function parseRemoteFeed(stored: unknown): RemoteFeed | null {
+export function parseRemoteFeed(stored: unknown): RemoteFeed | null {
 	if (!isRecord(stored) || typeof stored.cursor !== "string" || !Array.isArray(stored.entries)) return null;
 	const entries: RemoteEntry[] = [];
 	for (const item of stored.entries) {
@@ -333,13 +366,23 @@ function parseRemoteFeed(stored: unknown): RemoteFeed | null {
 	return { cursor: stored.cursor, entries };
 }
 
-/** One listed Remote entry in a stored feed record, or null if invalid. */
+/**
+ * One listed Remote entry in a stored feed record, or null if invalid. A
+ * file keeps its server hash, so a later sync still recognises a file
+ * created on both sides by it; a missing or malformed one only costs a
+ * download.
+ */
 function parseRemoteEntry(stored: unknown): RemoteEntry | null {
 	if (!isRecord(stored) || typeof stored.path !== "string") return null;
 	const id = typeof stored.stableId === "string" ? { stableId: stored.stableId } : {};
 	if (stored.kind === "folder") return { kind: "folder", path: stored.path, ...id };
 	if (stored.kind === "file" && typeof stored.revision === "string" && typeof stored.size === "number") {
-		return { kind: "file", path: stored.path, revision: stored.revision, size: stored.size, ...id };
+		const { serverHash } = stored;
+		const hash =
+			isRecord(serverHash) && typeof serverHash.algorithm === "string" && typeof serverHash.value === "string"
+				? { serverHash: { algorithm: serverHash.algorithm, value: serverHash.value } }
+				: {};
+		return { kind: "file", path: stored.path, revision: stored.revision, size: stored.size, ...id, ...hash };
 	}
 	return null;
 }

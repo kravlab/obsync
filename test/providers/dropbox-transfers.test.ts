@@ -224,6 +224,37 @@ describe("Dropbox download parts", () => {
 		await expectFailure(provider.read("scan.pdf"), "permanent");
 	});
 
+	it.each([
+		["shorter", 10],
+		["longer", 101],
+	])("fails as permanent when a download in one request comes back %s than the file", async (_, length) => {
+		const { dropbox, provider } = await setUp();
+		await provider.write("photo.png", patterned(100));
+		// get_metadata, then the download comes back with another length than the file's 100 bytes.
+		dropbox.interceptions.push(null, { status: 200, headers: {}, text: "", arrayBuffer: new ArrayBuffer(length) });
+
+		await expectFailure(provider.read("photo.png"), "permanent");
+	});
+
+	it("reads a file up to the limit in one request without Range, its length the file's size", async () => {
+		const { dropbox, provider } = await setUp();
+		const { revision } = await provider.write("photo.png", patterned(100));
+		const sent = dropbox.requests.length;
+
+		const { data } = await provider.read("photo.png");
+
+		const downloads = dropbox.requests.slice(sent).filter((request) => routeOf(request) === "files/download");
+		expect(downloads.map((request) => [argOf(request), request.headers?.Range])).toEqual([[{ path: `rev:${revision}` }, undefined]]);
+		expect(isPatterned(data, 100)).toBe(true);
+	});
+
+	it("reads an empty file", async () => {
+		const { provider } = await setUp();
+		await provider.write("empty.md", patterned(0));
+
+		expect((await provider.read("empty.md")).data.byteLength).toBe(0);
+	});
+
 	it("fails reading a folder as permanent", async () => {
 		const { provider } = await setUp();
 		await provider.createFolder("notes");

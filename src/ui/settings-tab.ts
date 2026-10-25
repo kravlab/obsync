@@ -257,7 +257,13 @@ export class ObsyncSettingTab extends PluginSettingTab {
 				name: strings.settingsDropbox,
 				description: fill(strings.settingsConnectedAs, { device: device.name }),
 				button: strings.disconnect,
-				action: () => void this.disconnect(),
+				action: () => {
+					this.disconnect().catch((error: unknown) => {
+						// A bug: the user is told, and the console keeps it for the bug report.
+						console.error("obsync: disconnecting failed", error);
+						new Notice(this.strings.noticeDisconnectFailed);
+					});
+				},
 			},
 			{
 				name: strings.syncNow,
@@ -271,6 +277,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	/**
 	 * Disconnects this device and redraws the tab. When the login could not
 	 * be revoked, the notice tells the user to revoke the app in Dropbox.
+	 * Rejects on an unexpected error, which the row's action tells.
 	 */
 	private async disconnect(): Promise<void> {
 		const outcome = await this.service.disconnect();

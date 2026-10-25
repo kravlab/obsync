@@ -7,6 +7,7 @@
  * Remote's Metadata folder, and the local cleanup on disconnect.
  */
 import type { AccountAccess, Authorization, ConnectStep } from "./connect-step";
+import type { ConnectionEpoch } from "./connection-epoch";
 import { NO_CONFLICTS } from "./conflicts";
 import { detailField } from "./failure-detail";
 import { providerSecretId, type Clock, type DeviceIdentity, type DeviceStore, type SecretStore, type UiPort } from "./ports";
@@ -24,22 +25,53 @@ import {
 import { statusOf } from "./status";
 
 /**
- * A provider failure while connecting this device: its category, and its
- * `failureDetail` when it has one to tell.
+ * Why connecting this device failed (spec of the review fixes, item 1): a
+ * provider failure by its category; the service refusing the code; a
+ * login to another account; a Remote name taken or holding a slash; a
+ * folder the provider cannot sync; another device's First sync in
+ * progress there; or an unexpected error, a `bug`.
+ */
+export type ConnectFailureCause =
+	| ProviderErrorCategory
+	| "codeRejected"
+	| "otherAccount"
+	| "nameTaken"
+	| "invalidName"
+	| "unsupportedProvider"
+	| "firstSyncInProgress"
+	| "bug";
+
+/**
+ * A failure while connecting this device: why, and what tells more when
+ * there is something: the `failureDetail` of the error, or the name of
+ * the device doing its First sync.
  */
 export interface ConnectFailure {
-	readonly cause: ProviderErrorCategory;
+	readonly cause: ConnectFailureCause;
+	readonly detail?: string;
+}
+
+/**
+ * A revoke on disconnect that failed other than by the login being refused
+ * already (spec of the review fixes, item 3): the provider failure's
+ * category, or `bug` for an unexpected error, and its `failureDetail` when
+ * it has one to tell.
+ */
+export interface RevokeFailure {
+	readonly cause: ProviderErrorCategory | "bug";
 	readonly detail?: string;
 }
 
 /**
  * What connecting tells the UI: the status and lists a Connection changes,
- * and its failures, which only the activity log keeps, since the connect
- * window tells the user itself.
+ * and its failures, which the activity log keeps, while the connect window
+ * and the disconnect notice tell the user themselves.
  */
 export interface ConnectionUi extends Pick<UiPort, "showStatus" | "showSkipped" | "showConflicts"> {
-	/** Reports a provider failure while connecting, for the activity log. */
+	/** Reports a failure while connecting, for the activity log. */
 	reportConnectFailure(failure: ConnectFailure): void;
+	/** Reports a revoke on disconnect that failed, for the activity log. */
+	reportRevokeFailure(failure: RevokeFailure): void;
 }
 
 /** Everything connecting and disconnecting is built from. */
@@ -52,6 +84,8 @@ export interface ConnectionPorts {
 	readonly newDeviceId: () => string;
 	/** This device's clock, against which another device's "First sync in progress" mark is judged stale. */
 	readonly clock: Clock;
+	/** The Connection epoch, shared with the sync engine; Disconnect advances it. */
+	readonly epoch: ConnectionEpoch;
 }
 
 /** Connects and disconnects this device. */
@@ -63,12 +97,16 @@ export interface ConnectionService {
 	/** Starts a login; the user opens its page and pastes back the code. */
 	startAuthorization(): Promise<PendingAuthorization>;
 	/**
-	 * Revokes this device's login at the service, then clears its secret
-	 * and everything it keeps for the Connection, and empties the shown
-	 * skipped-files and conflicts lists. The local cleanup runs
-	 * even when the revoke fails, e.g. offline; the outcome then says so,
-	 * since the user has to revoke the app in the service's own settings.
-	 * The vault, the Remote and other devices are left untouched.
+	 * Ends this device's Connection: advances the Connection epoch, so a
+	 * sync running meanwhile writes nothing more to this device's state and
+	 * what the engine held for the Connection no longer holds; clears the
+	 * secret and everything it keeps for the Connection, and empties the
+	 * shown skipped-files and conflicts lists; then revokes the login at
+	 * the service. Clearing first means a sync started while the service is
+	 * asked finds no Connection. A revoke that fails, e.g. offline, is
+	 * reported for the activity log and the outcome says so, since the user
+	 * has to revoke the app in the service's own settings. The vault, the
+	 * Remote and other devices are left untouched.
 	 */
 	disconnect(): Promise<DisconnectOutcome>;
 }
@@ -98,7 +136,8 @@ export interface PendingAuthorization {
  * - `authorized`: a device without a Connection logged in and now chooses
  *   its Remote;
  * - `codeRejected`: the service refused the code (reused, expired or
- *   mistyped); nothing was stored, and the login starts over;
+ *   mistyped), answering `detail`; nothing was stored, and the login
+ *   starts over;
  * - `otherAccount`: the device has a Connection to a different account, so
  *   the login is refused and nothing changes; switching accounts means
  *   disconnecting first;
@@ -108,7 +147,7 @@ export interface PendingAuthorization {
  */
 export type AuthorizationOutcome =
 	| { readonly kind: "authorized"; readonly remotes: RemoteChooser }
-	| { readonly kind: "codeRejected" }
+	| { readonly kind: "codeRejected"; readonly detail?: string }
 	| { readonly kind: "otherAccount" }
 	| { readonly kind: "reconnected" };
 
@@ -179,17 +218,25 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 	const secretId = providerSecretId(connectStep.providerId);
 
 	/**
-	 * Runs one step of connecting; a provider failure it throws is reported
-	 * for the activity log with its detail, then thrown on to the connect
-	 * window, which tells the user.
+	 * Runs one step of connecting; whatever it throws is reported for the
+	 * activity log with its detail, a provider failure by its category and
+	 * anything else as a bug, then thrown on to the connect window, which
+	 * tells the user.
 	 */
 	async function reported<T>(step: () => Promise<T>): Promise<T> {
 		try {
 			return await step();
 		} catch (error) {
-			if (error instanceof ProviderError) ui.reportConnectFailure({ cause: error.failure.category, ...detailField(error) });
+			const cause = error instanceof ProviderError ? error.failure.category : "bug";
+			ui.reportConnectFailure({ cause, ...detailField(error) });
 			throw error;
 		}
+	}
+
+	/** Reports `failure`, a refusal decided while connecting, and returns its `outcome`. */
+	function refused<T>(outcome: T, failure: ConnectFailure): T {
+		ui.reportConnectFailure(failure);
+		return outcome;
 	}
 
 	/**
@@ -205,7 +252,7 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 		deviceName: string,
 	): Promise<ConnectOutcome> {
 		const setup = access.openRoot(root);
-		if (!isSyncable(setup)) return { kind: "unsupportedProvider" };
+		if (!isSyncable(setup)) return refused({ kind: "unsupportedProvider" }, { cause: "unsupportedProvider" });
 		const device: DeviceIdentity = { id: ports.newDeviceId(), name: deviceName };
 		await setup.createFolder(METADATA_FOLDER);
 		try {
@@ -238,7 +285,9 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 		const setup = access.openRoot(root);
 		if (!evenDuringFirstSync && isSyncable(setup)) {
 			const other = await deviceNameInFirstSync(setup, ports.clock.now());
-			if (other !== null) return { kind: "firstSyncInProgress", deviceName: other };
+			if (other !== null) {
+				return refused({ kind: "firstSyncInProgress", deviceName: other }, { cause: "firstSyncInProgress", detail: other });
+			}
 		}
 		return connect(access, authorization, root, deviceName);
 	}
@@ -258,12 +307,12 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 			},
 			createRemote(name: string, deviceName: string): Promise<CreateRemoteOutcome> {
 				return reported(async () => {
-					if (name.includes("/")) return { kind: "invalidName" };
+					if (name.includes("/")) return refused({ kind: "invalidName" }, { cause: "invalidName" });
 					let root: string;
 					try {
 						({ root } = await access.createRoot(name));
 					} catch (error) {
-						if (isFailure(error, "preconditionFailed")) return { kind: "nameTaken" };
+						if (isFailure(error, "preconditionFailed")) return refused({ kind: "nameTaken" }, { cause: "nameTaken" });
 						throw error;
 					}
 					return connect(access, authorization, root, deviceName);
@@ -276,7 +325,7 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 	async function outcomeOf(authorization: Authorization): Promise<AuthorizationOutcome> {
 		const connection = await deviceStore.loadConnection();
 		if (connection === null) return { kind: "authorized", remotes: remoteChooser(authorization) };
-		if (connection.accountId !== authorization.accountId) return { kind: "otherAccount" };
+		if (connection.accountId !== authorization.accountId) return refused({ kind: "otherAccount" }, { cause: "otherAccount" });
 		secretStore.setSecret(secretId, authorization.secret);
 		// The new secret ends a pause for a refused login; the Snapshot and Bases were kept, so syncing goes on normally.
 		// Read after storing the secret, so a pause a failing sync stored meanwhile ends too.
@@ -306,7 +355,10 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 						try {
 							authorization = await attempt.complete(code);
 						} catch (error) {
-							if (isFailure(error, "auth")) return { kind: "codeRejected" };
+							if (isFailure(error, "auth")) {
+								const answer = detailField(error);
+								return refused({ kind: "codeRejected", ...answer }, { cause: "codeRejected", ...answer });
+							}
 							throw error;
 						}
 						return outcomeOf(authorization);
@@ -316,25 +368,26 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 		},
 
 		async disconnect(): Promise<DisconnectOutcome> {
+			ports.epoch.advance();
 			const secret = secretStore.getSecret(secretId);
-			let outcome: DisconnectOutcome = { kind: "disconnected" };
-			if (secret !== null) {
-				try {
-					await connectStep.access(secret).revoke();
-				} catch (error) {
-					if (!(error instanceof ProviderError)) throw error;
-					// A refused secret is already revoked; any other failure leaves
-					// it possibly valid. The cleanup below runs either way.
-					if (error.failure.category !== "auth") outcome = { kind: "revokeFailed" };
-				}
-			}
 			secretStore.deleteSecret(secretId);
 			await deviceStore.clear();
 			ui.showStatus({ state: "notConnected" });
 			// What the last sync skipped and left in conflict belonged to the Remote just left.
 			ui.showSkipped([]);
 			ui.showConflicts(NO_CONFLICTS);
-			return outcome;
+			if (secret === null) return { kind: "disconnected" };
+			try {
+				await connectStep.access(secret).revoke();
+				return { kind: "disconnected" };
+			} catch (error) {
+				// A refused secret is already revoked; any other failure, an
+				// unexpected one included, leaves it possibly valid.
+				if (isFailure(error, "auth")) return { kind: "disconnected" };
+				const cause = error instanceof ProviderError ? error.failure.category : "bug";
+				ui.reportRevokeFailure({ cause, ...detailField(error) });
+				return { kind: "revokeFailed" };
+			}
 		},
 	};
 }

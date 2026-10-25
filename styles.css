@@ -206,8 +206,10 @@
 	margin-bottom: var(--size-4-1);
 }
 
+/* A line of the Sync window (Skipped, Activity) can be selected for copying, on iOS too. */
 .obsync-sync-line {
 	padding: var(--size-4-1) 0;
 	font-size: var(--font-ui-small);
+	-webkit-user-select: text;
 	user-select: text;
 }

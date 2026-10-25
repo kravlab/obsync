@@ -1,12 +1,13 @@
 import { MarkdownView, Notice, Platform, Plugin, apiVersion, getLanguage, requestUrl } from "obsidian";
 import { withActivityLog } from "./engine/activity-log";
 import { createConnectionService } from "./engine/connection";
+import { createConnectionEpoch } from "./engine/connection-epoch";
 import { createSyncEngine } from "./engine/engine";
 import type { ConfigurationConflictStore, Scheduler } from "./engine/ports";
 import { ObsidianActivityStore } from "./obsidian/activity-store";
 import { ObsidianConfigurationCategoriesStore } from "./obsidian/configuration-categories-store";
 import { ObsidianConfigurationConflicts } from "./obsidian/configuration-conflict-store";
-import { ObsidianConnectErrorLog } from "./obsidian/connect-error-log";
+import { ObsidianConnectionErrorLog } from "./obsidian/connection-error-log";
 import { ObsidianDeletionGuardStore } from "./obsidian/deletion-guard-store";
 import { ObsidianDeviceStore } from "./obsidian/device-store";
 import { ObsidianLocalVault } from "./obsidian/local-vault";
@@ -45,7 +46,9 @@ export default class ObsyncPlugin extends Plugin {
 	 * commands (open the window or one of its tabs, Reconnect while paused
 	 * for it, Sync now, Full reconcile, Restore local configuration) and the
 	 * settings tab, then shows the state of this device's Connection.
-	 * Strings follow Obsidian's language as read at load.
+	 * Strings follow Obsidian's language as read at load. The engine and
+	 * its listeners start once Obsidian's layout is ready; a plugin unloaded
+	 * before that, or while this method waits, starts and reads nothing more.
 	 */
 	override async onload(): Promise<void> {
 		const strings = selectStrings(getLanguage());
@@ -77,6 +80,8 @@ export default class ObsyncPlugin extends Plugin {
 			}),
 		);
 		const secretStore = new ObsidianSecretStore(this.app);
+		// Disconnect advances it, so a sync running then stops writing and what the engine held for the Connection ends.
+		const epoch = createConnectionEpoch();
 		// Obsidian sets it for every plugin it loads; the typings leave it optional for manifests of plugins not loaded.
 		const pluginDir = this.manifest.dir;
 		if (pluginDir === undefined) throw new Error("obsync: Obsidian gave no folder for this plugin");
@@ -92,10 +97,11 @@ export default class ObsyncPlugin extends Plugin {
 			connectStep: createDropboxConnectStep(dropbox),
 			deviceStore,
 			secretStore,
-			// A failure while connecting also goes to a file in the plugin's folder, to be taken off a phone.
-			ui: withConnectErrorLog(ui, new ObsidianConnectErrorLog(this.app.vault.adapter, pluginDir), dropbox.clock),
+			// A failure while connecting or revoking also goes to a file in the plugin's folder, to be taken off a phone.
+			ui: withConnectErrorLog(ui, new ObsidianConnectionErrorLog(this.app.vault.adapter, pluginDir), dropbox.clock),
 			newDeviceId: () => crypto.randomUUID(),
 			clock: dropbox.clock,
+			epoch,
 		});
 		const engine = createSyncEngine({
 			providers: createDropboxConnector(dropbox),
@@ -112,6 +118,9 @@ export default class ObsyncPlugin extends Plugin {
 			pluginDir,
 			pluginId: this.manifest.id,
 			newDeviceId: () => crypto.randomUUID(),
+			epoch,
+			// A bug of a sync on its own, already shown as Sync failed, goes to the console for the bug report.
+			reportError: (error) => console.error("obsync: sync failed", error),
 		});
 		// The engine shows Sync failed itself; an error reaching here is a
 		// bug, logged for the bug report.
@@ -126,10 +135,10 @@ export default class ObsyncPlugin extends Plugin {
 			engine.reconcile().catch((error: unknown) => console.error("obsync: reconcile failed", error));
 		};
 		const openConnect = (): void => {
-			new ConnectModal(this.app, connection, strings, this.app.vault.getName(), (how) => {
+			new ConnectModal(this.app, connection, strings, this.app.vault.getName(), () => {
 				void settingTab.reload();
-				// A login again ends a pause for Reconnect needed; syncing goes on at once.
-				if (how === "reconnected") syncNow();
+				// Syncing starts at once: a new Connection shows its First sync preview, a login again ends a pause for Reconnect needed.
+				syncNow();
 			}).open();
 		};
 		// One Sync window at a time, closed with the plugin so its buttons never reach an unloaded engine.
@@ -190,7 +199,13 @@ export default class ObsyncPlugin extends Plugin {
 			},
 		});
 		this.addConflictResolution(strings);
+		// `onLayoutReady` is not tied to the plugin's lifecycle: a plugin unloaded before the layout is ready starts nothing.
+		let unloaded = false;
+		this.register(() => {
+			unloaded = true;
+		});
 		this.app.workspace.onLayoutReady(() => {
+			if (unloaded) return;
 			// Nothing syncs before the vault's files are all loaded.
 			const started = engine.start();
 			this.register(started.stop);
@@ -219,6 +234,8 @@ export default class ObsyncPlugin extends Plugin {
 		);
 		this.addSettingTab(settingTab);
 		await connection.showStatus();
+		// Unloaded meanwhile, the plugin reads nothing more, so its snapshot database is not opened again.
+		if (unloaded) return;
 		await settingTab.reload();
 	}
 

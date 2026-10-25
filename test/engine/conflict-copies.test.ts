@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { parentOf } from "../../src/engine/paths";
 import { bytes } from "../support/bytes";
-import { FakeRemote } from "../fakes/fake-remote";
+import { FakeRemote, type FakeServiceOptions } from "../fakes/fake-remote";
 import { connectTestDevice, type TestDevice } from "../fakes/test-device";
 import { forgetNotices, mirror, remoteText, syncNow, vaultText } from "../support/sync";
 
@@ -15,8 +15,9 @@ const AFTERNOON = new Date(2026, 9, 20, 14, 30).getTime();
 async function syncedPairWith(
 	path: string,
 	content: ArrayBuffer,
+	service: FakeServiceOptions = {},
 ): Promise<{ remote: FakeRemote; laptop: TestDevice; phone: TestDevice }> {
-	const remote = new FakeRemote();
+	const remote = new FakeRemote(service);
 	const laptop = connectTestDevice(remote, "Laptop");
 	const phone = connectTestDevice(remote, "Phone");
 	laptop.clock.advance(AFTERNOON);
@@ -57,6 +58,42 @@ describe("Conflict copies of files that are not text", () => {
 			expect(await vaultText(device, copy)).toBe("phone's photo");
 		}
 		expect(phone.ui.lastStatus).toEqual({ state: "synced" });
+	});
+
+	it("makes a Conflict copy of a file with a long name that the provider can still store", async () => {
+		const path = `${"y".repeat(240)}.png`;
+		const { remote, laptop, phone } = await syncedPairWith(path, bytes("original"), { nameRules: { maxSegmentLength: 255 } });
+		await laptop.vault.write(path, bytes("laptop's photo"));
+		await phone.vault.write(path, bytes("phone's photo"));
+
+		await syncNow(laptop);
+		await syncNow(phone);
+
+		const copies = remoteFiles(remote).filter((file) => file !== path);
+		expect(phone.ui.lastStatus).toEqual({ state: "synced" });
+		expect(copies).toHaveLength(1);
+		expect(copies[0]?.length).toBeLessThanOrEqual(255);
+		expect(remoteText(remote, copies[0] ?? "")).toBe("phone's photo");
+		expect((await phone.vault.list()).filter((entry) => entry.path !== path && entry.kind === "file")).toHaveLength(1);
+	});
+
+	it("makes no Conflict copy when no copy name fits the Remote, skipping the file and keeping both versions", async () => {
+		// The folder leaves no room in a 60-unit path for even the shortest copy name.
+		const path = `${"f".repeat(50)}/a.png`;
+		const { remote, laptop, phone } = await syncedPairWith(path, bytes("original"), { nameRules: { maxPathLength: 60 } });
+		await laptop.vault.write(path, bytes("laptop's photo"));
+		await phone.vault.write(path, bytes("phone's photo"));
+		await syncNow(laptop);
+
+		await syncNow(phone);
+		await syncNow(phone);
+
+		expect(phone.ui.lastStatus).toEqual({ state: "synced" });
+		expect(phone.ui.lastSkipped).toEqual([{ path, reason: "nameNotRepresentable" }]);
+		expect((await phone.vault.list()).filter((entry) => entry.kind === "file").map((entry) => entry.path)).toEqual([path]);
+		expect(remoteFiles(remote)).toEqual([path]);
+		expect(await vaultText(phone, path)).toBe("phone's photo");
+		expect(remoteText(remote, path)).toBe("laptop's photo");
 	});
 
 	it("shows a notice on the device that made the Conflict copy only", async () => {

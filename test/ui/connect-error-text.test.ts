@@ -42,6 +42,31 @@ describe("withConnectErrorLog", () => {
 		expect(log.lines).toEqual(["2026-10-21 16:37 Connecting failed. Dropbox could not be reached."]);
 	});
 
+	it("writes a refused code with the service's answer, in English", () => {
+		const log = new RecordingLog();
+		const clock = new ManualClock();
+		clock.advance(AFTERNOON);
+
+		withConnectErrorLog(new RecordingUi(), log, clock).reportConnectFailure({ cause: "codeRejected", detail: "invalid_grant" });
+
+		expect(log.lines).toEqual(["2026-10-21 16:37 Connecting failed. Dropbox did not accept the code. (invalid_grant)"]);
+	});
+
+	it("writes a revoke that failed on disconnect, in English, and passes it on", () => {
+		const inner = new RecordingUi();
+		const log = new RecordingLog();
+		const clock = new ManualClock();
+		clock.advance(AFTERNOON);
+		const failure = { cause: "transient", detail: "no response" } as const;
+
+		withConnectErrorLog(inner, log, clock).reportRevokeFailure(failure);
+
+		expect(log.lines).toEqual([
+			"2026-10-21 16:37 Disconnecting: the login could not be revoked. Dropbox could not be reached. (no response)",
+		]);
+		expect(inner.revokeFailures).toEqual([failure]);
+	});
+
 	it("passes statuses and lists on unchanged, writing nothing", () => {
 		const inner = new RecordingUi();
 		const log = new RecordingLog();

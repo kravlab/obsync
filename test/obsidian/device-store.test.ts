@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseConnection, parseEntry } from "../../src/obsidian/device-store";
+import { parseConnection, parseEntry, parseRemoteFeed } from "../../src/obsidian/device-store";
 
 /** A stored Connection record as `saveConnection` writes it, with `fields` added to the Connection. */
 function storedConnection(fields: Record<string, unknown> = {}): unknown {
@@ -37,5 +37,28 @@ describe("parseEntry", () => {
 	it("reads a file without the mark, or with a mark that is not true, as holding no Conflict blocks", () => {
 		expect(parseEntry(file)).toEqual(file);
 		expect(parseEntry({ ...file, conflicted: "yes" })).toEqual(file);
+	});
+});
+
+describe("parseRemoteFeed", () => {
+	const hash = { algorithm: "dropbox-content-hash", value: "abc123" };
+	const file = { kind: "file", path: "photo.png", revision: "r1", size: 3 } as const;
+
+	it("reads a file entry with its server hash, so a later sync can compare by it", () => {
+		expect(parseRemoteFeed({ cursor: "c1", entries: [{ ...file, serverHash: hash }] })).toEqual({
+			cursor: "c1",
+			entries: [{ ...file, serverHash: hash }],
+		});
+	});
+
+	it("reads a file entry without a server hash as one", () => {
+		expect(parseRemoteFeed({ cursor: "c1", entries: [file] })).toEqual({ cursor: "c1", entries: [file] });
+	});
+
+	it("reads a malformed server hash as none, keeping the entry", () => {
+		expect(parseRemoteFeed({ cursor: "c1", entries: [{ ...file, serverHash: { algorithm: 1 } }] })).toEqual({
+			cursor: "c1",
+			entries: [file],
+		});
 	});
 });

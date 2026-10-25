@@ -1,4 +1,5 @@
 import type { ActivityEvent } from "../engine/activity-log";
+import type { ConnectFailureCause } from "../engine/connection";
 import type { SyncFailureCause } from "../engine/status";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
@@ -22,24 +23,49 @@ function eventText(event: ActivityEvent, strings: Strings): string {
 		case "notice":
 			return noticeText(event.notice, strings);
 		case "connectFailed":
-			return failureLine(strings.activityConnectFailed, event.cause, event.detail, strings);
+			return failureLine(strings.activityConnectFailed, connectFailureText(event.cause, strings), event.detail, strings);
+		case "revokeFailed":
+			return failureLine(strings.activityRevokeFailed, failureText(event.cause, strings), event.detail, strings);
 		case "status":
 			if (event.status.state !== "syncFailed") return statusLabel(event.status, strings);
-			return failureLine(strings.activitySyncFailed, event.status.cause, event.status.detail, strings);
+			return failureLine(
+				strings.activitySyncFailed,
+				failureText(event.status.cause, strings),
+				event.status.detail,
+				strings,
+			);
 	}
 }
 
 /**
- * A failure told by `template` with why it failed, followed by `detail` in
- * parentheses; without them when there is no detail, as in events stored
- * before failures kept one, or one stored empty.
+ * A failure told by `template` with `cause`, why it failed, followed by
+ * `detail` in parentheses; without them when there is no detail, as in
+ * events stored before failures kept one, or one stored empty.
  */
-function failureLine(template: string, cause: SyncFailureCause, detail: string | undefined, strings: Strings): string {
-	const text = fill(template, { cause: failureText(cause, strings) });
+function failureLine(template: string, cause: string, detail: string | undefined, strings: Strings): string {
+	const text = fill(template, { cause });
 	return detail === undefined || detail === "" ? text : fill(strings.activityDetail, { text, detail });
 }
 
-/** Why a sync failed, in the user's language. */
+/** Why connecting failed, in the user's language: a refusal of its own, or a cause a sync can fail for too. */
+function connectFailureText(cause: ConnectFailureCause, strings: Strings): string {
+	switch (cause) {
+		case "codeRejected":
+			return strings.connectFailureCodeRejected;
+		case "otherAccount":
+			return strings.connectFailureOtherAccount;
+		case "nameTaken":
+			return strings.connectFailureNameTaken;
+		case "invalidName":
+			return strings.connectFailureInvalidName;
+		case "firstSyncInProgress":
+			return strings.connectFailureFirstSyncInProgress;
+		default:
+			return failureText(cause, strings);
+	}
+}
+
+/** Why a provider call or a sync failed, in the user's language. */
 function failureText(cause: SyncFailureCause, strings: Strings): string {
 	switch (cause) {
 		case "auth":

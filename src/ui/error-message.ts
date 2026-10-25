@@ -18,12 +18,16 @@ export function providerErrorMessage(error: ProviderError, strings: Strings): st
 }
 
 /**
- * The line telling what the provider answered on a failure, shown under its
- * message so it can be read off the screen; undefined when the failure has
- * nothing to tell.
+ * The line telling what went wrong on a failure, `error`'s detail as
+ * `failureDetail` gives it, shown under its message so it can be read off
+ * the screen; undefined when the failure has nothing to tell.
  */
-export function providerErrorDetailLine(error: ProviderError, strings: Strings): string | undefined {
-	const { detail } = detailField(error);
+export function errorDetailLine(error: unknown, strings: Strings): string | undefined {
+	return detailLine(detailField(error).detail, strings);
+}
+
+/** The line showing `detail` under a failure's message; undefined without one. */
+export function detailLine(detail: string | undefined, strings: Strings): string | undefined {
 	return detail === undefined ? undefined : fill(strings.errorDetails, { detail });
 }
 

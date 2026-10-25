@@ -5,6 +5,7 @@
  */
 import type { ConfigurationCategories } from "./configuration";
 import type { SyncConflicts } from "./conflicts";
+import type { ConnectionEpoch } from "./connection-epoch";
 import type { DeletionAnswer, DeletionGuardSettings, DeletionPrompt } from "./deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "./first-sync";
 import type { LocalVault, VaultPath } from "./local-vault";
@@ -259,4 +260,12 @@ export interface EnginePorts {
 	readonly pluginId: string;
 	/** Returns a new random Device ID, for registering again after the Sync snapshot was lost. */
 	readonly newDeviceId: () => string;
+	/** The Connection epoch, shared with the connection service, which advances it on Disconnect. */
+	readonly epoch: ConnectionEpoch;
+	/**
+	 * Reports an error of a sync no caller waits for (polling, the
+	 * post-edit pause, a retry, a vault change): a bug, already shown as
+	 * Sync failed, kept for the bug report.
+	 */
+	readonly reportError: (error: unknown) => void;
 }

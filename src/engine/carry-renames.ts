@@ -65,8 +65,12 @@ export interface RenameSync {
 	ensureRemoteFolder(path: VaultPath): Promise<void>;
 	/** Creates `path` and the folders above it in the vault where missing. */
 	ensureVaultFolder(path: VaultPath): Promise<void>;
-	/** A Conflict copy name for `path` by this device now, free in the vault and on the Remote. */
-	conflictCopyPath(path: VaultPath): Promise<VaultPath>;
+	/**
+	 * A Conflict copy name for `path` by this device now, free in the vault
+	 * and on the Remote; null when the Remote can hold no copy name for it,
+	 * and `path` is then skipped for this sync.
+	 */
+	conflictCopyPath(path: VaultPath): Promise<VaultPath | null>;
 	/** Whether `path` lies in the configuration folder, where no Conflict copy is made. */
 	inConfiguration(path: VaultPath): boolean;
 	/** Keeps the vault file `path` as a configuration conflict's local version, and moves it to the trash. */
@@ -76,6 +80,13 @@ export interface RenameSync {
 	/** Forgets `path` and its Base. */
 	forget(path: VaultPath): Promise<void>;
 }
+
+/**
+ * What moving a vault file out of the way did: renamed it to the Conflict
+ * copy `copy`; kept a configuration file aside, out of the vault; or
+ * nothing, since the Remote can hold no Conflict copy name for it.
+ */
+type MovedAside = { readonly kind: "copy"; readonly copy: VaultPath } | { readonly kind: "keptAside" } | { readonly kind: "noCopyName" };
 
 /** What carrying renames leaves for the rest of the sync. */
 export interface CarriedRenames {
@@ -186,14 +197,18 @@ export async function carryRenames(renames: Renames, sync: RenameSync): Promise<
 		if (remote.has(to)) {
 			if (await completeCutOffCopy(current, from, to, synced, there.revision)) return;
 			const aside = await moveAsideInVault(to);
-			if (aside === null) {
+			if (aside.kind === "noCopyName") {
+				deferred.add(to);
+				return;
+			}
+			if (aside.kind === "keptAside") {
 				// Kept aside, the renamed file is gone here: its old Remote file goes as a delete
 				// would, only while it holds the synced content; an edit there downloads back.
 				await deleteRemoteCopied(current, there.revision === synced.revision ? synced.revision : undefined);
 				await sync.forget(from);
 				return;
 			}
-			to = aside;
+			to = aside.copy;
 		}
 		await sync.ensureRemoteFolder(parentOf(to));
 		const fileMove = provider.capabilities.fileMove;
@@ -311,7 +326,7 @@ export async function carryRenames(renames: Renames, sync: RenameSync): Promise<
 		const occupant = await vault.stat(to);
 		if (occupant !== null) {
 			if (occupant.kind !== "file" || kind !== "file") return false;
-			await moveAsideInVault(to);
+			if ((await moveAsideInVault(to)).kind === "noCopyName") return false;
 		}
 		await sync.ensureVaultFolder(parentOf(to));
 		await vault.rename(from, to);
@@ -323,21 +338,23 @@ export async function carryRenames(renames: Renames, sync: RenameSync): Promise<
 	/**
 	 * Renames the new vault file `path`, in the way of a file the Remote
 	 * keeps there, to a Conflict copy name and tells the user; the copy is
-	 * uploaded as a new file. Returns the copy's path. A configuration file
-	 * is kept in the configuration conflict store and leaves the vault
-	 * instead, unannounced: null.
+	 * uploaded as a new file. A configuration file is kept in the
+	 * configuration conflict store and leaves the vault instead,
+	 * unannounced. When the Remote can hold no copy name for it, the file
+	 * stays where it is, and what was to move onto its path waits.
 	 */
-	async function moveAsideInVault(path: VaultPath): Promise<VaultPath | null> {
+	async function moveAsideInVault(path: VaultPath): Promise<MovedAside> {
 		if (sync.inConfiguration(path)) {
 			await sync.keepLocalConfiguration(path);
 			walked.delete(path);
-			return null;
+			return { kind: "keptAside" };
 		}
 		const copy = await sync.conflictCopyPath(path);
+		if (copy === null) return { kind: "noCopyName" };
 		await vault.rename(path, copy);
 		moveInside(walked, path, copy);
 		ui.showNotice({ kind: "conflictCopyCreated", path, copyPath: copy });
-		return copy;
+		return { kind: "copy", copy };
 	}
 
 	/**

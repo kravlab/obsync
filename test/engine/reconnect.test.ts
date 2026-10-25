@@ -19,6 +19,7 @@ async function logInAgain(service: FakeService, device: TestDevice, account: Fak
 		ui: device.ui,
 		newDeviceId: () => "unused",
 		clock: device.clock,
+		epoch: device.epoch,
 	});
 	const pending = await connection.startAuthorization();
 	return pending.submitCode(account.approve(pending.authorizeUrl));

@@ -1,6 +1,8 @@
 import type { Clock } from "../../src/engine/ports";
 import { sha256, sha256Hex } from "../support/sha256";
 import type { HttpRequest, HttpResponse } from "../../src/providers/dropbox/http";
+// In jsdom the global `ArrayBuffer` is the window's while Node's built-ins make Node's buffers: `instanceof` tells them apart.
+import { isArrayBuffer } from "../../src/obsidian/is-array-buffer";
 import { ManualClock } from "./manual-clock";
 
 /**
@@ -94,9 +96,9 @@ export class FakeDropbox {
 		private readonly clock: Clock = new ManualClock(),
 	) {}
 
-	/** Creates an account with an empty App Folder. */
-	addAccount(accountId: string): FakeDropboxAccount {
-		const account = new FakeDropboxAccount(accountId);
+	/** Creates an account with an empty App Folder, folding path case with `fold` if given. */
+	addAccount(accountId: string, fold?: (path: string) => string): FakeDropboxAccount {
+		const account = new FakeDropboxAccount(accountId, fold);
 		this.accounts.set(accountId, account);
 		return account;
 	}
@@ -317,7 +319,7 @@ export class FakeDropbox {
 	private getMetadata(account: FakeDropboxAccount, arg: { path: string }): HttpResponse {
 		const entry = account.read(arg.path);
 		if (!entry) return routeError("path/not_found/", { ".tag": "path", path: { ".tag": "not_found" } });
-		return json(200, metadataOf(entry));
+		return json(200, account.metadataOf(entry));
 	}
 
 	/**
@@ -388,7 +390,7 @@ export class FakeDropbox {
 		}
 		const headers = {
 			"content-type": "application/octet-stream",
-			"dropbox-api-result": JSON.stringify(metadataOf(entry)).replace(
+			"dropbox-api-result": JSON.stringify(account.metadataOf(entry)).replace(
 				/[\u007f-\uffff]/g,
 				(character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
 			),
@@ -594,10 +596,11 @@ function contentArg<Arg>(
 	const header = request.headers?.["Dropbox-API-Arg"] ?? "";
 	// HTTP headers carry only ASCII; the real service mangles anything else.
 	if (/[^\x20-\x7e]/.test(header)) return { response: status(400, "Dropbox-API-Arg is not ASCII") };
-	if (request.contentType !== "application/octet-stream" || !(request.body instanceof ArrayBuffer)) {
+	const { body } = request;
+	if (request.contentType !== "application/octet-stream" || !isArrayBuffer(body)) {
 		return { response: status(400, "expected an application/octet-stream body") };
 	}
-	return { arg: JSON.parse(header) as Arg, body: request.body };
+	return { arg: JSON.parse(header) as Arg, body };
 }
 
 /** A file revision of a fake App Folder. */
@@ -621,14 +624,23 @@ export class FakeDropboxAccount {
 	private readonly changeLog: string[] = [];
 	private lastId = 0;
 
-	/** @param accountId what `get_current_account` reports */
-	constructor(readonly accountId: string) {}
+	/**
+	 * @param accountId what `get_current_account` reports
+	 * @param fold how the account folds a path's case, as its `path_lower`
+	 *   gives it: JavaScript's `toLowerCase` unless a test plays Dropbox
+	 *   folding some characters otherwise. It is applied to paths already
+	 *   folded too, so folding twice must give what folding once does.
+	 */
+	constructor(
+		readonly accountId: string,
+		readonly fold: (path: string) => string = (path) => path.toLowerCase(),
+	) {}
 
 	/** Creates a folder at `path` ("/Name/..."), with any missing parents. */
 	putFolder(path: string): void {
 		this.putParents(path);
 		if (!this.get(path)) {
-			this.entries.set(path.toLowerCase(), { kind: "folder", path, id: this.nextId() });
+			this.entries.set(this.fold(path), { kind: "folder", path, id: this.nextId() });
 			this.changeLog.push(path);
 		}
 	}
@@ -639,7 +651,7 @@ export class FakeDropboxAccount {
 		const id = this.get(path)?.id ?? this.nextId();
 		const stored = this.get(path)?.path ?? path;
 		const file: FakeDropboxFile = { kind: "file", path: stored, id, data, rev };
-		this.entries.set(path.toLowerCase(), file);
+		this.entries.set(this.fold(path), file);
 		this.revisions.set(rev, file);
 		this.changeLog.push(stored);
 	}
@@ -654,7 +666,7 @@ export class FakeDropboxAccount {
 
 	/** Removes the entry at `path` and everything inside it. */
 	remove(path: string): void {
-		const lower = path.toLowerCase();
+		const lower = this.fold(path);
 		for (const [key, entry] of [...this.entries]) {
 			if (key === lower || key.startsWith(`${lower}/`)) {
 				this.entries.delete(key);
@@ -670,7 +682,7 @@ export class FakeDropboxAccount {
 	 */
 	move(from: string, to: string): void {
 		this.putParents(to);
-		const lower = from.toLowerCase();
+		const lower = this.fold(from);
 		const moving = [...this.entries].filter(([key]) => key === lower || key.startsWith(`${lower}/`));
 		for (const [key, entry] of moving) {
 			this.entries.delete(key);
@@ -678,14 +690,14 @@ export class FakeDropboxAccount {
 		}
 		for (const [, entry] of moving) {
 			const path = to + entry.path.slice(from.length);
-			this.entries.set(path.toLowerCase(), { ...entry, path });
+			this.entries.set(this.fold(path), { ...entry, path });
 			this.changeLog.push(path);
 		}
 	}
 
 	/** The entry at `path`, compared without case. */
 	get(path: string): FakeDropboxEntry | undefined {
-		return this.entries.get(path.toLowerCase());
+		return this.entries.get(this.fold(path));
 	}
 
 	/** The bytes of the file at `path`, if there is one. */
@@ -696,7 +708,7 @@ export class FakeDropboxAccount {
 
 	/** Metadata of the entries under `path`, direct children unless `recursive`. */
 	children(path: string, recursive: boolean): Record<string, unknown>[] {
-		const prefix = `${path.toLowerCase()}/`;
+		const prefix = `${this.fold(path)}/`;
 		return [...this.entries.keys()]
 			.filter((key) => key.startsWith(prefix) && (recursive || !key.slice(prefix.length).includes("/")))
 			.sort()
@@ -718,17 +730,17 @@ export class FakeDropboxAccount {
 		recursive: boolean,
 		position: number,
 	): { readonly entries: Record<string, unknown>[]; readonly position: number } {
-		const prefix = `${path.toLowerCase()}/`;
+		const prefix = `${this.fold(path)}/`;
 		const lastLogged = new Map<string, string>();
 		for (const logged of this.changeLog.slice(position)) {
-			const key = logged.toLowerCase();
+			const key = this.fold(logged);
 			if (key.startsWith(prefix) && (recursive || !key.slice(prefix.length).includes("/"))) {
 				lastLogged.set(key, logged);
 			}
 		}
 		const entries = [...lastLogged].map(([key, logged]) => {
 			const entry = this.entries.get(key);
-			return entry ? metadataOf(entry) : deletedMetadataOf(logged);
+			return entry ? metadataOf(entry, this.fold) : deletedMetadataOf(logged, this.fold);
 		});
 		return { entries, position: this.changeLog.length };
 	}
@@ -737,7 +749,12 @@ export class FakeDropboxAccount {
 	metadata(path: string): Record<string, unknown> {
 		const entry = this.get(path);
 		if (!entry) throw new Error(`no entry at ${path}`);
-		return metadataOf(entry);
+		return metadataOf(entry, this.fold);
+	}
+
+	/** The Dropbox metadata of `entry`, one of this account's, its `path_lower` folded as the account folds. */
+	metadataOf(entry: FakeDropboxEntry): Record<string, unknown> {
+		return metadataOf(entry, this.fold);
 	}
 
 	/** Creates the folders above `path`, as a write to it would. */
@@ -753,11 +770,11 @@ export class FakeDropboxAccount {
 	}
 }
 
-/** The Dropbox metadata of `entry`, tagged like `Metadata`. */
-function metadataOf(entry: FakeDropboxEntry): Record<string, unknown> {
+/** The Dropbox metadata of `entry`, tagged like `Metadata`, its `path_lower` folded with `fold`. */
+function metadataOf(entry: FakeDropboxEntry, fold: (path: string) => string): Record<string, unknown> {
 	const common = {
 		name: entry.path.slice(entry.path.lastIndexOf("/") + 1),
-		path_lower: entry.path.toLowerCase(),
+		path_lower: fold(entry.path),
 		path_display: entry.path,
 		id: entry.id,
 	};
@@ -780,12 +797,12 @@ function contentHashOf(data: ArrayBuffer): string {
 	return sha256Hex(digests);
 }
 
-/** The Dropbox `DeletedMetadata` of an entry deleted at `path`. */
-function deletedMetadataOf(path: string): Record<string, unknown> {
+/** The Dropbox `DeletedMetadata` of an entry deleted at `path`, its `path_lower` folded with `fold`. */
+function deletedMetadataOf(path: string, fold: (path: string) => string): Record<string, unknown> {
 	return {
 		".tag": "deleted",
 		name: path.slice(path.lastIndexOf("/") + 1),
-		path_lower: path.toLowerCase(),
+		path_lower: fold(path),
 		path_display: path,
 	};
 }

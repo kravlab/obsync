@@ -17,4 +17,10 @@ export default defineConfig([
 			},
 		},
 	},
+	// The tests' fake of the obsidian module defines Obsidian's element
+	// helpers (createEl, createDiv), so it has to build elements without them.
+	{
+		files: ["test/fakes/obsidian.ts"],
+		rules: { "obsidianmd/prefer-create-el": "off" },
+	},
 ]);

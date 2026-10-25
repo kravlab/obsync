@@ -2,7 +2,9 @@
  * The Dropbox Provider (spec, "Dropbox provider" and "Provider contract"):
  * one Remote, a subfolder of the App Folder, through Dropbox's HTTP API.
  *
- * - `list` is a recursive `list_folder` of the root, paged.
+ * - `list` is a recursive `list_folder` of the root, paged; entries are
+ *   matched against the root's own `path_lower`, read once per provider
+ *   with `get_metadata`, alongside its first listing.
  * - `read` is `get_metadata`, then `files/download` of that revision;
  *   `write` is `files/upload`, or an upload session for a file above the
  *   Per-request limit, which downloads also keep to (transfers.ts).
@@ -43,6 +45,7 @@ import {
 	fileRevision,
 	listFolder,
 	listFolderContinue,
+	lookupFailure,
 	routeFailure,
 	stableIdOf,
 	summary,
@@ -100,6 +103,25 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 	const rules: TransferRules = { limit: transfers.requestLimit(), wait: transfers.wait };
 	/** The App-Folder path of a Remote path. */
 	const full = (path: RemotePath): string => `${root}/${path}`;
+	/** The root's `path_lower`, read once; a failed read is not kept, so the next listing reads it again. */
+	let rootLower: Promise<string> | undefined;
+
+	/**
+	 * The root's `path_lower` as Dropbox gives it (spec of the review fixes,
+	 * item 12): entries are matched against Dropbox's own folding, which
+	 * JavaScript's `toLowerCase` may not reproduce for every character.
+	 */
+	function rootKey(): Promise<string> {
+		rootLower ??= (async () => {
+			const found = await client.rpc("files/get_metadata", { path: root });
+			if (!found.ok) throw lookupFailure("get_metadata", found.error);
+			return (found.value as Metadata).path_lower;
+		})().catch((error: unknown) => {
+			rootLower = undefined;
+			throw error;
+		});
+		return rootLower;
+	}
 
 	/** Moves the entry at `from` to `to` with `move_v2`, refusing an occupied `to`; returns the moved entry's metadata. */
 	async function move(from: RemotePath, to: RemotePath): Promise<Metadata> {
@@ -113,8 +135,8 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 			conditionalWrite: true,
 			changeFeed: {
 				async changes(cursor: string): Promise<ChangeBatch> {
-					const batch = await listFolderContinue(client, cursor);
-					return { changes: remoteChanges(root, batch.entries, "list_folder/continue"), cursor: batch.cursor };
+					const [batch, lower] = await Promise.all([listFolderContinue(client, cursor), rootKey()]);
+					return { changes: remoteChanges(root, lower, batch.entries, "list_folder/continue"), cursor: batch.cursor };
 				},
 			},
 			fileMove: {
@@ -133,8 +155,9 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 		maxFileSize: MAX_FILE_SIZE,
 
 		async list(): Promise<Listing> {
-			const batch = await listFolder(client, root, true);
-			return { entries: remoteEntries(root, batch.entries), cursor: batch.cursor };
+			// Both at once: the root's metadata is read in the time of the listing, not after it.
+			const [batch, lower] = await Promise.all([listFolder(client, root, true), rootKey()]);
+			return { entries: remoteEntries(root, lower, batch.entries), cursor: batch.cursor };
 		},
 
 		read(path) {
@@ -169,24 +192,29 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
 }
 
 /**
- * The present entries below `root`, by Remote path: the changes of a full
- * listing with any `deleted` entries left out.
+ * The present entries below `root`, whose `path_lower` is `rootLower`, by
+ * Remote path: the changes of a full listing with any `deleted` entries
+ * left out.
  */
-function remoteEntries(root: string, listed: readonly Metadata[]): RemoteEntry[] {
-	return remoteChanges(root, listed, "list_folder").filter((change): change is RemoteEntry => change.kind !== "deleted");
+function remoteEntries(root: string, rootLower: string, listed: readonly Metadata[]): RemoteEntry[] {
+	return remoteChanges(root, rootLower, listed, "list_folder").filter(
+		(change): change is RemoteEntry => change.kind !== "deleted",
+	);
 }
 
 /**
  * The changes below `root`, by Remote path, from `route`. `path_display`
  * has the right case only in its last component, so each path is rebuilt
- * from the entries' own `name`s along `path_lower`; the root itself and
- * entries outside it are left out. The changes keep Dropbox's order, a
- * path appearing as often as Dropbox reports it, since each entry is to
- * be applied in turn. A file without its `rev` or `size` is a response
- * this provider cannot trust: it fails as `permanent`.
+ * from the entries' own `name`s along `path_lower`, matched against
+ * `rootLower`, the root's own `path_lower`; the root itself and entries
+ * outside it are left out. The changes keep Dropbox's order, a path
+ * appearing as often as Dropbox reports it, since each entry is to be
+ * applied in turn. A file without its `rev` or `size` is a response this
+ * provider cannot trust: it fails as `permanent`.
  */
-function remoteChanges(root: string, listed: readonly Metadata[], route: string): Change[] {
-	const rootLower = root.toLowerCase();
+function remoteChanges(root: string, rootLower: string, listed: readonly Metadata[], route: string): Change[] {
+	/** How many segments a path's split at "/" begins with for the root: "" before its leading slash, then its own. */
+	const rootSegments = root.split("/").length;
 	const byLower = new Map<string, Metadata>();
 	for (const entry of listed) {
 		byLower.set(entry.path_lower, entry);
@@ -199,10 +227,11 @@ function remoteChanges(root: string, listed: readonly Metadata[], route: string)
 		if (known !== undefined) return known;
 		const parentLower = lower.slice(0, lower.lastIndexOf("/"));
 		const parent = byLower.get(parentLower);
-		// A parent missing from the batch keeps its displayed name.
+		// A parent missing from the batch keeps its displayed name, below the root's
+		// segments: the root may show in another Unicode form, of another length.
 		const parentPath =
 			parent === undefined
-				? entry.path_display.slice(root.length + 1, entry.path_display.lastIndexOf("/"))
+				? entry.path_display.split("/").slice(rootSegments, -1).join("/")
 				: pathOf(parentLower, parent);
 		const path = parentPath === "" ? entry.name : `${parentPath}/${entry.name}`;
 		paths.set(lower, path);

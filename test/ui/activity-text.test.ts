@@ -76,4 +76,66 @@ describe("activityLine", () => {
 			"2026-10-20 14:30 Connecting failed. Dropbox could not be reached.",
 		);
 	});
+
+	it.each([
+		[
+			"codeRejected",
+			"Connecting failed. Dropbox did not accept the code.",
+			"Не удалось подключиться. Dropbox не принял код.",
+		],
+		[
+			"otherAccount",
+			"Connecting failed. This device is connected to a different Dropbox account.",
+			"Не удалось подключиться. Это устройство подключено к другому аккаунту Dropbox.",
+		],
+		[
+			"nameTaken",
+			"Connecting failed. A folder with this name already exists.",
+			"Не удалось подключиться. Папка с таким именем уже есть.",
+		],
+		[
+			"invalidName",
+			'Connecting failed. The folder name contains "/".',
+			"Не удалось подключиться. В имени папки есть «/».",
+		],
+		[
+			"unsupportedProvider",
+			"Connecting failed. This provider cannot be synced.",
+			"Не удалось подключиться. С этим провайдером синхронизация невозможна.",
+		],
+		[
+			"firstSyncInProgress",
+			"Connecting failed. Another device is doing its first sync with this folder.",
+			"Не удалось подключиться. Другое устройство выполняет первую синхронизацию с этой папкой.",
+		],
+		["bug", "Connecting failed. The plugin hit an error.", "Не удалось подключиться. В плагине произошла ошибка."],
+	] as const)("tells a connect failure for %s in English and Russian", (cause, english, russian) => {
+		const event = { at: AFTERNOON, kind: "connectFailed", cause } as const;
+
+		expect(activityLine(event, selectStrings("en"))).toBe(`2026-10-20 14:30 ${english}`);
+		expect(activityLine(event, selectStrings("ru"))).toBe(`2026-10-20 14:30 ${russian}`);
+	});
+
+	it("tells a revoke that failed on disconnect, with its detail, in English and Russian", () => {
+		const event = { at: AFTERNOON, kind: "revokeFailed", cause: "transient", detail: "no response" } as const;
+
+		expect(activityLine(event, selectStrings("en"))).toBe(
+			"2026-10-20 14:30 Disconnecting: the login could not be revoked. Dropbox could not be reached. (no response)",
+		);
+		expect(activityLine(event, selectStrings("ru"))).toBe(
+			"2026-10-20 14:30 Отключение: не удалось отозвать вход. Dropbox недоступен. (no response)",
+		);
+	});
+
+	it("tells a refused code with the service's answer, and a First sync with the device doing it", () => {
+		const refused = { at: AFTERNOON, kind: "connectFailed", cause: "codeRejected", detail: "invalid_grant" } as const;
+		const waiting = { at: AFTERNOON, kind: "connectFailed", cause: "firstSyncInProgress", detail: "Tablet" } as const;
+
+		expect(activityLine(refused, selectStrings("en"))).toBe(
+			"2026-10-20 14:30 Connecting failed. Dropbox did not accept the code. (invalid_grant)",
+		);
+		expect(activityLine(waiting, selectStrings("en"))).toBe(
+			"2026-10-20 14:30 Connecting failed. Another device is doing its first sync with this folder. (Tablet)",
+		);
+	});
 });

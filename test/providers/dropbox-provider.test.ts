@@ -296,3 +296,102 @@ describe("Dropbox provider errors", () => {
 		await expectFailure(provider.createFolder("notes"), "permanent");
 	});
 });
+
+describe("Dropbox provider on a Remote whose name Dropbox folds otherwise than JavaScript", () => {
+	/**
+	 * A stand-in folding that differs from JavaScript's: it takes "İ" to a
+	 * plain "i", where `toLowerCase` adds a combining dot. How Dropbox
+	 * itself folds "İ" is not known; any difference is what matters here.
+	 */
+	const fold = (path: string): string => path.replace(/İ/g, "i").toLowerCase();
+
+	/** The provider on the Remote "/İzmir notes" of an account that folds paths with `fold`, holding `a.md`. */
+	async function openFolded() {
+		const clock = new ManualClock();
+		const dropbox = new FakeDropbox("test-app-key", clock);
+		const account = dropbox.addAccount("dbid:account-1", fold);
+		account.putFolder("/İzmir notes");
+		const connector = createDropboxConnector({ appKey: "test-app-key", http: dropbox.requestUrl, clock, transfers: testTransfers() });
+		const provider = await connector.open(
+			{ accountId: account.accountId, remoteRoot: "/İzmir notes", device: { id: "laptop-id", name: "Laptop" } },
+			dropbox.issueRefreshToken(account),
+		);
+		await provider.write("a.md", bytes("a"));
+		return { provider, account };
+	}
+
+	it("lists the Remote's entries, matched by the folder's own path_lower", async () => {
+		const { provider } = await openFolded();
+
+		expect((await provider.list()).entries.map((entry) => entry.path)).toEqual(["a.md"]);
+	});
+
+	it("follows the Remote's changes, matched the same way", async () => {
+		const { provider } = await openFolded();
+		const { cursor } = await provider.list();
+		await provider.write("b.md", bytes("b"));
+
+		const feed = provider.capabilities.changeFeed;
+		if (feed === undefined || cursor === undefined) throw new Error("no change feed");
+		expect((await feed.changes(cursor)).changes.map((change) => change.path)).toEqual(["b.md"]);
+	});
+});
+
+describe("Dropbox provider's read of the Remote's own path_lower", () => {
+	/** The `files/get_metadata` requests among `dropbox`'s requests from `from` on. */
+	const metadataReads = (dropbox: FakeDropbox, from: number) =>
+		dropbox.requests.slice(from).filter((request) => request.url.endsWith("/2/files/get_metadata"));
+
+	it("reads the root's metadata once for every listing and change batch of one provider", async () => {
+		const { dropbox, provider } = await openDropboxRemote();
+		const sent = dropbox.requests.length;
+
+		const { cursor } = await provider.list();
+		await provider.list();
+		if (cursor === undefined || provider.capabilities.changeFeed === undefined) throw new Error("no change feed");
+		await provider.capabilities.changeFeed.changes(cursor);
+
+		expect(metadataReads(dropbox, sent)).toHaveLength(1);
+	});
+
+	it("reads it again on the next listing after a failed read", async () => {
+		const { dropbox, provider } = await openDropboxRemote();
+		let failed = false;
+		dropbox.onRequest = (request) => {
+			if (!failed && request.url.endsWith("/2/files/get_metadata")) {
+				failed = true;
+				throw new Error("offline");
+			}
+		};
+
+		await expectFailure(provider.list(), "transient");
+		await provider.write("a.md", bytes("a"));
+
+		expect((await provider.list()).entries.map((entry) => entry.path)).toEqual(["a.md"]);
+	});
+});
+
+describe("Dropbox provider on a Remote whose entries show it in another Unicode form", () => {
+	/** Folds as one Unicode form, so "Café" composed and decomposed name one folder. */
+	const fold = (path: string): string => path.normalize("NFC").toLowerCase();
+
+	it("rebuilds a changed entry's path whose folder is not in the batch, by segments, not by the root's length", async () => {
+		const clock = new ManualClock();
+		const dropbox = new FakeDropbox("test-app-key", clock);
+		const account = dropbox.addAccount("dbid:account-1", fold);
+		// Entries show the root decomposed, one UTF-16 unit longer than the root as the Connection keeps it.
+		account.putFolder("/Café notes/sub");
+		const connector = createDropboxConnector({ appKey: "test-app-key", http: dropbox.requestUrl, clock, transfers: testTransfers() });
+		const provider = await connector.open(
+			{ accountId: account.accountId, remoteRoot: "/Café notes", device: { id: "laptop-id", name: "Laptop" } },
+			dropbox.issueRefreshToken(account),
+		);
+		const { cursor } = await provider.list();
+		account.putFile("/Café notes/sub/a.md", bytes("a"), "rev100");
+
+		if (cursor === undefined || provider.capabilities.changeFeed === undefined) throw new Error("no change feed");
+		const { changes } = await provider.capabilities.changeFeed.changes(cursor);
+
+		expect(changes.map((change) => change.path)).toEqual(["sub/a.md"]);
+	});
+});

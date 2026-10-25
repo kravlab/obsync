@@ -11,6 +11,8 @@
  *   then reads `rev:<rev>`, so parts never mix two versions: in one
  *   `files/download` up to the limit, in `Range` parts above it. An empty
  *   file gets no `Range`, whose answer for it Dropbox does not document.
+ *   Bytes of another length than that revision's size, whole or in a
+ *   part, fail the read.
  */
 import type { RequestLimit } from "../../engine/request-limit";
 import { ProviderError, type RemoteContent } from "../../engine/provider";
@@ -175,7 +177,10 @@ function transferFailure(route: string, error: Tagged): ProviderError {
 
 /**
  * Downloads the file at the App-Folder `path` in responses no larger than
- * the limit, with the revision it read. A path holding no file is `notFound`, a folder `permanent`.
+ * the limit, with the revision it read. A path holding no file is
+ * `notFound`, a folder `permanent`. Bytes of another length than the
+ * revision's size, whole or in a part, are `permanent`: a cut-off body is
+ * never taken for the file.
  */
 export async function downloadFile(
 	client: DropboxClient,
@@ -194,6 +199,9 @@ export async function downloadFile(
 	if (size <= part) {
 		const result = await client.download(revision);
 		if (!result.ok) throw lookupFailure("download", result.error);
+		if (result.data.byteLength !== size) {
+			throw new ProviderError({ category: "permanent" }, `download: ${result.data.byteLength} bytes of ${size} for ${path}`);
+		}
 		return { data: result.data, revision: rev };
 	}
 	const whole = new Uint8Array(size);

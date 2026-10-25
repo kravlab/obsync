@@ -2,13 +2,17 @@
  * The text merge (spec, "Text merge"): a line-based 3-way merge of this
  * device's version and the Remote's against the Base. Without a true Base
  * it is a 2-way merge: common lines appear once and every region where
- * the versions differ becomes a Conflict block, so no side is picked.
- * Changes that do not overlap, and the same change on both sides, merge
- * without one.
+ * the versions differ becomes a Conflict block, so no side is picked, save
+ * the one exception below. Changes that do not overlap, and the same
+ * change on both sides, merge without one.
  *
  * Versions are compared and merged with LF line endings and no byte-order
  * mark; the result is written in the local file's style, so a difference
- * only in those is none.
+ * only in those is none. Nor is a difference only in whether the file ends
+ * with a line break, an empty file and one holding only a line break
+ * included: the merge keeps the line break. Against a Base, a side that
+ * only changed that line break while the other added lines still differs
+ * from it in more, and gets a Conflict block.
  */
 import { diff3Merge, diffComm } from "node-diff3";
 import { commonEnds } from "./common-ends";
@@ -60,9 +64,15 @@ export function mergeText(versions: TextVersions, labels: ConflictLabels): Merge
 	const base = baseText === undefined ? null : linesOf(baseText);
 	const merged: string[] = [];
 	let conflicted = false;
-	for (const region of regions(base, local, remote)) {
+	const all = regions(base, local, remote);
+	for (const [index, region] of all.entries()) {
+		/** Whether nothing but empty runs of common lines follows: the region ends the file. */
+		const endsFile = all.slice(index + 1).every((later) => "same" in later && later.same.length === 0);
 		if ("same" in region) {
 			merged.push(...region.same);
+		} else if (endsFile && sameOnceClosed(region.local, region.remote)) {
+			// The sides differ only in whether the file ends with a line break: no conflict, kept with it.
+			merged.push(...closedAtEnd(region.local));
 		} else {
 			merged.push(...conflictBlock(region.local, region.remote, labels));
 			conflicted = true;
@@ -132,6 +142,21 @@ function conflictBlock(local: readonly string[], remote: readonly string[], labe
 		...closed(remote),
 		`${REMOTE_MARKER} ${labels.remote}\n`,
 	];
+}
+
+/** Whether `local` and `remote`, the last lines of a file, are the same once each ends with a line break. */
+function sameOnceClosed(local: readonly string[], remote: readonly string[]): boolean {
+	const [left, right] = [closedAtEnd(local), closedAtEnd(remote)];
+	return left.length === right.length && left.every((line, index) => line === right[index]);
+}
+
+/**
+ * `lines`, the last lines of a file, ending with a line break: an empty
+ * end, as an empty file has, becomes one empty line, so "" and "\n" are
+ * the same once closed.
+ */
+function closedAtEnd(lines: readonly string[]): string[] {
+	return closed(lines.length === 0 ? [""] : lines);
 }
 
 /** `lines` with a line break added to the last one if it has none. */

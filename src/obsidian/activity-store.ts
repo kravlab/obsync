@@ -1,5 +1,6 @@
 import type { App } from "obsidian";
 import type { ActivityEvent, ActivityStore } from "../engine/activity-log";
+import type { ConnectFailureCause, RevokeFailure } from "../engine/connection";
 import type { SyncNotice } from "../engine/notices";
 import type { ProviderErrorCategory } from "../engine/provider";
 import type { SyncFailureCause, SyncStatus } from "../engine/status";
@@ -83,6 +84,23 @@ const FAILURE_CAUSES: Record<SyncFailureCause, true> = {
 	bug: true,
 };
 
+/** The causes connecting fails for besides a provider failure; a record, so a cause added to the type must be added here. */
+const CONNECT_REFUSALS: Record<Exclude<ConnectFailureCause, ProviderErrorCategory>, true> = {
+	codeRejected: true,
+	otherAccount: true,
+	nameTaken: true,
+	invalidName: true,
+	unsupportedProvider: true,
+	firstSyncInProgress: true,
+	bug: true,
+};
+
+/** Every cause connecting fails for. */
+const CONNECT_CAUSES: Record<ConnectFailureCause, true> = { ...PROVIDER_CAUSES, ...CONNECT_REFUSALS };
+
+/** Every cause a revoke on disconnect fails for. */
+const REVOKE_CAUSES: Record<RevokeFailure["cause"], true> = { ...PROVIDER_CAUSES, bug: true };
+
 /** The sides a delete can be told on. */
 const DELETED_ON: Record<"thisDevice" | "otherDevice", true> = { thisDevice: true, otherDevice: true };
 
@@ -114,15 +132,17 @@ const NOTICE_FIELDS: Record<SyncNotice["kind"], FieldsCheck> = {
 /**
  * Whether `value` is an activity event the shell can word: a time, and a
  * status of a known state or a notice of a known kind, with the fields
- * that state or kind carries, or a failure while connecting with a known
- * provider category. A detail is optional, since events stored before
+ * that state or kind carries, a failure while connecting with a known
+ * cause, or a failed revoke with a known cause. A detail is
+ * optional, since events stored before
  * failures kept one have none.
  */
 function isActivityEvent(value: unknown): value is ActivityEvent {
 	if (!isRecord(value) || typeof value.at !== "number") return false;
 	if (value.kind === "notice") return hasFields(value.notice, "kind", NOTICE_FIELDS);
 	if (value.kind === "status") return hasFields(value.status, "state", STATUS_FIELDS);
-	if (value.kind === "connectFailed") return isOneOf(value.cause, PROVIDER_CAUSES) && isOptionalText(value.detail);
+	if (value.kind === "connectFailed") return isOneOf(value.cause, CONNECT_CAUSES) && isOptionalText(value.detail);
+	if (value.kind === "revokeFailed") return isOneOf(value.cause, REVOKE_CAUSES) && isOptionalText(value.detail);
 	return false;
 }
 

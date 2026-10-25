@@ -68,6 +68,48 @@ describe("text merge without a Base", () => {
 	});
 });
 
+describe("text merge of versions differing only in the last line break", () => {
+	it("merges them without a Base and without a Conflict block, ending with the line break", () => {
+		expect(merge(null, "a\nb", "a\nb\n")).toBe("a\nb\n");
+		expect(merge(null, "a\nb\n", "a\nb")).toBe("a\nb\n");
+		expect(conflicted(null, "a\nb", "a\nb\n")).toBe(false);
+	});
+
+	it("merges them with a Base both changed from, without a Conflict block", () => {
+		expect(merge("x\n", "a\nb", "a\nb\n")).toBe("a\nb\n");
+		expect(conflicted("x\n", "a\nb", "a\nb\n")).toBe(false);
+	});
+
+	it("still writes a Conflict block where the lines differ beyond the line break", () => {
+		expect(conflicted(null, "a\nb", "a\nc\n")).toBe(true);
+	});
+
+	it("merges a single line differing only in its line break, whichever side has it", () => {
+		expect(merge(null, "a", "a\n")).toBe("a\n");
+		expect(conflicted(null, "a", "a\n")).toBe(false);
+		expect(conflicted(null, "a\nb\n", "a\nb")).toBe(false);
+	});
+
+	it("takes an empty file and a file holding only a line break as the same", () => {
+		expect(merge(null, "", "\n")).toBe("\n");
+		expect(merge(null, "\n", "")).toBe("\n");
+		expect(conflicted(null, "", "\n")).toBe(false);
+	});
+
+	it("still writes a Conflict block for a blank line one side alone has in the middle", () => {
+		expect(conflicted(null, "a\nb\n", "a\n\nb\n")).toBe(true);
+	});
+
+	it("writes the merge in the local file's CRLF style, line break included", () => {
+		expect(merge(null, "a\r\nb", "a\nb\n")).toBe("a\r\nb\r\n");
+	});
+
+	it("still writes a Conflict block when one side only changed the line break and the other added lines", () => {
+		// Against the Base, the versions differ in more than the line break.
+		expect(conflicted("p\n", "p", "p\nq\n")).toBe(true);
+	});
+});
+
 describe("text merge line endings and BOM", () => {
 	it("takes a difference only in line endings as none, and writes the result with the local line endings", () => {
 		expect(merge("a\nb\n", "a\r\nb\r\n", "a\nB\n")).toBe("a\r\nB\r\n");

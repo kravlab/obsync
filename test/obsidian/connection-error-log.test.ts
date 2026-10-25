@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
-import { ObsidianConnectErrorLog, type ConnectErrorLogAdapter } from "../../src/obsidian/connect-error-log";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ObsidianConnectionErrorLog, type ConnectionErrorLogAdapter } from "../../src/obsidian/connection-error-log";
 
 /** The vault adapter's text file operations over a map, as the plugin folder on disk. */
-class MemoryAdapter implements ConnectErrorLogAdapter {
+class MemoryAdapter implements ConnectionErrorLogAdapter {
 	readonly files = new Map<string, string>();
 	/** When set, every write fails with it, as a full or read-only disk. */
 	writeError: Error | undefined;
@@ -25,11 +25,16 @@ class MemoryAdapter implements ConnectErrorLogAdapter {
 
 const LOG = ".vault-config/plugins/obsync/obsync.log";
 
-describe("the connect error log file", () => {
+// A console spy is taken off even when a test fails before its end.
+afterEach(() => {
+	vi.restoreAllMocks();
+});
+
+describe("the connection error log file", () => {
 	it("is created with the first line in the plugin's folder", async () => {
 		const adapter = new MemoryAdapter();
 
-		await new ObsidianConnectErrorLog(adapter, ".vault-config/plugins/obsync").append("2026-10-21 16:37 Connecting failed.");
+		await new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync").append("2026-10-21 16:37 Connecting failed.");
 
 		expect(adapter.files.get(LOG)).toBe("2026-10-21 16:37 Connecting failed.\n");
 	});
@@ -37,7 +42,7 @@ describe("the connect error log file", () => {
 	it("adds each line after the ones it holds", async () => {
 		const adapter = new MemoryAdapter();
 		adapter.files.set(LOG, "first\n");
-		const log = new ObsidianConnectErrorLog(adapter, ".vault-config/plugins/obsync");
+		const log = new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync");
 
 		await log.append("second");
 		await log.append("third");
@@ -45,11 +50,33 @@ describe("the connect error log file", () => {
 		expect(adapter.files.get(LOG)).toBe("first\nsecond\nthird\n");
 	});
 
+	it("keeps every line of appends started together, in the order they were started", async () => {
+		const adapter = new MemoryAdapter();
+		const log = new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync");
+
+		await Promise.all([log.append("first"), log.append("second"), log.append("third")]);
+
+		expect(adapter.files.get(LOG)).toBe("first\nsecond\nthird\n");
+	});
+
+	it("goes on appending after a write that failed, the queue of appends unbroken", async () => {
+		const adapter = new MemoryAdapter();
+		const log = new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync");
+		vi.spyOn(console, "error").mockImplementation(() => undefined);
+		adapter.writeError = new Error("disk full");
+		await log.append("lost");
+		adapter.writeError = undefined;
+
+		await log.append("kept");
+
+		expect(adapter.files.get(LOG)).toBe("kept\n");
+	});
+
 	it("keeps only the newest 100 lines", async () => {
 		const adapter = new MemoryAdapter();
 		adapter.files.set(LOG, `${Array.from({ length: 100 }, (_, index) => `old ${index}`).join("\n")}\n`);
 
-		await new ObsidianConnectErrorLog(adapter, ".vault-config/plugins/obsync").append("new");
+		await new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync").append("new");
 
 		const lines = adapter.files.get(LOG)?.split("\n") ?? [];
 		expect(lines).toHaveLength(101);
@@ -63,9 +90,8 @@ describe("the connect error log file", () => {
 		adapter.writeError = new Error("read-only file system");
 		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-		await expect(new ObsidianConnectErrorLog(adapter, ".vault-config/plugins/obsync").append("lost")).resolves.toBeUndefined();
+		await expect(new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync").append("lost")).resolves.toBeUndefined();
 
-		expect(consoleError).toHaveBeenCalledWith("obsync: writing the connect error log failed", adapter.writeError);
-		consoleError.mockRestore();
+		expect(consoleError).toHaveBeenCalledWith("obsync: writing the connection error log failed", adapter.writeError);
 	});
 });

@@ -277,6 +277,26 @@ describe("a file renamed onto a path another device just used", () => {
 		});
 	}
 
+	it("makes no Conflict copy whose name the Remote cannot hold when a rename lands on a new file, losing nothing", async () => {
+		// "taken.md" fits a 25-unit name, but no Conflict copy name of it does.
+		const { remote, laptop, phone } = await syncedPair("renamed there", { stableIds: true, nameRules: { maxSegmentLength: 25 } });
+		await laptop.vault.rename("note.md", "taken.md");
+		await syncNow(laptop);
+		await phone.vault.write("taken.md", bytes("new here"));
+
+		await syncNow(phone);
+
+		const vaultPaths = (await phone.vault.list()).map((entry) => entry.path);
+		expect(vaultPaths.some((path) => path.includes("(conflict"))).toBe(false);
+		expect(mirrorPaths(remote).some((path) => path.includes("(conflict"))).toBe(false);
+		const kept = await Promise.all(
+			vaultPaths.filter((path) => path.endsWith(".md")).map((path) => vaultText(phone, path)),
+		);
+		expect(phone.ui.lastStatus).toEqual({ state: "synced" });
+		expect(kept.join("\n")).toContain("new here");
+		expect(kept.join("\n")).toContain("renamed there");
+	});
+
 	it("makes this device's new file a Conflict copy when the Remote renamed a file onto its path", async () => {
 		const { remote, laptop, phone } = await syncedPair("renamed there", { stableIds: true });
 		await laptop.vault.rename("note.md", "taken.md");

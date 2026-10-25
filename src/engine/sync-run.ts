@@ -98,6 +98,7 @@ import {
 	type RemoteEntry,
 	type RemoteFile,
 } from "./provider";
+import { ConnectionChanged } from "./connection-epoch";
 import type { DifferingOutcome, FirstSyncPreview, FirstSyncTally } from "./first-sync";
 import { namedProvider, pathCodec } from "./name-policy";
 import { contentKindOf, type RemoteSettings } from "./remote-metadata";
@@ -155,6 +156,12 @@ export interface SyncRun {
 	 * each as an edit made here.
 	 */
 	readonly restores: readonly string[];
+	/**
+	 * Whether the Connection this sync runs for is still this device's:
+	 * checked once the user answered a prompt, which may be after Disconnect
+	 * (connection-epoch.ts); the sync then ends with `ConnectionChanged`.
+	 */
+	readonly inRunEpoch: () => boolean;
 	/**
 	 * Present when this is a First sync: the device has no Sync snapshot,
 	 * and entries left from a First sync cut off earlier are ignored, so it
@@ -226,6 +233,7 @@ export async function runSync({
 	configuration,
 	renameHints,
 	restores,
+	inRunEpoch,
 	firstSync,
 }: SyncRun): Promise<SyncRunResult> {
 	// A First sync is a union: entries left from one cut off earlier must not turn into renames or deletions.
@@ -436,7 +444,10 @@ export async function runSync({
 	 * announced, and the vault file takes the Remote version if it still
 	 * holds `localData` and is not being typed into, and is recorded. Cut
 	 * off in between, the next sync finds the conflict again and makes
-	 * another copy, so nothing is lost.
+	 * another copy, so nothing is lost. When no copy name the Remote can
+	 * hold is left, no copy is made, the vault copy written already goes to
+	 * the trash, and `path` is skipped as `nameNotRepresentable`: each side
+	 * keeps its version, and each later sync finds the conflict again.
 	 */
 	async function keepConflictCopy(
 		path: VaultPath,
@@ -447,10 +458,15 @@ export async function runSync({
 	): Promise<void> {
 		const time = clock.now();
 		let copy = await freeCopyPath(path, time, 1);
+		if (copy === null) return refuseCopy(path);
 		await vault.write(copy.path, localData);
 		let written = await writeRemote(copy.path, localData, { kind: "absent" });
 		while (written === undefined) {
 			const next = await freeCopyPath(path, time, copy.number + 1);
+			if (next === null) {
+				await vault.trash(copy.path);
+				return refuseCopy(path);
+			}
 			await vault.rename(copy.path, next.path);
 			copy = next;
 			written = await writeRemote(copy.path, localData, { kind: "absent" });
@@ -502,20 +518,34 @@ export async function runSync({
 	 * The first Conflict copy path for `path`, by this device at `time`,
 	 * numbered `from` or higher, that is free in the vault and on the
 	 * Remote as listed; the first copy has no number, the next ones 2, 3, ….
+	 * Its name is cut to the room the provider's name rules leave in that
+	 * folder, its longest name and its longest path; null when the Remote
+	 * cannot hold the name even so, which a higher number would not change.
 	 */
 	async function freeCopyPath(
 		path: VaultPath,
 		time: number,
 		from: number,
-	): Promise<{ readonly path: VaultPath; readonly number: number }> {
-		const { caseInsensitive } = provider.nameRules;
+	): Promise<{ readonly path: VaultPath; readonly number: number } | null> {
+		const { caseInsensitive, maxSegmentLength, maxPathLength } = provider.nameRules;
+		const folder = parentOf(path);
+		const remoteFolder = folder === "" ? "" : codec.toRemote(folder);
+		if (remoteFolder === null) return null;
+		const pathRoom = maxPathLength === undefined ? Number.POSITIVE_INFINITY : maxPathLength - remoteFolder.length - (folder === "" ? 0 : 1);
+		const room = Math.min(maxSegmentLength ?? Number.POSITIVE_INFINITY, pathRoom);
 		const remoteKeys = new Set([...remote.keys()].map((listed) => pathKey(listed, caseInsensitive)));
 		for (let number = from; ; number += 1) {
-			const candidate = conflictCopyPath(path, device.name, time, number);
+			const candidate = conflictCopyPath(path, device.name, time, number, room);
+			if (codec.toRemote(candidate) === null) return null;
 			if (!remoteKeys.has(pathKey(candidate, caseInsensitive)) && (await vault.stat(candidate)) === null) {
 				return { path: candidate, number };
 			}
 		}
+	}
+
+	/** Skips `path` for this sync as `nameNotRepresentable`: no Conflict copy name for it fits the Remote. */
+	function refuseCopy(path: VaultPath): void {
+		refused.push({ path, reason: "nameNotRepresentable" });
 	}
 
 	/** Creates `path` and the folders above it on the Remote where missing. */
@@ -936,7 +966,14 @@ export async function runSync({
 	/** What the default handling of a First sync does to the file `path` when both sides hold it differently. */
 	function differingOutcome(path: VaultPath): DifferingOutcome {
 		if (inConfiguration(path)) return "remoteKept";
-		return contentKindOf(path, settings) === "text" ? "merged" : "conflictCopy";
+		switch (contentKindOf(path, settings)) {
+			case "text":
+				return "merged";
+			case "json":
+				return "mergedOrConflictCopy";
+			case "other":
+				return "conflictCopy";
+		}
 	}
 
 	/** Whether the vault file `path` holds what the Remote file `there` does. */
@@ -950,6 +987,7 @@ export async function runSync({
 
 	if (firstSync !== undefined) {
 		const answer = await ui.askFirstSync(await firstSyncPreview());
+		if (!inRunEpoch()) throw new ConnectionChanged();
 		if (answer === null) return { held: "firstSync", skipped: skipped(), snapshot };
 		keepRemote = answer.differing === "keepRemote";
 		await firstSync.begin();
@@ -994,6 +1032,7 @@ export async function runSync({
 		reason === null
 			? "apply"
 			: await ui.askDeletions({ reason, toRemote: toRemotePaths, toVault: deletions.toVault });
+	if (!inRunEpoch()) throw new ConnectionChanged();
 	if (answer === null) return { held: "deletions", skipped: skipped(), snapshot };
 
 	const { deferred, leftRemoteFolders } = await carryRenames(renames, {
@@ -1009,7 +1048,11 @@ export async function runSync({
 		setRemoteFile,
 		ensureRemoteFolder,
 		ensureVaultFolder,
-		conflictCopyPath: async (path) => (await freeCopyPath(path, clock.now(), 1)).path,
+		async conflictCopyPath(path) {
+			const copy = await freeCopyPath(path, clock.now(), 1);
+			if (copy === null) refuseCopy(path);
+			return copy?.path ?? null;
+		},
 		inConfiguration,
 		keepLocalConfiguration,
 		unchangedHere,

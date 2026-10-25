@@ -122,8 +122,12 @@ export const en = {
 	firstSyncMerged: "Merged, every difference marked",
 	/** First sync preview list: what happens to any other differing file. */
 	firstSyncConflictCopy: "This device's version kept as a conflict copy",
+	/** First sync preview list: what happens to a differing JSON file, merged only when the merge is clean and parses. */
+	firstSyncMergedOrConflictCopy: "Merged, or this device's version kept as a conflict copy if it cannot be merged",
 	/** First sync preview list: what happens to a differing configuration file. */
 	firstSyncRemoteKept: "Dropbox version used, this device's kept to restore",
+	/** First sync preview list: one differing file; `{path}` is its vault path, `{outcome}` one of the texts above. */
+	firstSyncDifferingFile: "{path}: {outcome}",
 	/** First sync preview: the bulk option for differing files. */
 	firstSyncKeepRemote: "Use the Dropbox version of every differing file",
 	/** First sync preview: what the bulk option does. */
@@ -174,7 +178,9 @@ export const en = {
 	errorUnreachable: "Dropbox cannot be reached. Check the connection and try again.",
 	/** Dropbox refused a request for another reason. */
 	errorFailed: "Dropbox refused the request. Try again later.",
-	/** Under a failure's message: what Dropbox answered, `{detail}`, untranslated. */
+	/** Connecting failed on an error the plugin did not expect, a bug. */
+	connectUnexpected: "Connecting failed unexpectedly.",
+	/** Under a failure's message: what went wrong, `{detail}`, untranslated: Dropbox's answer, or an error's name and message. */
 	errorDetails: "Details: {detail}",
 	/** The connect window's button copying the failure shown. */
 	copyError: "Copy error",
@@ -213,9 +219,11 @@ export const en = {
 	noticeConnected: "Connected to Dropbox.",
 	noticeReconnected: "Reconnected to Dropbox.",
 	noticeDisconnected: "Disconnected from Dropbox.",
-	/** Disconnected, but the login could not be revoked, e.g. offline. */
+	/** Disconnecting stopped on an error the plugin did not expect, a bug. */
+	noticeDisconnectFailed: "Disconnecting failed: the plugin hit an error. See the console.",
+	/** Disconnected, but the login could not be revoked, e.g. offline; the activity log tells why. */
 	noticeDisconnectedRevokeFailed:
-		"Disconnected, but Dropbox could not be reached to revoke access. Remove the app from the connected apps in your Dropbox settings.",
+		"Disconnected, but Dropbox did not revoke access. Remove the app from the connected apps in your Dropbox settings.",
 	/** A file changed on two devices could not be merged; `{file}` and `{copy}` are vault paths. */
 	noticeConflictCopyCreated:
 		"{file} changed on another device too and could not be merged. This device's version is kept as {copy}.",
@@ -323,11 +331,16 @@ export const en = {
 	activityLine: "{time} {text}",
 	/** A failed sync in the activity log; `{cause}` is one of the failure texts below, a sentence without its full stop. */
 	activitySyncFailed: "Sync failed. {cause}.",
-	/** A failure while connecting in the activity log; `{cause}` as for a failed sync. */
+	/** A failure while connecting in the activity log; `{cause}` is a failure text below, of a sync or a `connectFailure` one. */
 	activityConnectFailed: "Connecting failed. {cause}.",
-	/** A failure's line with its detail; `{text}` is the line, `{detail}` what the provider answered, untranslated. */
+	/** Disconnecting could not revoke the login, which may still work at Dropbox; `{cause}` is a failure text below. */
+	activityRevokeFailed: "Disconnecting: the login could not be revoked. {cause}.",
+	/**
+	 * A failure's line with its detail; `{text}` is the line, `{detail}`, untranslated, what tells more:
+	 * Dropbox's answer, an error's name and message, or the name of the device doing its first sync.
+	 */
 	activityDetail: "{text} ({detail})",
-	/** Why a sync failed, by cause. */
+	/** Why a provider call or a sync failed, by cause. */
 	failureAuth: "Dropbox refused the login",
 	failureThrottled: "Dropbox asked to slow down",
 	failureTransient: "Dropbox could not be reached",
@@ -341,6 +354,12 @@ export const en = {
 	failureUnsupportedProvider: "This provider cannot be synced",
 	failureUnreadableSettings: "The shared settings in Dropbox are missing or unreadable",
 	failureBug: "The plugin hit an error",
+	/** Why connecting failed, for the refusals that are not a provider failure. */
+	connectFailureCodeRejected: "Dropbox did not accept the code",
+	connectFailureOtherAccount: "This device is connected to a different Dropbox account",
+	connectFailureNameTaken: "A folder with this name already exists",
+	connectFailureInvalidName: "The folder name contains \"/\"",
+	connectFailureFirstSyncInProgress: "Another device is doing its first sync with this folder",
 	/** The bug report's lines, always taken from this English table; `{version}`, `{platform}`, `{status}` are filled in. */
 	bugReportTitle: "Obsync bug report",
 	bugReportPluginVersion: "Plugin version: {version}",

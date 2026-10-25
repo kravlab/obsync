@@ -32,6 +32,54 @@ describe("conflictCopyPath", () => {
 		expect(conflictCopyPath(".hidden", "Phone", AFTERNOON)).toBe(".hidden (conflict Phone 2026-10-20 1430)");
 	});
 
+	it("leaves a copy name that fits the longest name as it is", () => {
+		expect(conflictCopyPath("Photo.png", "Phone", AFTERNOON, 1, 255)).toBe("Photo (conflict Phone 2026-10-20 1430).png");
+	});
+
+	it("shortens the original name's stem so the copy fits the longest name, keeping the suffix and extension", () => {
+		const copy = conflictCopyPath(`photos/${"x".repeat(250)}.png`, "Phone", AFTERNOON, 1, 255);
+		const name = copy.slice("photos/".length);
+
+		expect(name).toHaveLength(255);
+		expect(name.endsWith(" (conflict Phone 2026-10-20 1430).png")).toBe(true);
+		expect(isConflictCopy(copy)).toBe(true);
+	});
+
+	it("shortens the device name once the stem is down to one character", () => {
+		const copy = conflictCopyPath("A.png", "D".repeat(300), AFTERNOON, 2, 255);
+
+		expect(copy).toHaveLength(255);
+		expect(copy.startsWith("A (conflict DDD")).toBe(true);
+		expect(copy.endsWith("D 2026-10-20 1430 2).png")).toBe(true);
+		expect(isConflictCopy(copy)).toBe(true);
+	});
+
+	it("never cuts a character made of two UTF-16 units in half", () => {
+		// " (conflict Phones 2026-10-20 1430).png" takes 38 units, leaving an odd 217 for the stem.
+		const copy = conflictCopyPath(`${"😀".repeat(200)}.png`, "Phones", AFTERNOON, 1, 255);
+
+		expect(copy).toHaveLength(254);
+		expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(copy)).toBe(false);
+	});
+
+	it("never cuts a character the user sees as one, such as joined emoji", () => {
+		const family = "👨‍👩‍👧";
+		const copy = conflictCopyPath(`${family.repeat(40)}.png`, "Phone", AFTERNOON, 1, 255);
+		const stem = copy.slice(0, copy.indexOf(" (conflict "));
+
+		expect(copy.length).toBeLessThanOrEqual(255);
+		expect(stem.length).toBeGreaterThan(0);
+		expect(stem.replaceAll(family, "")).toBe("");
+	});
+
+	it("shortens the extension too, from its end, once stem and device name are down to one character", () => {
+		const copy = conflictCopyPath(`Chapter 1. ${"z".repeat(240)}`, "Phone", AFTERNOON, 1, 255);
+
+		expect(copy).toHaveLength(255);
+		expect(copy.startsWith("C (conflict P 2026-10-20 1430). zzz")).toBe(true);
+		expect(isConflictCopy(copy)).toBe(true);
+	});
+
 	it("replaces characters a file name cannot hold in the device name with a dash", () => {
 		expect(conflictCopyPath("Photo.png", 'a/b\\c:d*e?f"g<h>i|j\u0007k', AFTERNOON)).toBe(
 			"Photo (conflict a-b-c-d-e-f-g-h-i-j-k 2026-10-20 1430).png",

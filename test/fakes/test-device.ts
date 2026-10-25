@@ -12,7 +12,8 @@ import {
 import { DEFAULT_CONFIGURATION_CATEGORIES, type ConfigurationCategories } from "../../src/engine/configuration";
 import type { SyncConflicts } from "../../src/engine/conflicts";
 import type { ActivityEvent, ActivityUi } from "../../src/engine/activity-log";
-import type { ConnectFailure, ConnectionUi } from "../../src/engine/connection";
+import type { ConnectFailure, ConnectionUi, RevokeFailure } from "../../src/engine/connection";
+import { createConnectionEpoch, type ConnectionEpoch } from "../../src/engine/connection-epoch";
 import { DEFAULT_DELETION_GUARD, type DeletionAnswer, type DeletionGuardSettings, type DeletionPrompt } from "../../src/engine/deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "../../src/engine/first-sync";
 import type { LocalVault, VaultPath } from "../../src/engine/local-vault";
@@ -210,6 +211,8 @@ export class RecordingUi implements ActivityUi, ConnectionUi {
 	readonly activityLogs: (readonly ActivityEvent[])[] = [];
 	/** Every failure while connecting reported, oldest first. */
 	readonly connectFailures: ConnectFailure[] = [];
+	/** Every revoke on disconnect that failed, oldest first. */
+	readonly revokeFailures: RevokeFailure[] = [];
 
 	/** The status shown last, or undefined if none was. */
 	get lastStatus(): SyncStatus | undefined {
@@ -274,6 +277,11 @@ export class RecordingUi implements ActivityUi, ConnectionUi {
 	reportConnectFailure(failure: ConnectFailure): void {
 		this.connectFailures.push(failure);
 	}
+
+	/** Records `failure` instead of passing it on. */
+	reportRevokeFailure(failure: RevokeFailure): void {
+		this.revokeFailures.push(failure);
+	}
 }
 
 /** One simulated device: its fakes and the ports built from them. */
@@ -300,6 +308,10 @@ export interface TestDevice {
 	configurationCategories: ConfigurationCategories;
 	/** This plugin's own folder in the device's configuration folder. */
 	readonly pluginDir: string;
+	/** The Connection epoch the engine reads; a connection service built for the device shares it. */
+	readonly epoch: ConnectionEpoch;
+	/** Every error the engine reported of a sync no caller waited for, oldest first. */
+	readonly errors: unknown[];
 	readonly ports: EnginePorts;
 }
 
@@ -327,6 +339,8 @@ export function createTestDevice(remote: FakeRemote, options: TestDeviceOptions 
 	const scheduler = new ManualScheduler(clock);
 	const ui = new RecordingUi();
 	const crash = new CrashPoints();
+	const epoch = createConnectionEpoch();
+	const errors: unknown[] = [];
 	const provider = remote.openProvider(crash);
 	const providers: ProviderConnector = {
 		providerId: TEST_PROVIDER_ID,
@@ -346,6 +360,8 @@ export function createTestDevice(remote: FakeRemote, options: TestDeviceOptions 
 		deletionGuard: DEFAULT_DELETION_GUARD,
 		configurationCategories: DEFAULT_CONFIGURATION_CATEGORIES,
 		pluginDir,
+		epoch,
+		errors,
 		ports: {
 			providers,
 			vault: crashingVault(vault, crash),
@@ -361,6 +377,8 @@ export function createTestDevice(remote: FakeRemote, options: TestDeviceOptions 
 			pluginDir,
 			pluginId,
 			newDeviceId: () => crypto.randomUUID(),
+			epoch,
+			reportError: (error) => errors.push(error),
 		},
 	};
 	return device;

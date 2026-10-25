@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createConnectionService, type AuthorizationOutcome } from "../../src/engine/connection";
 import { SimulatedCrash } from "../fakes/fake-provider";
 import { connectTestDevice } from "../fakes/test-device";
@@ -285,7 +285,7 @@ describe("logging in", () => {
 		const laptop = createConnectingDevice(service, "laptop");
 		const pending = await createConnectionService(laptop.ports).startAuthorization();
 
-		expect(await pending.submitCode("expired-code")).toEqual({ kind: "codeRejected" });
+		expect(await pending.submitCode("expired-code")).toEqual({ kind: "codeRejected", detail: "code refused: expired-code" });
 		expect(laptop.deviceStore.connection).toBeNull();
 		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBeNull();
 	});
@@ -347,16 +347,31 @@ describe("failures while connecting", () => {
 		expect(laptop.ui.notices).toEqual([]);
 	});
 
-	it("reports nothing for a refused code, which asks for a new login", async () => {
+	it("reports a refused code with the service's answer, and asks for a new login", async () => {
 		const service = new FakeService();
 		const account = service.addAccount("account-1");
 		const laptop = createConnectingDevice(service, "laptop");
 		const pending = await createConnectionService(laptop.ports).startAuthorization();
 		laptop.connectStep.failNext("complete", { category: "auth" });
 
-		expect(await pending.submitCode(account.approve(pending.authorizeUrl))).toEqual({ kind: "codeRejected" });
+		expect(await pending.submitCode(account.approve(pending.authorizeUrl))).toEqual({
+			kind: "codeRejected",
+			detail: "injected auth on complete",
+		});
 
-		expect(laptop.ui.connectFailures).toEqual([]);
+		expect(laptop.ui.connectFailures).toEqual([{ cause: "codeRejected", detail: "injected auth on complete" }]);
+	});
+
+	it("reports a login to another account", async () => {
+		const service = new FakeService();
+		const first = service.addAccount("account-1");
+		const second = service.addAccount("account-2");
+		const laptop = createConnectingDevice(service, "laptop");
+		await (await authorize(laptop, first)).createRemote("My vault", "Laptop");
+
+		await logIn(laptop, second);
+
+		expect(laptop.ui.connectFailures).toEqual([{ cause: "otherAccount" }]);
 	});
 
 	it("reports a failure to list the folders", async () => {
@@ -393,7 +408,7 @@ describe("failures while connecting", () => {
 		expect(laptop.ui.notices).toEqual([]);
 	});
 
-	it("reports nothing for a taken Remote name, which is an answer, not a failure", async () => {
+	it("reports a taken Remote name and a name holding a slash", async () => {
 		const service = new FakeService();
 		const account = service.addAccount("account-1");
 		account.addFolder("My vault");
@@ -401,6 +416,52 @@ describe("failures while connecting", () => {
 		const remotes = await authorize(laptop, account);
 
 		expect(await remotes.createRemote("My vault", "Laptop")).toEqual({ kind: "nameTaken" });
+		expect(await remotes.createRemote("Work/Notes", "Laptop")).toEqual({ kind: "invalidName" });
+
+		expect(laptop.ui.connectFailures).toEqual([{ cause: "nameTaken" }, { cause: "invalidName" }]);
+	});
+
+	it("reports a chosen folder and a new Remote that the provider cannot sync", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1", { conditionalWrite: false });
+		account.addFolder("Notes");
+		const laptop = createConnectingDevice(service, "laptop");
+		const remotes = await authorize(laptop, account);
+
+		await remotes.useFolder("Notes", "Laptop");
+		await remotes.createRemote("My vault", "Laptop");
+
+		expect(laptop.ui.connectFailures).toEqual([{ cause: "unsupportedProvider" }, { cause: "unsupportedProvider" }]);
+	});
+
+	it("reports another device's First sync in progress, naming that device", async () => {
+		const { service, account } = await remoteWithMark(0);
+		const phone = createConnectingDevice(service, "phone");
+
+		await (await authorize(phone, account)).useFolder("My vault", "Phone");
+
+		expect(phone.ui.connectFailures).toEqual([{ cause: "firstSyncInProgress", detail: "Tablet" }]);
+	});
+
+	it("reports an unexpected error as a bug, with its name and message, and throws it on", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		const remotes = await authorize(laptop, account);
+		const unexpected = new TypeError("boom");
+		vi.spyOn(laptop.deviceStore, "saveConnection").mockRejectedValueOnce(unexpected);
+
+		await expect(remotes.createRemote("My vault", "Laptop")).rejects.toBe(unexpected);
+
+		expect(laptop.ui.connectFailures).toEqual([{ cause: "bug", detail: "TypeError: boom" }]);
+	});
+
+	it("reports nothing when connecting succeeds", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+
+		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
 
 		expect(laptop.ui.connectFailures).toEqual([]);
 	});
@@ -459,6 +520,61 @@ describe("disconnecting", () => {
 
 		expect(outcome).toEqual({ kind: "revokeFailed" });
 		expect(service.accountOf(secret)).toBe(account);
+		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBeNull();
+		expect(laptop.deviceStore.connection).toBeNull();
+		expect(laptop.ui.lastStatus).toEqual({ state: "notConnected" });
+	});
+
+	it("reports a revoke the service could not be asked for, with its detail", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
+		laptop.connectStep.failNext("revoke", { category: "transient" });
+
+		await createConnectionService(laptop.ports).disconnect();
+
+		expect(laptop.ui.revokeFailures).toEqual([{ cause: "transient", detail: "injected transient on revoke" }]);
+	});
+
+	it("reports no revoke failure when the revoke succeeds", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
+
+		expect(await createConnectionService(laptop.ports).disconnect()).toEqual({ kind: "disconnected" });
+
+		expect(laptop.ui.revokeFailures).toEqual([]);
+	});
+
+	it("reports no revoke failure when the service refuses the secret already", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
+		service.revoke(laptop.secretStore.getSecret("obsync-fake-service") ?? "");
+
+		expect(await createConnectionService(laptop.ports).disconnect()).toEqual({ kind: "disconnected" });
+
+		expect(laptop.ui.revokeFailures).toEqual([]);
+	});
+
+	it("clears local state after an unexpected error while revoking, reporting it as a bug", async () => {
+		const service = new FakeService();
+		const account = service.addAccount("account-1");
+		const laptop = createConnectingDevice(service, "laptop");
+		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
+		const access = laptop.connectStep.access.bind(laptop.connectStep);
+		vi.spyOn(laptop.connectStep, "access").mockImplementation((secret) => ({
+			...access(secret),
+			revoke: () => Promise.reject(new TypeError("boom")),
+		}));
+
+		const outcome = await createConnectionService(laptop.ports).disconnect();
+
+		expect(outcome).toEqual({ kind: "revokeFailed" });
+		expect(laptop.ui.revokeFailures).toEqual([{ cause: "bug", detail: "TypeError: boom" }]);
 		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBeNull();
 		expect(laptop.deviceStore.connection).toBeNull();
 		expect(laptop.ui.lastStatus).toEqual({ state: "notConnected" });

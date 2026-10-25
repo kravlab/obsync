@@ -24,7 +24,9 @@ export function firstSyncPreviewText(preview: FirstSyncPreview, strings: Strings
 		toUpload: count(strings.firstSyncToUpload, preview.toUpload),
 		identical: count(strings.firstSyncIdentical, preview.identical),
 		differing: count(strings.firstSyncDiffering, preview.differing),
-		differingFiles: preview.differing.map(({ path, outcome }) => `${path}: ${outcomeText(outcome, strings)}`),
+		differingFiles: preview.differing.map(({ path, outcome }) =>
+			fill(strings.firstSyncDifferingFile, { path, outcome: outcomeText(outcome, strings) }),
+		),
 	};
 }
 
@@ -35,6 +37,8 @@ function outcomeText(outcome: DifferingOutcome, strings: Strings): string {
 			return strings.firstSyncMerged;
 		case "conflictCopy":
 			return strings.firstSyncConflictCopy;
+		case "mergedOrConflictCopy":
+			return strings.firstSyncMergedOrConflictCopy;
 		case "remoteKept":
 			return strings.firstSyncRemoteKept;
 	}

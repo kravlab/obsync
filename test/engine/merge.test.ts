@@ -8,7 +8,7 @@ import {
 import { bytes } from "../support/bytes";
 import { FakeRemote } from "../fakes/fake-remote";
 import { connectTestDevice } from "../fakes/test-device";
-import { remoteText, syncNow, syncedPair, vaultText } from "../support/sync";
+import { forgetNotices, remoteText, syncNow, syncedPair, vaultText } from "../support/sync";
 
 
 describe("shared Remote settings at the start of a sync", () => {
@@ -245,5 +245,25 @@ describe("JSON files", () => {
 		expect(remoteText(remote, "board.canvas")).toBe('{"nodes":["laptop"]}\n');
 		expect(await vaultText(phone, "board.canvas")).toBe('{"nodes":["laptop"]}\n');
 		expect(remoteText(remote, "board (conflict Phone 2026-10-20 1430).canvas")).toBe('{"nodes":["phone"]}\n');
+	});
+
+	it("merges a JSON file changed alike on both sides but for the last line break, without a Conflict copy", async () => {
+		const remote = new FakeRemote();
+		const laptop = connectTestDevice(remote, "Laptop");
+		const phone = connectTestDevice(remote, "Phone");
+		await laptop.vault.write("data.json", bytes('{"a":0}\n'));
+		await syncNow(laptop);
+		await syncNow(phone);
+		forgetNotices(laptop, phone);
+		await laptop.vault.write("data.json", bytes('{"a":1}'));
+		await phone.vault.write("data.json", bytes('{"a":1}\n'));
+
+		await syncNow(laptop);
+		await syncNow(phone);
+
+		expect(remoteText(remote, "data.json")).toBe('{"a":1}\n');
+		expect(await vaultText(phone, "data.json")).toBe('{"a":1}\n');
+		expect((await phone.vault.list()).map((entry) => entry.path)).toEqual(["data.json"]);
+		expect(phone.ui.notices).toEqual([]);
 	});
 });

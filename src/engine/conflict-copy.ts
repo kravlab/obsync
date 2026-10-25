@@ -32,14 +32,43 @@ const COPY_NAME = /^.+ \(conflict .+ \d{4}-\d{2}-\d{2} \d{4}(?: \d+)?\)(?:\.[^.]
  * extension. Characters a file name cannot hold in the device name become
  * `-`. `number`, from 2, tells copies apart whose names would otherwise be
  * the same; the first copy has none.
+ *
+ * With `maxNameLength`, the provider's longest name in UTF-16 units as its
+ * name rules count it, a longer copy name is cut to fit (spec of the review
+ * fixes, item 7): the original stem first, down to one character, then
+ * the device name, down to one character, and last the extension, from
+ * its end, with its dot once nothing is left of it; the date stays whole.
+ * Characters are cut as the user sees them (grapheme clusters), never
+ * half of one. A name that still does not fit is given as it is, for the
+ * caller to find unstorable.
  */
-export function conflictCopyPath(path: VaultPath, deviceName: string, time: number, number = 1): VaultPath {
+export function conflictCopyPath(
+	path: VaultPath,
+	deviceName: string,
+	time: number,
+	number = 1,
+	maxNameLength = Number.POSITIVE_INFINITY,
+): VaultPath {
 	const { stem, extension } = splitName(nameOf(path));
-	const device = deviceName.replace(UNSAFE_IN_NAME, "-");
-	const suffix = number > 1 ? ` ${number}` : "";
-	const copyName = `${stem} (conflict ${device} ${localTimestamp(time)}${suffix})${extension}`;
+	const stemCharacters = graphemesOf(stem);
+	const deviceCharacters = graphemesOf(deviceName.replace(UNSAFE_IN_NAME, "-"));
+	const extensionCharacters = graphemesOf(extension.slice(1));
+	const stamp = ` ${localTimestamp(time)}${number > 1 ? ` ${number}` : ""})`;
+	/** The copy name of the stem, device name and extension as cut so far. */
+	const copyName = (): string => {
+		const ending = extensionCharacters.length === 0 ? "" : `.${extensionCharacters.join("")}`;
+		return `${stemCharacters.join("")} (conflict ${deviceCharacters.join("")}${stamp}${ending}`;
+	};
+	while (copyName().length > maxNameLength && stemCharacters.length > 1) stemCharacters.pop();
+	while (copyName().length > maxNameLength && deviceCharacters.length > 1) deviceCharacters.pop();
+	while (copyName().length > maxNameLength && extensionCharacters.length > 0) extensionCharacters.pop();
 	const folder = parentOf(path);
-	return folder === "" ? copyName : `${folder}/${copyName}`;
+	return folder === "" ? copyName() : `${folder}/${copyName()}`;
+}
+
+/** The characters of `text` as the user sees them: its grapheme clusters. */
+function graphemesOf(text: string): string[] {
+	return Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text), (part) => part.segment);
 }
 
 /** Whether the file at `path` is a Conflict copy, told by its own name only. */

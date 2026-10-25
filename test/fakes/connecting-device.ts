@@ -1,4 +1,5 @@
 import type { ConnectionPorts } from "../../src/engine/connection";
+import { createConnectionEpoch } from "../../src/engine/connection-epoch";
 import type { FakeService, FakeConnectStep } from "./fake-service";
 import { ManualClock } from "./manual-clock";
 import { InMemoryDeviceStore, InMemorySecretStore, RecordingUi } from "./test-device";
@@ -35,6 +36,6 @@ export function createConnectingDevice(service: FakeService, label: string): Con
 		secretStore,
 		ui,
 		clock,
-		ports: { connectStep, deviceStore, secretStore, ui, newDeviceId, clock },
+		ports: { connectStep, deviceStore, secretStore, ui, newDeviceId, clock, epoch: createConnectionEpoch() },
 	};
 }
