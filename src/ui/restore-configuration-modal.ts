@@ -2,6 +2,7 @@ import { SuggestModal, type App } from "obsidian";
 import type { KeptConfiguration } from "../engine/ports";
 import { keptConfigurationItem } from "./configuration-text";
 import type { Strings } from "./i18n/strings";
+import { fitForPhone } from "./phone-modal";
 
 /**
  * "Restore local configuration": lists the local configuration versions
@@ -22,6 +23,7 @@ export class RestoreConfigurationModal extends SuggestModal<KeptConfiguration> {
 		private readonly restore: (version: KeptConfiguration) => void,
 	) {
 		super(app);
+		fitForPhone(this);
 		this.setPlaceholder(strings.restoreConfigurationPlaceholder);
 	}
 
