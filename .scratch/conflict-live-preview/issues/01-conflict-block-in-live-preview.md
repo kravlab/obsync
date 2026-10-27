@@ -52,3 +52,5 @@ block puts the cursor where it was pressed, not a selection of the whole
 block. `obsync-conflict-after` stops at a line starting a quote of the
 note's own, which keeps its bar, and styles.css undoes only lazy quote
 lines.
+
+- 2026-10-27: Implemented in commit `3cb34d7` (fix(conflicts): show marker lines plain in editor) on `main`. Ticket closed.
