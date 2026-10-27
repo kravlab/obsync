@@ -1,6 +1,8 @@
 # Copying a connect error, and a log file of them
 
-Status: approved 2026-10-21
+Status: draft 2026-10-22 (approved 2026-10-21; widened to every connect
+error after the manual check found no button, no file line and no
+Activity entry for a refused code)
 
 ## Problem
 
