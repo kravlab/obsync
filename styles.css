@@ -63,7 +63,34 @@
 	font-size: var(--font-text-size);
 	font-weight: var(--font-normal);
 	line-height: var(--line-height-normal);
+	letter-spacing: normal;
 	text-decoration: none;
+}
+
+/* A heading's line, such as the one above =======, is spaced out from the
+   one above it (Obsidian's `.cm-s-obsidian .cm-line.HyperMD-header`
+   padding-top); not on a block's sides. */
+.cm-s-obsidian .cm-line.obsync-conflict-local,
+.cm-s-obsidian .cm-line.obsync-conflict-remote {
+	padding-top: 0;
+}
+
+/* The >>>>>>> quote runs on to the lines after the block as lazy lines
+   (HyperMD-quote-lazy): Obsidian's quote type and background
+   (`.markdown-source-view.mod-cm6.is-live-preview .HyperMD-quote`), bar
+   (its `:before`) and colour (`.cm-s-obsidian span.cm-quote`) are undone
+   there. A quote of the note's own keeps them. */
+.markdown-source-view.mod-cm6.is-live-preview .cm-line.obsync-conflict-after.HyperMD-quote-lazy {
+	font-style: normal;
+	background-color: transparent;
+}
+
+.markdown-source-view.mod-cm6.is-live-preview .cm-line.obsync-conflict-after.HyperMD-quote-lazy::before {
+	display: none;
+}
+
+.cm-s-obsidian .cm-line.obsync-conflict-after.HyperMD-quote-lazy span.cm-quote {
+	color: inherit;
 }
 
 .obsync-conflict-actions {

@@ -8,7 +8,7 @@ import type { ConflictBlock } from "../engine/conflict-blocks";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
 
-/** The line class of marker lines, styled in styles.css. */
+/** The class of marker lines, shown in the editor as blocks of their own; styled in styles.css. */
 export const MARKER_CLASS = "obsync-conflict-marker";
 
 /** The class of this device's side, styled in styles.css. */
