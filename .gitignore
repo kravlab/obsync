@@ -1,11 +1,11 @@
 # Installed packages (pnpm install).
 node_modules/
 
-# Build output: main.js with copies of manifest.json and styles.css, the
-# plugin folder as Obsidian loads it (see esbuild.config.mjs).
+# Build output: main.js with copies of manifest.json and src/styles.css, the
+# plugin folder as Obsidian loads it (see scripts/esbuild.config.mjs).
 dist/
 
-# Local build settings, such as the Dropbox app key (see esbuild.config.mjs).
+# Local build settings, such as the Dropbox app key (see scripts/esbuild.config.mjs).
 .env
 
 # What the desktop and Android runs keep on this machine: the Obsidian they

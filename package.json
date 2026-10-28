@@ -7,14 +7,14 @@
 	"license": "MIT",
 	"packageManager": "pnpm@12.13.0",
 	"scripts": {
-		"build": "tsc --noEmit && node esbuild.config.mjs production",
-		"dev": "node esbuild.config.mjs",
+		"build": "tsc --noEmit && node scripts/esbuild.config.mjs production",
+		"dev": "node scripts/esbuild.config.mjs",
 		"typecheck": "tsc --noEmit",
-		"lint": "eslint . --max-warnings 0",
-		"test": "vitest run",
-		"test:e2e:desktop": "pnpm build && vitest run --config vitest.e2e.desktop.config.mjs",
-		"test:e2e:android": "pnpm build && vitest run --config vitest.e2e.android.config.mjs",
-		"test:e2e:pair": "pnpm build && vitest run --config vitest.e2e.pair.config.mjs"
+		"lint": "eslint --config scripts/eslint.config.mjs . --max-warnings 0",
+		"test": "vitest run --config test/vitest.config.mjs",
+		"test:e2e:desktop": "pnpm build && vitest run --config test/e2e/vitest.desktop.config.mjs",
+		"test:e2e:android": "pnpm build && vitest run --config test/e2e/vitest.android.config.mjs",
+		"test:e2e:pair": "pnpm build && vitest run --config test/e2e/vitest.pair.config.mjs"
 	},
 	"devDependencies": {
 		"@codemirror/state": "6.7.6",

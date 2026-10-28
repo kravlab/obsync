@@ -4,11 +4,13 @@ import { defineConfig } from "eslint/config";
 import obsidianmd from "eslint-plugin-obsidianmd";
 
 export default defineConfig([
-	// dist/ is build output; *.mjs are build and tool configs outside
-	// the TypeScript project; .agents/ and .claude/ hold vendored agent
+	// Run as `eslint --config scripts/eslint.config.mjs` from the repository
+	// root, so every pattern here is relative to the root. dist/ is build
+	// output; *.mjs are build and tool configs outside the TypeScript
+	// project, wherever they are; .agents/ and .claude/ hold vendored agent
 	// skills, and .scratch/ tickets and local prototype builds, not plugin
 	// code; .e2e/ holds what the desktop and Android runs keep locally.
-	{ ignores: ["dist/", "*.mjs", ".agents/", ".claude/", ".scratch/", ".e2e/"] },
+	{ ignores: ["dist/", "**/*.mjs", ".agents/", ".claude/", ".scratch/", ".e2e/"] },
 	...obsidianmd.configs.recommendedWithLocalesEn,
 	{
 		languageOptions: {

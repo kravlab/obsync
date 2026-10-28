@@ -19,7 +19,7 @@ import {
 
 const strings = selectStrings("en");
 
-/** The app key the test build carries (vitest.config.mjs). */
+/** The app key the test build carries (test/vitest.config.mjs). */
 const APP_KEY = "test-app-key";
 
 /** The plugins started by a test, unloaded after it. */

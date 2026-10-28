@@ -1,4 +1,4 @@
-/** Replaced by the build with the key from the build environment (esbuild.config.mjs). */
+/** Replaced by the build with the key from the build environment (scripts/esbuild.config.mjs). */
 declare const OBSYNC_DROPBOX_APP_KEY: string;
 
 /**

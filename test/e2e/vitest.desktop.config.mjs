@@ -3,9 +3,12 @@
 // No fake `obsidian` module and no jsdom: the tests run in Node and talk to
 // Obsidian through its CLI. Scenario files run one after another, each with
 // an Obsidian of its own, so two windows never compete for the screen.
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+	// The paths below are relative to the repository root.
+	root: fileURLToPath(new URL("../..", import.meta.url)),
 	test: {
 		include: ["test/e2e/desktop/**/*.test.ts"],
 		fileParallelism: false,

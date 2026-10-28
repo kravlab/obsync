@@ -1,8 +1,9 @@
 // Bundles src/main.ts into dist/main.js, the one script Obsidian loads, and
-// copies manifest.json and styles.css next to it, so dist/ holds exactly the
-// files of <vault>/.obsidian/plugins/obsync/.
-// `node esbuild.config.mjs production` builds once, minified; without an
-// argument it watches and rebuilds with inline source maps.
+// copies manifest.json and src/styles.css next to it, so dist/ holds exactly
+// the files of <vault>/.obsidian/plugins/obsync/.
+// `node scripts/esbuild.config.mjs production`, run from the repository
+// root as every path here is, builds once, minified; without an argument it
+// watches and rebuilds with inline source maps.
 import esbuild from "esbuild";
 import process from "node:process";
 import { copyFileSync, existsSync } from "node:fs";
@@ -12,10 +13,11 @@ const production = process.argv[2] === "production";
 
 const outdir = "dist";
 
-// The files Obsidian loads besides main.js. They are copied after every
-// successful build, so a watch rebuild also refreshes them; an edit to one of
-// them alone triggers no rebuild.
-const pluginFiles = ["manifest.json", "styles.css"];
+// The files Obsidian loads besides main.js, each from its source to the name
+// Obsidian looks for. They are copied after every successful build, so a
+// watch rebuild also refreshes them; an edit to one of them alone triggers no
+// rebuild.
+const pluginFiles = { "manifest.json": "manifest.json", "src/styles.css": "styles.css" };
 
 /** Copies pluginFiles into outdir once a build has written main.js. */
 const copyPluginFiles = {
@@ -23,7 +25,7 @@ const copyPluginFiles = {
 	setup(build) {
 		build.onEnd((result) => {
 			if (result.errors.length > 0) return;
-			for (const file of pluginFiles) copyFileSync(file, `${outdir}/${file}`);
+			for (const [source, name] of Object.entries(pluginFiles)) copyFileSync(source, `${outdir}/${name}`);
 		});
 	},
 };

@@ -70,7 +70,7 @@ export interface DeviceOptions {
 	readonly phone?: boolean;
 }
 
-/** The app key the test build carries (vitest.config.mjs), which the fake Dropbox expects. */
+/** The app key the test build carries (test/vitest.config.mjs), which the fake Dropbox expects. */
 const APP_KEY = "test-app-key";
 
 /**

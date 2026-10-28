@@ -2,9 +2,12 @@
 // phone, started by the run itself (test/e2e/support/android-phone.ts). No
 // fake `obsidian` module and no jsdom: the tests run in Node and talk to
 // Obsidian through its WebView's DevTools. One scenario file, one phone.
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+	// The paths below are relative to the repository root.
+	root: fileURLToPath(new URL("../..", import.meta.url)),
 	test: {
 		include: ["test/e2e/android/**/*.test.ts"],
 		fileParallelism: false,

@@ -6,18 +6,19 @@
 // pair scenarios drive a real Obsidian and run by their own commands
 // (`pnpm test:e2e:desktop`, `pnpm test:e2e:android`, `pnpm test:e2e:pair`),
 // so they are left out here; their helpers' tests (test/e2e/support/) are
-// not.
+// not. The paths below are relative to the repository root, set as `root`.
 import { fileURLToPath } from "node:url";
 import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
-	// The build puts the Dropbox app key here (esbuild.config.mjs); tests talk to a fake Dropbox under this one.
+	root: fileURLToPath(new URL("..", import.meta.url)),
+	// The build puts the Dropbox app key here (scripts/esbuild.config.mjs); tests talk to a fake Dropbox under this one.
 	define: {
 		OBSYNC_DROPBOX_APP_KEY: JSON.stringify("test-app-key"),
 	},
 	resolve: {
 		alias: {
-			obsidian: fileURLToPath(new URL("test/fakes/obsidian.ts", import.meta.url)),
+			obsidian: fileURLToPath(new URL("fakes/obsidian.ts", import.meta.url)),
 		},
 	},
 	test: {
