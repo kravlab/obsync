@@ -11,6 +11,7 @@ describe("statusTone and statusIcon", () => {
 		[{ state: "offline" }, "idle", "cloud-off"],
 		[{ state: "deletionsOnHold" }, "attention", "pause"],
 		[{ state: "firstSyncWaiting" }, "attention", "pause"],
+		[{ state: "settingsCollision" }, "attention", "pause"],
 		[{ state: "reconnectNeeded" }, "error", "log-in"],
 		[{ state: "syncFailed", cause: "permanent" }, "error", "alert-triangle"],
 	] as const)("gives %o its dot colour and ribbon icon", (status: SyncStatus, tone, icon) => {

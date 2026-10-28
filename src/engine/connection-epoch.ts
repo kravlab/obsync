@@ -65,6 +65,10 @@ export function boundToEpoch(store: DeviceStore, epoch: ConnectionEpoch, taken: 
 		moveSnapshotEntry: (from, to, entry) => guarded(() => store.moveSnapshotEntry(from, to, entry)),
 		markSnapshotComplete: () => guarded(() => store.markSnapshotComplete()),
 		saveRemoteFeed: (feed) => guarded(() => store.saveRemoteFeed(feed)),
+		loadKnownSettings: () => store.loadKnownSettings(),
+		saveKnownSettings: (settings) => guarded(() => store.saveKnownSettings(settings)),
+		loadSettingsChange: () => store.loadSettingsChange(),
+		saveSettingsChange: (change) => guarded(() => store.saveSettingsChange(change)),
 		clear: () => guarded(() => store.clear()),
 	};
 }

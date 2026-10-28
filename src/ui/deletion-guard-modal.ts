@@ -1,8 +1,8 @@
-import { Modal, Setting, type App } from "obsidian";
+import { Setting, type App } from "obsidian";
 import type { DeletionAnswer, DeletionPrompt } from "../engine/deletion-guard";
 import { deletionPromptText } from "./deletion-prompt-text";
 import type { Strings } from "./i18n/strings";
-import { fitForPhone } from "./phone-modal";
+import { PromptModal } from "./prompt-modal";
 
 /**
  * The Deletion guard prompt (spec, "Status, notices, guidance", modal
@@ -10,10 +10,7 @@ import { fitForPhone } from "./phone-modal";
  * side, a list to review every one of them, and Apply or Restore. Closing
  * it without a choice answers null, which holds sync until "Sync now".
  */
-export class DeletionGuardModal extends Modal {
-	/** Settles the pending `ask`; cleared once it has been answered. */
-	private settle: ((answer: DeletionAnswer) => void) | undefined;
-
+export class DeletionGuardModal extends PromptModal<NonNullable<DeletionAnswer>> {
 	/**
 	 * @param app the Obsidian app
 	 * @param strings the UI strings in the user's language
@@ -25,15 +22,6 @@ export class DeletionGuardModal extends Modal {
 		private readonly prompt: DeletionPrompt,
 	) {
 		super(app);
-		fitForPhone(this);
-	}
-
-	/** Opens the prompt and resolves with the user's answer, null if it is closed without one. */
-	ask(): Promise<DeletionAnswer> {
-		return new Promise((resolve) => {
-			this.settle = resolve;
-			this.open();
-		});
 	}
 
 	override onOpen(): void {
@@ -72,18 +60,5 @@ export class DeletionGuardModal extends Modal {
 					.setCta()
 					.onClick(() => this.answer("restore")),
 			);
-	}
-
-	override onClose(): void {
-		this.contentEl.empty();
-		this.answer(null);
-	}
-
-	/** Gives `answer` to the pending `ask` once, and closes the prompt. */
-	private answer(answer: DeletionAnswer): void {
-		const settle = this.settle;
-		this.settle = undefined;
-		settle?.(answer);
-		if (answer !== null) this.close();
 	}
 }

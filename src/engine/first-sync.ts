@@ -85,14 +85,21 @@ export async function beginFirstSync(
 }
 
 /**
- * After a completed sync with a snapshot: the first one since a First sync
- * started clears the "First sync in progress" mark from this device's
- * record, then notes in the Connection that the First sync is done. A mark
- * a cut-off sync left is cleared by the next one that completes.
+ * After a completed sync with a snapshot: rewrites this device's record
+ * when it is out of date, then notes that in the Connection. The first
+ * completed sync since a First sync started clears the "First sync in
+ * progress" mark, so the First sync is done; one after the user renamed
+ * the device writes the new name. A mark a cut-off sync left is cleared by
+ * the next one that completes. The Connection is read again after the
+ * write, so a rename made meanwhile is kept, for the next completed sync
+ * to write.
  */
-export async function noteFirstSyncDone(deviceStore: DeviceStore, provider: Provider): Promise<void> {
+export async function updateDeviceRecord(deviceStore: DeviceStore, provider: Provider): Promise<void> {
 	const connection = await deviceStore.loadConnection();
-	if (connection === null || connection.firstSyncDone === true) return;
+	if (connection === null || (connection.firstSyncDone === true && connection.deviceRecordOutdated !== true)) return;
 	await writeDeviceRecord(provider, connection.device);
-	await deviceStore.saveConnection({ ...connection, firstSyncDone: true });
+	const current = await deviceStore.loadConnection();
+	if (current === null) return;
+	const renamedMeanwhile = current.device.name !== connection.device.name;
+	await deviceStore.saveConnection({ ...current, firstSyncDone: true, deviceRecordOutdated: renamedMeanwhile });
 }

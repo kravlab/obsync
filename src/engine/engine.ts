@@ -11,9 +11,10 @@ import { isWithin, movedAlong } from "./paths";
 import type { VaultRename } from "./renames";
 import { providerSecretId, type DeviceStore, type EnginePorts, type Scheduler } from "./ports";
 import { ProviderError, isSyncable } from "./provider";
-import { beginFirstSync, noteFirstSyncDone } from "./first-sync";
+import { beginFirstSync, updateDeviceRecord } from "./first-sync";
 import { conflictsOf } from "./conflicts";
-import { readRemoteSettings } from "./remote-metadata";
+import { readRemoteSettings, type RemoteSettings } from "./remote-metadata";
+import { applySettingsChange, sameSettings } from "./settings-change";
 import { statusOf, type SyncFailureCause, type SyncStatus } from "./status";
 import { runSync, type SyncHold } from "./sync-run";
 import type { SyncSnapshot } from "./sync-snapshot";
@@ -72,7 +73,10 @@ export interface SyncEngine {
 	 * until a sync from the `user` ("Sync now", the default `source`),
 	 * which asks again. The hold lives in memory only, and ends with the
 	 * Connection: after Disconnect (the Connection epoch), the next sync
-	 * asks afresh.
+	 * asks afresh. A settings change waiting on this device is brought to
+	 * the Remote first (`changeSettings`); its collision prompt, closed
+	 * without an answer, holds sync the same way, showing the settings
+	 * collision.
 	 */
 	sync(source?: SyncSource): Promise<void>;
 	/**
@@ -91,6 +95,17 @@ export interface SyncEngine {
 	 * memory, for the next sync that does.
 	 */
 	restoreConfiguration(id: string): Promise<void>;
+	/**
+	 * "Apply to all devices": asks for a sync from the user that brings the
+	 * shared Remote settings to `wanted`, edited from `base`, the settings
+	 * the user saw, on the Remote (settings-change.ts). Only what differs
+	 * from `base` is this device's change, so a setting another device
+	 * changed since stays. The change is stored on this device first, so it
+	 * outlives a restart and a sync that cannot run. Edited from the change
+	 * still waiting, it joins that one, keeping the settings it was made
+	 * from.
+	 */
+	changeSettings(base: RemoteSettings, wanted: RemoteSettings): Promise<void>;
 }
 
 /** A sync under way and what follows it. */
@@ -136,9 +151,22 @@ function timerOn(scheduler: Scheduler, isStopped: () => boolean): Timer {
 	};
 }
 
+/**
+ * What holds sync until the user asks for one: a prompt of the sync itself
+ * (`SyncHold`), or the collision prompt of a settings change, closed.
+ */
+type Hold = SyncHold | "settingsCollision";
+
 /** The status shown while sync is held by `hold`. */
-function heldStatus(hold: SyncHold): SyncStatus {
-	return hold === "deletions" ? { state: "deletionsOnHold" } : { state: "firstSyncWaiting" };
+function heldStatus(hold: Hold): SyncStatus {
+	switch (hold) {
+		case "deletions":
+			return { state: "deletionsOnHold" };
+		case "firstSync":
+			return { state: "firstSyncWaiting" };
+		case "settingsCollision":
+			return { state: "settingsCollision" };
+	}
 }
 
 /** Sync failed for `cause`, on `error`, with its detail when it has one to tell. */
@@ -174,7 +202,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 	let ownWrites = 0;
 	let backoffAttempt = 0;
 	/** What holds sync until the user asks for one, if anything. */
-	let held: SyncHold | undefined;
+	let held: Hold | undefined;
 	/** How many syncs the user has asked for; a hold is not set over a request made while its prompt was open. */
 	let userRequests = 0;
 	/**
@@ -346,12 +374,25 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				return;
 			}
 			// Shared settings this device cannot read could classify files differently from other devices.
-			const settings = await readRemoteSettings(provider);
-			if (settings === null) {
+			const stored = await readRemoteSettings(provider);
+			if (stored === null) {
 				ui.showStatus({ state: "syncFailed", cause: "unreadableSettings" });
 				return;
 			}
 			run.listing = true;
+			// A settings change asked for from now on is for the follow-up sync.
+			const applied = await applySettingsChange(provider, store, ui, stored, inRunEpoch);
+			if (applied.kind === "unreadable") {
+				ui.showStatus({ state: "syncFailed", cause: "unreadableSettings" });
+				return;
+			}
+			if (applied.kind === "held") {
+				// A sync the user asked for meanwhile runs next and asks again.
+				if (userRequests === userRequestsBefore) held = "settingsCollision";
+				ui.showStatus(heldStatus("settingsCollision"));
+				return;
+			}
+			const { settings } = applied;
 			// Restores asked for from now on are for the follow-up sync.
 			const restoring = [...restores];
 			const isFirstSync = !(await store.hasSnapshot());
@@ -389,7 +430,7 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 				await store.markSnapshotComplete();
 				ui.showNotice({ kind: "firstSyncDone", ...result.firstSync });
 			}
-			await noteFirstSyncDone(store, provider);
+			await updateDeviceRecord(store, provider);
 			if (!inRunEpoch()) return;
 			renameHints.splice(0, hints.length);
 			ui.showStatus({ state: "synced" });
@@ -513,6 +554,13 @@ export function createSyncEngine(ports: EnginePorts): SyncEngine {
 
 		restoreConfiguration(id: string): Promise<void> {
 			restores.push(id);
+			return trigger("sync", "user");
+		},
+
+		async changeSettings(base: RemoteSettings, wanted: RemoteSettings): Promise<void> {
+			const pending = await deviceStore.loadSettingsChange();
+			const joined = pending !== null && sameSettings(base, pending.wanted);
+			await deviceStore.saveSettingsChange({ base: joined ? pending.base : base, wanted });
 			return trigger("sync", "user");
 		},
 	};

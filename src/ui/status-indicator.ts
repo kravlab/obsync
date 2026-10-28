@@ -4,12 +4,14 @@ import { NO_CONFLICTS, type SyncConflicts } from "../engine/conflicts";
 import type { DeletionAnswer, DeletionPrompt } from "../engine/deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "../engine/first-sync";
 import type { SyncNotice } from "../engine/notices";
+import type { SettingsCollisionAnswer, SettingsCollisionPrompt } from "../engine/settings-change";
 import type { SyncStatus } from "../engine/status";
 import type { SkippedFile } from "../engine/sync-listing";
 import { DeletionGuardModal } from "./deletion-guard-modal";
 import { FirstSyncModal } from "./first-sync-modal";
 import type { Strings } from "./i18n/strings";
 import { noticeText } from "./notice-text";
+import { SettingsCollisionModal } from "./settings-collision-modal";
 import { statusIcon, statusTone } from "./status-look";
 import { statusText } from "./status-text";
 import type { ShownSync, ShownSyncSource } from "./sync-window";
@@ -26,16 +28,16 @@ import type { ShownSync, ShownSyncSource } from "./sync-window";
  *   state, with the same text as its tooltip.
  *
  * A click on either opens the Sync window. Each sync notice is shown as an
- * Obsidian notice, and the Deletion guard and First sync prompts are asked
- * through it.
+ * Obsidian notice, and the Deletion guard, First sync and settings
+ * collision prompts are asked through it.
  */
 export class StatusIndicator implements ActivityUi, ShownSyncSource {
 	/** What the engine reported last. */
 	private facts: ShownSync = { status: { state: "notConnected" }, conflicts: NO_CONFLICTS, skipped: [], activity: [] };
 	/** Called after every change of `facts`, while subscribed. */
 	private readonly listeners = new Set<() => void>();
-	/** Deletion guard prompts and First sync previews open now; the plugin's unload closes them, which answers null. */
-	private readonly prompts = new Set<DeletionGuardModal | FirstSyncModal>();
+	/** Deletion guard, First sync and settings collision prompts open now; the plugin's unload closes them, which answers null. */
+	private readonly prompts = new Set<DeletionGuardModal | FirstSyncModal | SettingsCollisionModal>();
 	/** The status bar item (desktop) or ribbon icon (mobile). */
 	private readonly element: HTMLElement;
 	/** The status bar item's dot; absent on mobile. */
@@ -134,6 +136,20 @@ export class StatusIndicator implements ActivityUi, ShownSyncSource {
 	 */
 	async askFirstSync(preview: FirstSyncPreview): Promise<FirstSyncAnswer> {
 		const modal = new FirstSyncModal(this.plugin.app, this.strings, preview);
+		this.prompts.add(modal);
+		try {
+			return await modal.ask();
+		} finally {
+			this.prompts.delete(modal);
+		}
+	}
+
+	/**
+	 * Asks `prompt` in the settings collision modal and resolves with the
+	 * answer; null if it is closed, or the plugin unloads while it is open.
+	 */
+	async askSettingsCollision(prompt: SettingsCollisionPrompt): Promise<SettingsCollisionAnswer> {
+		const modal = new SettingsCollisionModal(this.plugin.app, this.strings, prompt);
 		this.prompts.add(modal);
 		try {
 			return await modal.ask();

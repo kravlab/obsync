@@ -86,6 +86,7 @@ export function withActivityLog(ui: ActivityUi, store: ActivityStore, clock: Clo
 		showConflicts: (conflicts) => ui.showConflicts(conflicts),
 		askDeletions: (prompt) => ui.askDeletions(prompt),
 		askFirstSync: (preview) => ui.askFirstSync(preview),
+		askSettingsCollision: (prompt) => ui.askSettingsCollision(prompt),
 		reportConnectFailure: (failure) => record({ at: clock.now(), kind: "connectFailed", ...failure }),
 		reportRevokeFailure: (failure) => record({ at: clock.now(), kind: "revokeFailed", ...failure }),
 	};

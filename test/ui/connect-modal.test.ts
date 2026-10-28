@@ -32,6 +32,10 @@ function serviceFor(script: Pick<Script, "submitCode">): ConnectionService {
 		disconnect: () => Promise.resolve({ kind: "disconnected" }),
 		startAuthorization: () =>
 			Promise.resolve({ authorizeUrl: "https://example.com/authorize", submitCode: () => script.submitCode() }),
+		renameDevice: () => Promise.reject(new Error("unused")),
+		otherDevices: () => Promise.reject(new Error("unused")),
+		forgetDevice: () => Promise.reject(new Error("unused")),
+		sharedSettings: () => Promise.resolve(null),
 	};
 }
 

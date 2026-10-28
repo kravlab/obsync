@@ -26,5 +26,7 @@ export function statusLabel(status: SyncStatus, strings: Strings): string {
 			return strings.statusDeletionsOnHold;
 		case "firstSyncWaiting":
 			return strings.statusFirstSyncWaiting;
+		case "settingsCollision":
+			return strings.statusSettingsCollision;
 	}
 }

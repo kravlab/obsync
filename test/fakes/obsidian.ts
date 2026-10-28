@@ -503,6 +503,18 @@ export class Setting {
 		return this;
 	}
 
+	/** Adds a drop-down list, set up by `build`. */
+	addDropdown(build: (dropdown: DropdownComponent) => unknown): this {
+		build(new DropdownComponent(this.controlEl));
+		return this;
+	}
+
+	/** Adds a multi-line text field, set up by `build`. */
+	addTextArea(build: (text: TextAreaComponent) => unknown): this {
+		build(new TextAreaComponent(this.controlEl));
+		return this;
+	}
+
 	/** Shows the row as a heading. */
 	setHeading(): this {
 		this.settingEl.classList.add("setting-item-heading");
@@ -534,6 +546,35 @@ export class ToggleComponent {
 	/** Runs `callback` with the new value on each switch. */
 	onChange(callback: (on: boolean) => unknown): this {
 		this.toggleEl.addEventListener("change", () => void callback(this.toggleEl.checked));
+		return this;
+	}
+}
+
+/** A drop-down list, created in its container as Obsidian's is. */
+export class DropdownComponent {
+	/** The select element. */
+	readonly selectEl: HTMLSelectElement;
+
+	/** @param containerEl the element the list is added to */
+	constructor(containerEl: HTMLElement) {
+		this.selectEl = containerEl.createEl("select");
+	}
+
+	/** Adds the choice `value`, shown as `display`. */
+	addOption(value: string, display: string): this {
+		this.selectEl.createEl("option", { value, text: display });
+		return this;
+	}
+
+	/** Selects `value`, without telling `onChange`. */
+	setValue(value: string): this {
+		this.selectEl.value = value;
+		return this;
+	}
+
+	/** Runs `callback` with the selected value on each change. */
+	onChange(callback: (value: string) => unknown): this {
+		this.selectEl.addEventListener("change", () => void callback(this.selectEl.value));
 		return this;
 	}
 }

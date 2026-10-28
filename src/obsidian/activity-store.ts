@@ -115,6 +115,7 @@ const STATUS_FIELDS: Record<SyncStatus["state"], FieldsCheck> = {
 	reconnectNeeded: noFields,
 	deletionsOnHold: noFields,
 	firstSyncWaiting: noFields,
+	settingsCollision: noFields,
 };
 
 /** The fields of each notice kind; a record, so a kind added to the type must be added here. */
@@ -127,6 +128,7 @@ const NOTICE_FIELDS: Record<SyncNotice["kind"], FieldsCheck> = {
 		[notice.downloaded, notice.uploaded, notice.conflicted, notice.conflictCopies].every((count) => typeof count === "number"),
 	configurationChanged: noFields,
 	reconnectNeeded: noFields,
+	namePolicyRefused: (notice) => Array.isArray(notice.paths) && notice.paths.every((path) => typeof path === "string"),
 };
 
 /**

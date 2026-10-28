@@ -25,6 +25,8 @@ import {
 	encodeSettings,
 } from "../../src/engine/remote-metadata";
 import type { Provider } from "../../src/engine/provider";
+import type { RemoteSettings } from "../../src/engine/remote-metadata";
+import type { SettingsChange, SettingsCollisionAnswer, SettingsCollisionPrompt } from "../../src/engine/settings-change";
 import type { SyncStatus } from "../../src/engine/status";
 import type { SkippedFile } from "../../src/engine/sync-listing";
 import { DEFAULT_SYNC_SCHEDULE, type SyncSchedule } from "../../src/engine/sync-schedule";
@@ -49,6 +51,10 @@ export class InMemoryDeviceStore implements DeviceStore {
 	remoteFeed: RemoteFeed | null = null;
 	/** Whether a First sync completed the snapshot. */
 	snapshotComplete = false;
+	/** The shared Remote settings the last sync read, if any. */
+	knownSettings: RemoteSettings | null = null;
+	/** The change of the shared Remote settings waiting for a sync, if any. */
+	settingsChange: SettingsChange | null = null;
 
 	/** @param connection this device's Connection, or null for none */
 	constructor(public connection: Connection | null = null) {}
@@ -115,15 +121,29 @@ export class InMemoryDeviceStore implements DeviceStore {
 	}
 
 	loadRemoteFeed(): Promise<RemoteFeed | null> {
-		return Promise.resolve(
-			this.remoteFeed === null
-				? null
-				: { cursor: this.remoteFeed.cursor, entries: [...this.remoteFeed.entries] },
-		);
+		return Promise.resolve(this.remoteFeed === null ? null : { ...this.remoteFeed, entries: [...this.remoteFeed.entries] });
 	}
 
 	saveRemoteFeed(feed: RemoteFeed | null): Promise<void> {
-		this.remoteFeed = feed === null ? null : { cursor: feed.cursor, entries: [...feed.entries] };
+		this.remoteFeed = feed === null ? null : { ...feed, entries: [...feed.entries] };
+		return Promise.resolve();
+	}
+
+	loadKnownSettings(): Promise<RemoteSettings | null> {
+		return Promise.resolve(this.knownSettings);
+	}
+
+	saveKnownSettings(settings: RemoteSettings): Promise<void> {
+		this.knownSettings = settings;
+		return Promise.resolve();
+	}
+
+	loadSettingsChange(): Promise<SettingsChange | null> {
+		return Promise.resolve(this.settingsChange);
+	}
+
+	saveSettingsChange(change: SettingsChange | null): Promise<void> {
+		this.settingsChange = change;
 		return Promise.resolve();
 	}
 
@@ -133,6 +153,8 @@ export class InMemoryDeviceStore implements DeviceStore {
 		this.bases.clear();
 		this.remoteFeed = null;
 		this.snapshotComplete = false;
+		this.knownSettings = null;
+		this.settingsChange = null;
 		return Promise.resolve();
 	}
 }
@@ -203,6 +225,10 @@ export class RecordingUi implements ActivityUi, ConnectionUi {
 	readonly previews: FirstSyncPreview[] = [];
 	/** The answers to give the next previews, in order; with none left, the sync starts with differing files merged. */
 	readonly firstSyncAnswers: FirstSyncAnswer[] = [];
+	/** Every settings collision prompt asked, oldest first. */
+	readonly settingsCollisions: SettingsCollisionPrompt[] = [];
+	/** The answers to give the next settings collision prompts, in order; a prompt with none left fails the sync. */
+	readonly settingsCollisionAnswers: SettingsCollisionAnswer[] = [];
 	/** Every skipped-files list shown, oldest first. */
 	readonly skippedLists: (readonly SkippedFile[])[] = [];
 	/** Every conflicts list shown, oldest first. */
@@ -271,6 +297,14 @@ export class RecordingUi implements ActivityUi, ConnectionUi {
 		this.previews.push(preview);
 		const answer = this.firstSyncAnswers.length > 0 ? this.firstSyncAnswers.shift() : { differing: "merge" as const };
 		return Promise.resolve(answer ?? null);
+	}
+
+	/** Records `prompt` and gives the next scripted answer; an unscripted prompt is a test failure. */
+	askSettingsCollision(prompt: SettingsCollisionPrompt): Promise<SettingsCollisionAnswer> {
+		this.settingsCollisions.push(prompt);
+		this.onAsk?.();
+		if (this.settingsCollisionAnswers.length === 0) return Promise.reject(new Error("unexpected settings collision prompt"));
+		return Promise.resolve(this.settingsCollisionAnswers.shift() ?? null);
 	}
 
 	/** Records `failure` instead of passing it on. */
@@ -449,6 +483,10 @@ function crashingDeviceStore(store: InMemoryDeviceStore, crash: CrashPoints): De
 		markSnapshotComplete: () => crash.step("mark snapshot complete", () => store.markSnapshotComplete()),
 		loadRemoteFeed: () => store.loadRemoteFeed(),
 		saveRemoteFeed: (feed) => crash.step("save Remote feed", () => store.saveRemoteFeed(feed)),
+		loadKnownSettings: () => store.loadKnownSettings(),
+		saveKnownSettings: (settings) => crash.step("save known settings", () => store.saveKnownSettings(settings)),
+		loadSettingsChange: () => store.loadSettingsChange(),
+		saveSettingsChange: (change) => crash.step("save settings change", () => store.saveSettingsChange(change)),
 		clear: () => crash.step("clear Device store", () => store.clear()),
 	};
 }

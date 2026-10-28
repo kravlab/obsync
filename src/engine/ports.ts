@@ -9,8 +9,11 @@ import type { ConnectionEpoch } from "./connection-epoch";
 import type { DeletionAnswer, DeletionGuardSettings, DeletionPrompt } from "./deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "./first-sync";
 import type { LocalVault, VaultPath } from "./local-vault";
+import type { NamePolicy } from "./name-policy";
 import type { SyncNotice } from "./notices";
 import type { Provider, RemoteEntry } from "./provider";
+import type { RemoteSettings } from "./remote-metadata";
+import type { SettingsChange, SettingsCollisionAnswer, SettingsCollisionPrompt } from "./settings-change";
 import type { SyncStatus } from "./status";
 import type { SkippedFile } from "./sync-listing";
 import type { SyncSchedule } from "./sync-schedule";
@@ -43,6 +46,12 @@ export interface Connection {
 	 * Cleared by a login to the same account. Absent means not paused.
 	 */
 	readonly reconnectNeeded?: boolean;
+	/**
+	 * Whether this device's record in the Metadata folder still holds an
+	 * earlier device name: set when the user renames the device, cleared
+	 * once a completed sync rewrote the record. Absent means written.
+	 */
+	readonly deviceRecordOutdated?: boolean;
 }
 
 /** How a device is known on a Remote. */
@@ -75,6 +84,11 @@ export interface ProviderConnector {
 export interface RemoteFeed {
 	/** Where the provider's change feed continues from. */
 	readonly cursor: string;
+	/**
+	 * The name policy `entries` were decoded under: under another one their
+	 * vault paths are stale, and the next sync lists the Remote in full.
+	 */
+	readonly namePolicy: NamePolicy;
 	/** Every entry of the Remote as of `cursor`, as a full listing would give them. */
 	readonly entries: readonly RemoteEntry[];
 }
@@ -132,9 +146,23 @@ export interface DeviceStore {
 	 */
 	saveRemoteFeed(feed: RemoteFeed | null): Promise<void>;
 	/**
+	 * Returns the shared Remote settings the last sync read, or null when
+	 * none was saved or they are unreadable.
+	 */
+	loadKnownSettings(): Promise<RemoteSettings | null>;
+	/** Stores the shared Remote settings a sync read, replacing those stored before. */
+	saveKnownSettings(settings: RemoteSettings): Promise<void>;
+	/**
+	 * Returns the change of the shared Remote settings waiting for a sync to
+	 * write it, or null when there is none or it is unreadable.
+	 */
+	loadSettingsChange(): Promise<SettingsChange | null>;
+	/** Stores the change waiting for a sync, durably, or removes it when `change` is null. */
+	saveSettingsChange(change: SettingsChange | null): Promise<void>;
+	/**
 	 * Erases everything this device keeps for its Connection: the
-	 * Connection itself, the Sync snapshot, every Base, and the Remote feed
-	 * state.
+	 * Connection itself, the Sync snapshot, every Base, the Remote feed
+	 * state, the shared settings last read and any change waiting.
 	 */
 	clear(): Promise<void>;
 }
@@ -236,6 +264,12 @@ export interface UiPort {
 	 * closed without starting.
 	 */
 	askFirstSync(preview: FirstSyncPreview): Promise<FirstSyncAnswer>;
+	/**
+	 * Asks the user which value each setting in a collision of two changes
+	 * of the shared Remote settings keeps, and resolves with the answer;
+	 * null when the prompt was closed without one.
+	 */
+	askSettingsCollision(prompt: SettingsCollisionPrompt): Promise<SettingsCollisionAnswer>;
 }
 
 /** Everything the engine is built from. */

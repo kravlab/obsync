@@ -23,6 +23,8 @@ export const en = {
 	statusDeletionsOnHold: "Paused (confirm deletions)",
 	/** Sync status after the First sync preview was closed without starting; sync waits for "Sync now". */
 	statusFirstSyncWaiting: "First sync waiting for you",
+	/** Sync status after the shared settings collision prompt was closed without a choice; sync waits for "Sync now". */
+	statusSettingsCollision: "Paused (choose shared settings)",
 
 	/** Settings row naming the provider the device connects to. */
 	settingsDropbox: "Dropbox",
@@ -105,6 +107,75 @@ export const en = {
 		"Ask before a sync deletes more than this share of the synced files on one side, from 1 to 100 percent.",
 	/** The typed Deletion guard percentage is not one. */
 	settingsGuardPercentInvalid: "Enter a whole number from 1 to 100.",
+	/** Settings button renaming this device. */
+	rename: "Rename",
+	/** The typed device name is blank. */
+	deviceNameInvalid: "Enter a name.",
+	/** Settings heading of the shared Remote settings, the same on every device. */
+	settingsSharedHeading: "All devices",
+	/** Shown instead of the shared settings before this device synced once. */
+	settingsSharedUnknown: "Sync this device once to see the shared settings.",
+	/** Settings row of the name policy. */
+	settingsNamePolicy: "Names Dropbox cannot store",
+	settingsNamePolicyDescription:
+		"Skip such files and list them, or store them under names with look-alike characters. It changes only while Dropbox holds no file it would name differently.",
+	/** The name policy's choices. */
+	namePolicySkip: "Skip and list them",
+	namePolicyEncode: "Encode them reversibly",
+	/** Settings row of the text-extension list. */
+	settingsTextExtensions: "Text files",
+	settingsTextExtensionsDescription:
+		"Extensions of files merged line by line, separated by commas. Other changed files get conflict copies.",
+	/** Settings row of the ignore list. */
+	settingsIgnoreList: "Ignore list",
+	settingsIgnoreListDescription: "Paths that never sync, one pattern per line, as in a .gitignore file.",
+	/** Settings row of the size ceiling. */
+	settingsSizeCeiling: "Size limit (MiB)",
+	settingsSizeCeilingDescription: "Larger files are skipped and listed.",
+	/** The typed size ceiling is not one. */
+	settingsSizeCeilingInvalid: "Enter a whole number, at least 1.",
+	/** Settings button writing the shared settings for every device. */
+	settingsApplyShared: "Apply to all devices",
+	settingsApplySharedDescription: "These settings are the same on every device. Applying them writes them to Dropbox and syncs.",
+	/** Settings heading of the other devices on the Remote. */
+	settingsDevicesHeading: "Other devices",
+	/** Settings row description of another device, the row named after it. */
+	settingsDeviceDescription: "Forget a device only when it will never sync again.",
+	/** Settings button reading the other devices from Dropbox, which lists all of it. */
+	showDevices: "Show devices",
+	/** Shown when no other device is registered. */
+	settingsNoOtherDevices: "No other devices are registered.",
+	/** Shown when the other devices could not be read. */
+	settingsDevicesUnavailable: "The devices could not be read from Dropbox.",
+	/** Button forgetting another device. */
+	forgetDevice: "Forget",
+	/** Title of the confirmation; `{device}` is the device's name. */
+	forgetDeviceTitle: "Forget {device}?",
+	forgetDeviceText: "Its record is removed from Dropbox. Do this only for a device that will never sync again.",
+	/** After forgetting; `{device}` is its name. */
+	noticeDeviceForgotten: "{device} is forgotten.",
+	/** The device rewrote its record meanwhile, so it is still in use; `{device}` is its name. */
+	noticeDeviceInUse: "{device} synced in the meantime, so it was not forgotten.",
+	/** Forgetting failed, e.g. offline. */
+	noticeForgetFailed: "The device could not be forgotten. Try again later.",
+	/** Renaming this device failed unexpectedly, a bug. */
+	noticeRenameFailed: "The device could not be renamed: the plugin hit an error. See the console.",
+	/** Applying the shared settings failed unexpectedly, a bug. */
+	noticeApplyFailed: "The shared settings could not be applied: the plugin hit an error. See the console.",
+	/** Title of the shared settings collision prompt. */
+	collisionTitle: "Shared settings differ",
+	collisionIntro: "Another device changed these shared settings at the same time. Choose the value each one keeps.",
+	/** A choice in the collision prompt; `{value}` is the setting's value as text. */
+	collisionMine: "This device: {value}",
+	collisionRemote: "Other device: {value}",
+	/** Button applying the choices. */
+	collisionApply: "Apply",
+	/** What closing the prompt does. */
+	collisionCloseHint: "Closing this window pauses sync until you start a sync yourself.",
+	/** An empty list as a setting's value. */
+	settingValueNone: "None",
+	/** A size as a setting's value; `{count}` is a number. */
+	settingValueMebibytes: "{count} MiB",
 
 	/** Title of the First sync preview. */
 	firstSyncTitle: "First sync",
@@ -245,6 +316,9 @@ export const en = {
 	/** Dropbox refused this device's login, so sync is paused on it until the user reconnects. */
 	noticeReconnectNeeded:
 		"Dropbox no longer accepts this device's login, so sync is paused here. Open the sync window and reconnect.",
+	/** The name policy was not changed, since Dropbox holds files it would name differently; `{files}` lists their vault paths. */
+	noticeNamePolicyRefused:
+		"The name policy was not changed: these files in Dropbox would get names it cannot keep. Rename them first: {files}.",
 	/** Connect window: another device is doing its First sync with the chosen folder; `{device}` is its name. */
 	firstSyncInProgress:
 		"{device} is doing its first sync with this folder. Connect once it has finished, so fewer files conflict.",

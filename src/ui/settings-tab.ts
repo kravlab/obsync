@@ -3,14 +3,24 @@ import { CONFIGURATION_CATEGORIES, type ConfigurationCategory } from "../engine/
 import type { ConnectionService } from "../engine/connection";
 import { parseMaxDeletedFiles, parseMaxDeletedPercent } from "../engine/deletion-guard";
 import type { DeviceIdentity } from "../engine/ports";
+import type { DeviceRecord, RemoteSettings } from "../engine/remote-metadata";
 import { parseRequestLimit } from "../engine/request-limit";
+import {
+	parseIgnoreList,
+	parseSizeCeiling,
+	parseTextExtensions,
+	sameSettings,
+	sizeCeilingMebibytes,
+} from "../engine/settings-change";
 import { parseEditPause, parsePollInterval } from "../engine/sync-schedule";
 import type { ObsidianConfigurationCategoriesStore } from "../obsidian/configuration-categories-store";
 import type { ObsidianDeletionGuardStore } from "../obsidian/deletion-guard-store";
 import type { ObsidianRequestLimitStore } from "../obsidian/request-limit-store";
 import type { ObsidianScheduleStore } from "../obsidian/schedule-store";
+import { ConfirmModal } from "./confirm-modal";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
+import { namePolicyText } from "./shared-settings-text";
 
 /** A number setting of the tab: what its row says and how a typed value is kept. */
 interface NumberField {
@@ -54,6 +64,20 @@ function drawToggleField(row: Setting, field: ToggleField): void {
 	row.addToggle((toggle) => toggle.setValue(field.current()).onChange(field.save));
 }
 
+/** A row of the tab that draws its own controls: what it says, and how it draws them. */
+interface CustomField {
+	readonly name: string;
+	readonly description: string;
+	/** Adds the row's controls to `row`, which already says what the field does. */
+	readonly render: (row: Setting) => void;
+}
+
+/** Draws `field` into `row`. */
+function drawCustomField(row: Setting, field: CustomField): void {
+	row.setName(field.name).setDesc(field.description);
+	field.render(row);
+}
+
 /** One row of the tab: its name, what it says and what its button does. */
 interface Row {
 	readonly name: string;
@@ -64,19 +88,31 @@ interface Row {
 
 /**
  * The plugin's settings tab: this device's Connection, with Connect or
- * Disconnect, "Sync now" while connected, this device's number
- * settings: the post-edit pause, the polling interval, the per-request
- * limit and the Deletion guard thresholds, and, under their own heading,
- * this device's configuration categories. It renders declaratively on
+ * Disconnect, "Sync now" and the device name while connected, this
+ * device's number settings: the post-edit pause, the polling interval,
+ * the per-request limit and the Deletion guard thresholds, and, under
+ * their own headings, this device's configuration categories and, while
+ * connected, the shared Remote settings with "Apply to all devices" and
+ * the other devices, each to forget. It renders declaratively on
  * Obsidian 1.13 and later (`getSettingDefinitions`, also indexed for
  * settings search) and through `display` before that; both draw the same
  * rows.
  *
- * The Connection is read asynchronously, so the tab shows the state it
- * read last; `reload` reads it again and redraws.
+ * The Connection and the shared settings are read asynchronously, so the
+ * tab shows the state it read last; `reload` reads them again and redraws.
+ * The other devices take a full listing of the Remote, so they are read
+ * only when the user asks for them.
  */
 export class ObsyncSettingTab extends PluginSettingTab {
 	private device: DeviceIdentity | null = null;
+	/** The shared settings as edited in the tab, starting from those read last; null before a sync read them. */
+	private draft: RemoteSettings | null = null;
+	/** The shared settings the draft was edited from: those read last, or those applied last. */
+	private shown: RemoteSettings | null = null;
+	/** The device name as typed. */
+	private typedName = "";
+	/** The other devices as read last: undefined until the user asks for them, null when they could not be read. */
+	private others: readonly DeviceRecord[] | null | undefined = undefined;
 
 	/**
 	 * @param app the Obsidian app
@@ -85,6 +121,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	 * @param strings the UI strings in the user's language
 	 * @param openConnect opens the connect window
 	 * @param syncNow starts a sync of this device
+	 * @param changeSettings brings the shared Remote settings to the wanted ones, edited from the base ones, settling once its sync is done
 	 * @param requestLimit keeps this device's Per-request limit
 	 * @param schedule keeps this device's post-edit pause and polling interval
 	 * @param deletionGuard keeps this device's Deletion guard thresholds
@@ -97,6 +134,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 		private readonly strings: Strings,
 		private readonly openConnect: () => void,
 		private readonly syncNow: () => void,
+		private readonly changeSettings: (base: RemoteSettings, wanted: RemoteSettings) => Promise<void>,
 		private readonly requestLimit: ObsidianRequestLimitStore,
 		private readonly schedule: ObsidianScheduleStore,
 		private readonly deletionGuard: ObsidianDeletionGuardStore,
@@ -105,17 +143,53 @@ export class ObsyncSettingTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
-	/** Reads the Connection again and redraws the tab. */
+	/**
+	 * Reads the Connection and the shared settings again, dropping edits not
+	 * applied, and redraws the tab. Without a Connection, the other devices
+	 * read before are forgotten.
+	 */
 	async reload(): Promise<void> {
 		this.device = await this.service.currentDevice();
+		this.shown = this.device === null ? null : await this.service.sharedSettings();
+		this.draft = this.shown;
+		this.typedName = this.device?.name ?? "";
+		if (this.device === null) this.others = undefined;
+		this.redraw();
+	}
+
+	/**
+	 * After a sync: shows the shared settings it brought, unless the user is
+	 * editing them, so edits not applied yet are kept. Draws the tab again
+	 * only when they changed.
+	 */
+	async refreshShared(): Promise<void> {
+		if (this.device === null) return;
+		const { shown, draft } = this;
+		const editing = shown !== null && draft !== null && !sameSettings(shown, draft);
+		const read = await this.service.sharedSettings();
+		if (editing || read === null || (shown !== null && sameSettings(read, shown))) return;
+		this.shown = read;
+		this.draft = read;
+		this.redraw();
+	}
+
+	/** Draws the tab again from what it holds. */
+	private redraw(): void {
 		if (requireApiVersion("1.13.0")) this.update();
 		else this.draw();
 	}
 
 	override getSettingDefinitions(): SettingDefinitionItem[] {
+		/** `field` as a declarative row. */
+		const custom = (field: CustomField) => ({
+			name: field.name,
+			desc: field.description,
+			render: (setting: Setting) => drawCustomField(setting, field),
+		});
 		return [
 			// A declarative action row runs when clicked, so it is named by what it does.
 			...this.rows().map((row) => ({ name: row.button, desc: row.description, action: row.action })),
+			...this.deviceNameFields().map(custom),
 			...this.numberFields().map((field) => ({
 				name: field.name,
 				desc: field.description,
@@ -130,11 +204,23 @@ export class ObsyncSettingTab extends PluginSettingTab {
 					render: (setting: Setting) => drawToggleField(setting, field),
 				})),
 			},
+			...(this.device === null
+				? []
+				: [
+						{ type: "group" as const, heading: this.strings.settingsSharedHeading, items: this.sharedFields().map(custom) },
+						{ type: "group" as const, heading: this.strings.settingsDevicesHeading, items: this.otherDeviceFields().map(custom) },
+					]),
 		];
 	}
 
+	/**
+	 * Draws the tab when it opens, on Obsidian before 1.13, then reads it
+	 * again, so it shows what syncs brought since. Obsidian 1.13 and later
+	 * do not call it; there the tab follows each sync (`refreshShared`).
+	 */
 	override display(): void {
 		this.draw();
+		this.reload().catch((error: unknown) => console.error("obsync: reading the settings failed", error));
 	}
 
 	/** Draws the rows into the tab, as Obsidian before 1.13 shows them. */
@@ -146,9 +232,198 @@ export class ObsyncSettingTab extends PluginSettingTab {
 				.setDesc(row.description)
 				.addButton((button) => button.setButtonText(row.button).onClick(row.action));
 		}
+		for (const field of this.deviceNameFields()) drawCustomField(new Setting(this.containerEl), field);
 		for (const field of this.numberFields()) drawNumberField(new Setting(this.containerEl), field);
 		new Setting(this.containerEl).setName(this.strings.settingsConfigurationHeading).setHeading();
 		for (const field of this.categoryFields()) drawToggleField(new Setting(this.containerEl), field);
+		if (this.device === null) return;
+		new Setting(this.containerEl).setName(this.strings.settingsSharedHeading).setHeading();
+		for (const field of this.sharedFields()) drawCustomField(new Setting(this.containerEl), field);
+		new Setting(this.containerEl).setName(this.strings.settingsDevicesHeading).setHeading();
+		for (const field of this.otherDeviceFields()) drawCustomField(new Setting(this.containerEl), field);
+	}
+
+	/** This device's name, to rename it, while connected. */
+	private deviceNameFields(): CustomField[] {
+		const { strings } = this;
+		if (this.device === null) return [];
+		return [
+			{
+				name: strings.deviceName,
+				description: strings.deviceNameDescription,
+				render: (row) => {
+					row.addText((text) => text.setValue(this.typedName).onChange((typed) => (this.typedName = typed)));
+					row.addButton((button) => button.setButtonText(strings.rename).onClick(() => this.rename()));
+				},
+			},
+		];
+	}
+
+	/**
+	 * Renames this device to the typed name and reads the tab again; a
+	 * blank name is refused with a notice.
+	 */
+	private rename(): void {
+		this.service
+			.renameDevice(this.typedName)
+			.then((outcome) => {
+				if (outcome.kind === "emptyName") new Notice(this.strings.deviceNameInvalid);
+				return this.reload();
+			})
+			.catch((error: unknown) => {
+				// A bug: the user is told, and the console keeps it for the bug report.
+				console.error("obsync: renaming the device failed", error);
+				new Notice(this.strings.noticeRenameFailed);
+			});
+	}
+
+	/**
+	 * The shared Remote settings as edited, and "Apply to all devices";
+	 * before a sync read them, a row asking for one. A size limit typed
+	 * that is not one keeps the one before and says why.
+	 */
+	private sharedFields(): CustomField[] {
+		const { strings, draft } = this;
+		if (draft === null) return [{ name: strings.settingsSharedUnknown, description: "", render: () => undefined }];
+		/** Takes `change` into the settings as edited. */
+		const edit = (change: Partial<RemoteSettings>): void => {
+			if (this.draft !== null) this.draft = { ...this.draft, ...change };
+		};
+		return [
+			{
+				name: strings.settingsNamePolicy,
+				description: strings.settingsNamePolicyDescription,
+				render: (row) => {
+					row.addDropdown((dropdown) =>
+						dropdown
+							.addOption("skipAndReport", namePolicyText("skipAndReport", strings))
+							.addOption("encodeReversibly", namePolicyText("encodeReversibly", strings))
+							.setValue(draft.namePolicy)
+							.onChange((value) => edit({ namePolicy: value === "encodeReversibly" ? value : "skipAndReport" })),
+					);
+				},
+			},
+			{
+				name: strings.settingsTextExtensions,
+				description: strings.settingsTextExtensionsDescription,
+				render: (row) => {
+					row.addText((text) =>
+						text
+							.setValue(draft.textExtensions.join(", "))
+							.onChange((typed) => edit({ textExtensions: parseTextExtensions(typed) })),
+					);
+				},
+			},
+			{
+				name: strings.settingsIgnoreList,
+				description: strings.settingsIgnoreListDescription,
+				render: (row) => {
+					row.addTextArea((text) =>
+						text.setValue(draft.ignoreList.join("\n")).onChange((typed) => edit({ ignoreList: parseIgnoreList(typed) })),
+					);
+				},
+			},
+			{
+				name: strings.settingsSizeCeiling,
+				description: strings.settingsSizeCeilingDescription,
+				render: (row) => {
+					row.addText((text) =>
+						text.setValue(String(sizeCeilingMebibytes(draft))).onChange((typed) => {
+							const sizeCeilingBytes = parseSizeCeiling(typed);
+							if (sizeCeilingBytes !== null) edit({ sizeCeilingBytes });
+							row.setDesc(sizeCeilingBytes === null ? strings.settingsSizeCeilingInvalid : strings.settingsSizeCeilingDescription);
+						}),
+					);
+				},
+			},
+			{
+				name: strings.settingsApplyShared,
+				description: strings.settingsApplySharedDescription,
+				render: (row) => {
+					row.addButton((button) =>
+						button
+							.setButtonText(strings.settingsApplyShared)
+							.setCta()
+							.onClick(() => this.applyShared()),
+					);
+				},
+			},
+		];
+	}
+
+	/**
+	 * Brings the shared settings as edited to every device, then reads the
+	 * tab again. A change applied before that sync is done is made from
+	 * these, as the tab shows them.
+	 */
+	private applyShared(): void {
+		const { shown, draft } = this;
+		if (shown === null || draft === null) return;
+		this.shown = draft;
+		this.changeSettings(shown, draft)
+			.then(() => this.reload())
+			.catch((error: unknown) => {
+				// A bug: the user is told, and the console keeps it for the bug report.
+				console.error("obsync: applying the shared settings failed", error);
+				new Notice(this.strings.noticeApplyFailed);
+			});
+	}
+
+	/**
+	 * The other devices: a button reading them until the user asked, one
+	 * row each with Forget once read, or a row saying there are none or
+	 * that they could not be read, with the button to try again.
+	 */
+	private otherDeviceFields(): CustomField[] {
+		const { strings, others } = this;
+		const showButton = (row: Setting): void => {
+			row.addButton((button) => button.setButtonText(strings.showDevices).onClick(() => this.loadOthers()));
+		};
+		if (others === undefined) return [{ name: strings.showDevices, description: strings.settingsDeviceDescription, render: showButton }];
+		if (others === null) return [{ name: strings.settingsDevicesUnavailable, description: "", render: showButton }];
+		if (others.length === 0) return [{ name: strings.settingsNoOtherDevices, description: "", render: () => undefined }];
+		return others.map((record) => ({
+			name: record.device.name,
+			description: strings.settingsDeviceDescription,
+			render: (row) => {
+				row.addButton((button) => button.setButtonText(strings.forgetDevice).onClick(() => this.forget(record)));
+			},
+		}));
+	}
+
+	/** Reads the other devices from the Remote and redraws the tab; a failure, e.g. offline, is shown in their place. */
+	private loadOthers(): void {
+		this.service
+			.otherDevices()
+			.then((records) => (this.others = records))
+			.catch(() => (this.others = null))
+			.finally(() => this.redraw());
+	}
+
+	/**
+	 * Forgets `record` once the user confirms, tells how it went, and reads
+	 * the other devices again.
+	 */
+	private forget(record: DeviceRecord): void {
+		const { strings } = this;
+		const device = record.device.name;
+		new ConfirmModal(this.app, strings, {
+			title: fill(strings.forgetDeviceTitle, { device }),
+			text: strings.forgetDeviceText,
+			confirm: strings.forgetDevice,
+		})
+			.ask()
+			.then(async (confirmed) => {
+				if (confirmed === null) return;
+				const outcome = await this.service.forgetDevice(record);
+				new Notice(fill(outcome.kind === "forgotten" ? strings.noticeDeviceForgotten : strings.noticeDeviceInUse, { device }));
+				this.loadOthers();
+			})
+			.catch((error: unknown) => {
+				// Offline, or a bug: the user is told, and the console keeps it for the bug report.
+				console.error("obsync: forgetting a device failed", error);
+				new Notice(strings.noticeForgetFailed);
+			});
 	}
 
 	/**

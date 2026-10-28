@@ -2,6 +2,8 @@ import type { App } from "obsidian";
 import type { VaultPath } from "../engine/local-vault";
 import type { Connection, DeviceStore, RemoteFeed } from "../engine/ports";
 import type { RemoteEntry } from "../engine/provider";
+import { parseSettings, type RemoteSettings } from "../engine/remote-metadata";
+import type { SettingsChange } from "../engine/settings-change";
 import type { SnapshotEntry, SyncSnapshot } from "../engine/sync-snapshot";
 import { isArrayBuffer } from "./is-array-buffer";
 import { isRecord } from "./is-record";
@@ -12,8 +14,17 @@ const CONNECTION_KEY = "obsync-connection";
 /** The localStorage key naming this vault's snapshot database. */
 const SNAPSHOT_DATABASE_KEY = "obsync-snapshot-database";
 
+/** The localStorage key of the shared Remote settings the last sync read. */
+const KNOWN_SETTINGS_KEY = "obsync-known-settings";
+
+/** The localStorage key of the change of the shared Remote settings waiting for a sync. */
+const SETTINGS_CHANGE_KEY = "obsync-settings-change";
+
 /** The format version of the stored Connection. */
 const CONNECTION_FORMAT_VERSION = 1;
+
+/** The format version of the stored shared settings and settings change. */
+const SETTINGS_FORMAT_VERSION = 1;
 
 /** The format version of the snapshot entries; another version reads as an empty snapshot. */
 const SNAPSHOT_FORMAT_VERSION = 1;
@@ -59,11 +70,15 @@ const COMPLETE_KEY = "complete";
  * - the Remote change-feed state of the last completed sync (its cursor
  *   and the listing it builds on, server hashes included), in a third;
  * - whether a First sync completed the snapshot, as a mark in that same
- *   database, so it is lost together with the snapshot.
+ *   database, so it is lost together with the snapshot;
+ * - the shared Remote settings the last sync read, and a change of them
+ *   waiting for a sync, each in the vault's localStorage under its own key,
+ *   so the engine saving one never overwrites the shell saving the other.
  *
- * Both carry a format version. A Connection that is missing, of another
+ * All carry a format version. A Connection that is missing, of another
  * version or malformed reads as none, and a snapshot of another version as
- * empty, so the device starts over (spec, "Further Notes", state format).
+ * empty, so the device starts over (spec, "Further Notes", state format);
+ * shared settings or a change that is not valid read as none.
  */
 export class ObsidianDeviceStore implements DeviceStore {
 	/** The snapshot database opened so far, if any. */
@@ -184,8 +199,38 @@ export class ObsidianDeviceStore implements DeviceStore {
 		await completion(transaction);
 	}
 
+	loadKnownSettings(): Promise<RemoteSettings | null> {
+		const stored = this.loadVersioned(KNOWN_SETTINGS_KEY);
+		return Promise.resolve(stored === null ? null : parseSettings(stored.settings));
+	}
+
+	saveKnownSettings(settings: RemoteSettings): Promise<void> {
+		this.app.saveLocalStorage(KNOWN_SETTINGS_KEY, { formatVersion: SETTINGS_FORMAT_VERSION, settings });
+		return Promise.resolve();
+	}
+
+	loadSettingsChange(): Promise<SettingsChange | null> {
+		const stored = this.loadVersioned(SETTINGS_CHANGE_KEY);
+		const base = parseSettings(stored?.base);
+		const wanted = parseSettings(stored?.wanted);
+		return Promise.resolve(base === null || wanted === null ? null : { base, wanted });
+	}
+
+	saveSettingsChange(change: SettingsChange | null): Promise<void> {
+		this.app.saveLocalStorage(SETTINGS_CHANGE_KEY, change === null ? null : { formatVersion: SETTINGS_FORMAT_VERSION, ...change });
+		return Promise.resolve();
+	}
+
+	/** The record stored under `key` when it is of the settings format version, else null. */
+	private loadVersioned(key: string): Record<string, unknown> | null {
+		const stored: unknown = this.app.loadLocalStorage(key);
+		return isRecord(stored) && stored.formatVersion === SETTINGS_FORMAT_VERSION ? stored : null;
+	}
+
 	async clear(): Promise<void> {
 		this.app.saveLocalStorage(CONNECTION_KEY, null);
+		this.app.saveLocalStorage(KNOWN_SETTINGS_KEY, null);
+		this.app.saveLocalStorage(SETTINGS_CHANGE_KEY, null);
 		const stored = this.storedDatabase();
 		this.app.saveLocalStorage(SNAPSHOT_DATABASE_KEY, null);
 		// No longer named, the database is erased for this device even if deleting it fails.
@@ -334,7 +379,16 @@ export function parseConnection(stored: unknown): Connection | null {
 	const firstSyncDone = connection.firstSyncDone === true;
 	// Only a stored true pauses: anything else syncs, and a refused login pauses again at once.
 	const reconnectNeeded = connection.reconnectNeeded === true;
-	return { accountId, remoteRoot, device: { id: device.id, name: device.name }, firstSyncDone, reconnectNeeded };
+	// Anything but a stored true reads as written: a lost flag only leaves the old name in the record.
+	const deviceRecordOutdated = connection.deviceRecordOutdated === true;
+	return {
+		accountId,
+		remoteRoot,
+		device: { id: device.id, name: device.name },
+		firstSyncDone,
+		reconnectNeeded,
+		deviceRecordOutdated,
+	};
 }
 
 /** The snapshot entry in a stored record, or null if it holds no valid one. */
@@ -354,16 +408,22 @@ export function parseEntry(stored: unknown): SnapshotEntry | null {
 	return { kind, revision, hash, ...sized, ...id, ...statted, ...marked };
 }
 
-/** The Remote feed state in a stored record, or null if it holds no valid one. */
+/**
+ * The Remote feed state in a stored record, or null if it holds no valid
+ * one; without a known name policy its paths cannot be trusted, so it is
+ * none and the next sync lists the Remote in full.
+ */
 export function parseRemoteFeed(stored: unknown): RemoteFeed | null {
 	if (!isRecord(stored) || typeof stored.cursor !== "string" || !Array.isArray(stored.entries)) return null;
+	const { namePolicy } = stored;
+	if (namePolicy !== "skipAndReport" && namePolicy !== "encodeReversibly") return null;
 	const entries: RemoteEntry[] = [];
 	for (const item of stored.entries) {
 		const entry = parseRemoteEntry(item);
 		if (entry === null) return null;
 		entries.push(entry);
 	}
-	return { cursor: stored.cursor, entries };
+	return { cursor: stored.cursor, namePolicy, entries };
 }
 
 /**

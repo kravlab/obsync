@@ -11,6 +11,7 @@ export const ru: Strings = {
 	statusReconnectNeeded: "Нужно подключиться заново",
 	statusDeletionsOnHold: "Пауза (подтвердите удаления)",
 	statusFirstSyncWaiting: "Первая синхронизация ждёт вашего решения",
+	statusSettingsCollision: "Пауза (выберите общие настройки)",
 
 	settingsDropbox: "Dropbox",
 	settingsNotConnected: "Это устройство не подключено.",
@@ -55,6 +56,47 @@ export const ru: Strings = {
 	settingsGuardPercentDescription:
 		"Спрашивать, прежде чем синхронизация удалит на одной стороне большую долю синхронизированных файлов, от 1 до 100 процентов.",
 	settingsGuardPercentInvalid: "Введите целое число от 1 до 100.",
+	rename: "Переименовать",
+	deviceNameInvalid: "Введите имя.",
+	settingsSharedHeading: "Для всех устройств",
+	settingsSharedUnknown: "Синхронизируйте это устройство один раз, чтобы увидеть общие настройки.",
+	settingsNamePolicy: "Имена, которые Dropbox не хранит",
+	settingsNamePolicyDescription:
+		"Пропускать такие файлы и показывать их списком или хранить под именами с похожими символами. Правило меняется, только пока в Dropbox нет файлов, которые оно назвало бы иначе.",
+	namePolicySkip: "Пропускать и показывать",
+	namePolicyEncode: "Обратимо кодировать",
+	settingsTextExtensions: "Текстовые файлы",
+	settingsTextExtensionsDescription:
+		"Расширения файлов, которые сливаются построчно, через запятую. Для других изменённых файлов создаются копии конфликта.",
+	settingsIgnoreList: "Список исключений",
+	settingsIgnoreListDescription: "Пути, которые никогда не синхронизируются, по одному шаблону на строку, как в файле .gitignore.",
+	settingsSizeCeiling: "Предел размера (МиБ)",
+	settingsSizeCeilingDescription: "Файлы крупнее пропускаются и показываются списком.",
+	settingsSizeCeilingInvalid: "Введите целое число, не меньше 1.",
+	settingsApplyShared: "Применить для всех устройств",
+	settingsApplySharedDescription:
+		"Эти настройки одинаковы на всех устройствах. При применении они записываются в Dropbox и запускается синхронизация.",
+	settingsDevicesHeading: "Другие устройства",
+	settingsDeviceDescription: "Забывайте устройство, только если оно больше никогда не будет синхронизироваться.",
+	showDevices: "Показать устройства",
+	settingsNoOtherDevices: "Других устройств нет.",
+	settingsDevicesUnavailable: "Не удалось прочитать устройства из Dropbox.",
+	forgetDevice: "Забыть",
+	forgetDeviceTitle: "Забыть {device}?",
+	forgetDeviceText: "Его запись удаляется из Dropbox. Делайте это, только если устройство больше никогда не будет синхронизироваться.",
+	noticeDeviceForgotten: "{device}: устройство забыто.",
+	noticeDeviceInUse: "{device} за это время синхронизировалось, поэтому оно не забыто.",
+	noticeForgetFailed: "Не удалось забыть устройство. Попробуйте позже.",
+	noticeRenameFailed: "Не удалось переименовать устройство: в плагине произошла ошибка. Подробности в консоли.",
+	noticeApplyFailed: "Не удалось применить общие настройки: в плагине произошла ошибка. Подробности в консоли.",
+	collisionTitle: "Общие настройки расходятся",
+	collisionIntro: "Другое устройство изменило эти общие настройки одновременно с этим. Выберите, какое значение оставить для каждой.",
+	collisionMine: "Это устройство: {value}",
+	collisionRemote: "Другое устройство: {value}",
+	collisionApply: "Применить",
+	collisionCloseHint: "Если закрыть это окно, синхронизация остановится, пока вы не запустите её сами.",
+	settingValueNone: "Нет",
+	settingValueMebibytes: "{count} МиБ",
 
 	firstSyncTitle: "Первая синхронизация",
 	firstSyncIntro:
@@ -138,6 +180,8 @@ export const ru: Strings = {
 	noticeConfigurationChanged: "Настройки изменились на другом устройстве. Перезапустите Obsidian, чтобы применить их.",
 	noticeReconnectNeeded:
 		"Dropbox больше не принимает вход с этого устройства, поэтому синхронизация здесь приостановлена. Откройте окно синхронизации и подключитесь заново.",
+	noticeNamePolicyRefused:
+		"Правило имён не изменено: эти файлы в Dropbox получили бы имена, которые оно не сохранит. Сначала переименуйте их: {files}.",
 	firstSyncInProgress:
 		"{device} сейчас выполняет первую синхронизацию с этой папкой. Подключитесь, когда она закончится, чтобы конфликтов было меньше.",
 	connectAnyway: "Всё равно подключить",

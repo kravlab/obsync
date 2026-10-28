@@ -8,7 +8,7 @@
 import { isWholeNumberIn, parseWholeNumber } from "./whole-number";
 
 /** One MiB, the setting's unit, as the size ceiling also counts. */
-const MEBIBYTE = 1024 * 1024;
+export const MEBIBYTE = 1024 * 1024;
 
 /** The limit a device starts with, in MiB. */
 const DEFAULT_MEBIBYTES = 16;

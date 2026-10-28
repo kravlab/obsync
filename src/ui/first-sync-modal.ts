@@ -1,8 +1,8 @@
-import { Modal, Setting, type App } from "obsidian";
+import { Setting, type App } from "obsidian";
 import type { FirstSyncAnswer, FirstSyncPreview } from "../engine/first-sync";
 import { firstSyncPreviewText } from "./first-sync-preview-text";
 import type { Strings } from "./i18n/strings";
-import { fitForPhone } from "./phone-modal";
+import { PromptModal } from "./prompt-modal";
 
 /**
  * The First sync preview (spec, "First sync"): how many files the first
@@ -11,9 +11,7 @@ import { fitForPhone } from "./phone-modal";
  * differing file, and Start. Closing it without starting answers null,
  * which holds sync until "Sync now".
  */
-export class FirstSyncModal extends Modal {
-	/** Settles the pending `ask`; cleared once it has been answered. */
-	private settle: ((answer: FirstSyncAnswer) => void) | undefined;
+export class FirstSyncModal extends PromptModal<NonNullable<FirstSyncAnswer>> {
 	/** Whether the user chose to keep the Dropbox version of every differing file. */
 	private keepRemote = false;
 
@@ -28,15 +26,6 @@ export class FirstSyncModal extends Modal {
 		private readonly preview: FirstSyncPreview,
 	) {
 		super(app);
-		fitForPhone(this);
-	}
-
-	/** Opens the preview and resolves with the user's answer, null if it is closed without starting. */
-	ask(): Promise<FirstSyncAnswer> {
-		return new Promise((resolve) => {
-			this.settle = resolve;
-			this.open();
-		});
 	}
 
 	override onOpen(): void {
@@ -79,18 +68,5 @@ export class FirstSyncModal extends Modal {
 					.setCta()
 					.onClick(() => this.answer({ differing: this.keepRemote ? "keepRemote" : "merge" })),
 			);
-	}
-
-	override onClose(): void {
-		this.contentEl.empty();
-		this.answer(null);
-	}
-
-	/** Gives `answer` to the pending `ask` once, and closes the preview. */
-	private answer(answer: FirstSyncAnswer): void {
-		const settle = this.settle;
-		this.settle = undefined;
-		settle?.(answer);
-		if (answer !== null) this.close();
 	}
 }

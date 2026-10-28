@@ -27,6 +27,7 @@ describe("statusLabel", () => {
 		[{ state: "reconnectNeeded" }, "Reconnect needed", "Нужно подключиться заново"],
 		[{ state: "deletionsOnHold" }, "Paused (confirm deletions)", "Пауза (подтвердите удаления)"],
 		[{ state: "firstSyncWaiting" }, "First sync waiting for you", "Первая синхронизация ждёт вашего решения"],
+		[{ state: "settingsCollision" }, "Paused (choose shared settings)", "Пауза (выберите общие настройки)"],
 	] as const)("names the %o state in English and Russian", (status, english, russian) => {
 		expect(statusLabel(status, selectStrings("en"))).toBe(english);
 		expect(statusLabel(status, selectStrings("ru"))).toBe(russian);

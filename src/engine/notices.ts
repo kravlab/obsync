@@ -34,6 +34,11 @@ import type { VaultPath } from "./local-vault";
  * - `reconnectNeeded`: the provider refused this device's login, or its
  *   secret is gone, so sync is paused on this device until the user logs
  *   in again. It is told once, when the pause begins.
+ * - `namePolicyRefused`: the name policy the user chose was not written,
+ *   since the Remote holds entries, at the vault `paths` they stand for,
+ *   whose names would become ones the provider cannot store or would be
+ *   read as other files; the user renames them first. The other settings
+ *   of the change were written.
  */
 export type SyncNotice =
 	| {
@@ -58,4 +63,5 @@ export type SyncNotice =
 	  }
 	| ({ readonly kind: "firstSyncDone" } & Readonly<FirstSyncTally>)
 	| { readonly kind: "configurationChanged" }
-	| { readonly kind: "reconnectNeeded" };
+	| { readonly kind: "reconnectNeeded" }
+	| { readonly kind: "namePolicyRefused"; readonly paths: readonly VaultPath[] };

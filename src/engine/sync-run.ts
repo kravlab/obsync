@@ -261,7 +261,9 @@ export async function runSync({
 	const codec = withConfigurationFolder(pathCodec(storedAs.nameRules, settings.namePolicy), configuration.layout.configDir, caseInsensitive);
 	// From here on every provider call takes and gives vault paths.
 	const provider = namedProvider(storedAs, codec);
-	const previousFeed = await deviceStore.loadRemoteFeed();
+	const storedFeed = await deviceStore.loadRemoteFeed();
+	// Paths decoded under another name policy are stale: the Remote is listed in full instead.
+	const previousFeed = storedFeed?.namePolicy === settings.namePolicy ? storedFeed : null;
 	const listed = await listRemote(provider, previousFeed, snapshot.size > 0, reconcile);
 	const listing = syncListing(
 		await vault.list(),
@@ -826,7 +828,8 @@ export async function runSync({
 		const { caseInsensitive } = provider.nameRules;
 		const keyOf = (path: string): string => pathKey(path, caseInsensitive);
 		// Changes since this sync's own listing where the provider has a feed, else a full listing.
-		const since = listed.cursor === undefined ? null : { cursor: listed.cursor, entries: listed.entries };
+		const since =
+			listed.cursor === undefined ? null : { cursor: listed.cursor, namePolicy: settings.namePolicy, entries: listed.entries };
 		const current = await listRemote(provider, since, true, false);
 		const contents = folderContents(current.entries.map((entry) => keyOf(entry.path)));
 		for (const folder of deepestFirst(folders)) {
@@ -1087,7 +1090,7 @@ export async function runSync({
 	}
 	// A cursor that did not move brought no change: the stored state is still right.
 	if (listed.cursor !== undefined && listed.cursor !== previousFeed?.cursor) {
-		await deviceStore.saveRemoteFeed({ cursor: listed.cursor, entries: listed.entries });
+		await deviceStore.saveRemoteFeed({ cursor: listed.cursor, namePolicy: settings.namePolicy, entries: listed.entries });
 	}
 	return firstSync === undefined
 		? { nextPostEditPauseMs, skipped: skipped(), snapshot }

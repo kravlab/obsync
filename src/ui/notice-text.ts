@@ -25,6 +25,8 @@ export function noticeText(notice: SyncNotice, strings: Strings): string {
 			return strings.noticeConfigurationChanged;
 		case "reconnectNeeded":
 			return strings.noticeReconnectNeeded;
+		case "namePolicyRefused":
+			return fill(strings.noticeNamePolicyRefused, { files: notice.paths.join(", ") });
 		case "renameBeatsDelete":
 			return fill(
 				notice.deletedOn === "thisDevice" ? strings.noticeRenamedDeletedHere : strings.noticeRenamedDeletedThere,

@@ -20,6 +20,7 @@ export function statusTone(status: SyncStatus): StatusTone {
 			return "idle";
 		case "deletionsOnHold":
 		case "firstSyncWaiting":
+		case "settingsCollision":
 			return "attention";
 		case "reconnectNeeded":
 		case "syncFailed":
@@ -40,6 +41,7 @@ export function statusIcon(status: SyncStatus): string {
 			return "cloud-off";
 		case "deletionsOnHold":
 		case "firstSyncWaiting":
+		case "settingsCollision":
 			return "pause";
 		case "reconnectNeeded":
 			return "log-in";

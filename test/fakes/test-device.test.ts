@@ -5,7 +5,11 @@ describe("InMemoryDeviceStore", () => {
 	it("stores, replaces and clears the Remote feed state", async () => {
 		const store = new InMemoryDeviceStore();
 		expect(await store.loadRemoteFeed()).toBeNull();
-		const feed = { cursor: "c1", entries: [{ kind: "file" as const, path: "a.md", revision: "r1", size: 1 }] };
+		const feed = {
+			cursor: "c1",
+			namePolicy: "skipAndReport" as const,
+			entries: [{ kind: "file" as const, path: "a.md", revision: "r1", size: 1 }],
+		};
 		await store.saveRemoteFeed(feed);
 		expect(await store.loadRemoteFeed()).toEqual(feed);
 		await store.clear();

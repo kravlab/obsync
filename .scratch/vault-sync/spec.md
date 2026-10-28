@@ -222,7 +222,7 @@ From the map's Provider contract ticket, refined by the mobile runtime checks:
   - They are re-read at the start of every sync.
   - They change only by explicit user action, written with a precondition.
   - If two changes collide, sync stops until the user picks the value.
-  - Changing the name policy is an explicit operation that renames the affected files on the Remote.
+  - Changing the name policy is an explicit operation. It renames no file: under the one reversible encoding, a Remote name the change affects has no name to take, so the change is refused, naming those files, while the Remote holds any (encoded names when going to "skip and report", names already holding a substitute when going to "encode reversibly"). An accepted change makes every device list the Remote in full once.
 
 ### Text merge
 

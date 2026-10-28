@@ -38,6 +38,10 @@ export type SyncFailureCause = ProviderErrorCategory | "unsupportedProvider" | "
  * - `firstSyncWaiting`: the preview of a First sync was closed without
  *   starting it; nothing syncs until the user asks for a sync, which shows
  *   the preview again.
+ * - `settingsCollision`: a change of the shared Remote settings made here
+ *   collided with one made on another device and the prompt was closed
+ *   without picking the values; nothing syncs until the user asks for a
+ *   sync, which asks again.
  */
 export type SyncStatus =
 	| { readonly state: "notConnected" }
@@ -48,7 +52,8 @@ export type SyncStatus =
 	| { readonly state: "syncFailed"; readonly cause: SyncFailureCause; readonly detail?: string }
 	| { readonly state: "reconnectNeeded" }
 	| { readonly state: "deletionsOnHold" }
-	| { readonly state: "firstSyncWaiting" };
+	| { readonly state: "firstSyncWaiting" }
+	| { readonly state: "settingsCollision" };
 
 /** The status a device shows for its Connection, or for having none, before it syncs. */
 export function statusOf(connection: Connection | null): SyncStatus {

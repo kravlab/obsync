@@ -227,12 +227,24 @@ export default class ObsyncPlugin extends Plugin {
 			strings,
 			openConnect,
 			syncNow,
+			(base, wanted) => engine.changeSettings(base, wanted),
 			requestLimit,
 			schedule,
 			deletionGuard,
 			categories,
 		);
 		this.addSettingTab(settingTab);
+		// Each completed sync may bring shared settings another device changed; the tab shows them.
+		let lastState = indicator.shown().status.state;
+		this.register(
+			indicator.onChange(() => {
+				const { state } = indicator.shown().status;
+				if (state === "synced" && lastState !== "synced") {
+					settingTab.refreshShared().catch((error: unknown) => console.error("obsync: reading the settings failed", error));
+				}
+				lastState = state;
+			}),
+		);
 		await connection.showStatus();
 		// Unloaded meanwhile, the plugin reads nothing more, so its snapshot database is not opened again.
 		if (unloaded) return;

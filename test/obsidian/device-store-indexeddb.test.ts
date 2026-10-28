@@ -4,6 +4,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RemoteFeed } from "../../src/engine/ports";
+import { DEFAULT_REMOTE_SETTINGS } from "../../src/engine/remote-metadata";
 import { ObsidianDeviceStore } from "../../src/obsidian/device-store";
 import { FakeApp } from "../fakes/obsidian-app";
 
@@ -27,6 +28,7 @@ describe("the device store over IndexedDB", () => {
 		const store = newStore();
 		const feed: RemoteFeed = {
 			cursor: "cursor-1",
+			namePolicy: "skipAndReport",
 			entries: [
 				{ kind: "file", path: "photo.png", revision: "r1", size: 3, serverHash: { algorithm: "dropbox-content-hash", value: "abc" } },
 				{ kind: "folder", path: "photos" },
@@ -36,6 +38,40 @@ describe("the device store over IndexedDB", () => {
 		await store.saveRemoteFeed(feed);
 
 		expect(await store.loadRemoteFeed()).toEqual(feed);
+	});
+
+	it("keeps the shared settings last read and a pending change apart, until the Connection is cleared", async () => {
+		const store = newStore();
+		const known = { ...DEFAULT_REMOTE_SETTINGS, ignoreList: ["Archive/"] };
+		const change = { base: known, wanted: { ...known, sizeCeilingBytes: 1_000 } };
+
+		await store.saveSettingsChange(change);
+		await store.saveKnownSettings(known);
+
+		expect(await store.loadKnownSettings()).toEqual(known);
+		expect(await store.loadSettingsChange()).toEqual(change);
+		await store.saveSettingsChange(null);
+		expect(await store.loadSettingsChange()).toBeNull();
+		expect(await store.loadKnownSettings()).toEqual(known);
+		await store.saveSettingsChange(change);
+		await store.clear();
+		expect(await store.loadKnownSettings()).toBeNull();
+		expect(await store.loadSettingsChange()).toBeNull();
+	});
+
+	it("reads stored settings that are not valid ones as none", async () => {
+		const app = new FakeApp();
+		const store = new ObsidianDeviceStore(app as never);
+		opened.push(store);
+		await store.saveKnownSettings(DEFAULT_REMOTE_SETTINGS);
+		await store.saveSettingsChange({ base: DEFAULT_REMOTE_SETTINGS, wanted: DEFAULT_REMOTE_SETTINGS });
+		for (const key of ["obsync-known-settings", "obsync-settings-change"]) {
+			const stored = app.loadLocalStorage(key) as Record<string, unknown>;
+			app.saveLocalStorage(key, { ...stored, formatVersion: 2 });
+		}
+
+		expect(await store.loadKnownSettings()).toBeNull();
+		expect(await store.loadSettingsChange()).toBeNull();
 	});
 
 	it("keeps a text file's Base through a save and a load", async () => {

@@ -36,9 +36,18 @@ describe("stored activity log", () => {
 
 	it("reads back an event of every status state and notice kind", () => {
 		const every: ActivityEvent[] = [
-			...(["notConnected", "connected", "synced", "offline", "reconnectNeeded", "deletionsOnHold", "firstSyncWaiting"] as const).map(
-				(state): ActivityEvent => ({ at: 1, kind: "status", status: { state } }),
-			),
+			...(
+				[
+					"notConnected",
+					"connected",
+					"synced",
+					"offline",
+					"reconnectNeeded",
+					"deletionsOnHold",
+					"firstSyncWaiting",
+					"settingsCollision",
+				] as const
+			).map((state): ActivityEvent => ({ at: 1, kind: "status", status: { state } })),
 			{ at: 1, kind: "status", status: { state: "syncFailed", cause: "bug" } },
 			{ at: 1, kind: "notice", notice: { kind: "restoredAfterDelete", path: "a.md", deletedOn: "thisDevice" } },
 			{ at: 1, kind: "notice", notice: { kind: "renamedOnBoth", path: "b.md", localPath: "c.md" } },
@@ -50,6 +59,7 @@ describe("stored activity log", () => {
 			},
 			{ at: 1, kind: "notice", notice: { kind: "configurationChanged" } },
 			{ at: 1, kind: "notice", notice: { kind: "reconnectNeeded" } },
+			{ at: 1, kind: "notice", notice: { kind: "namePolicyRefused", paths: ["a＼b.md"] } },
 		];
 
 		expect(storedActivity(storableActivity(every))).toEqual(every);

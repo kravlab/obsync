@@ -11,7 +11,7 @@
 import type { VaultPath } from "./local-vault";
 import { nameOf, parentOf, splitName } from "./paths";
 import type { DeviceIdentity } from "./ports";
-import { isFailure, type Provider, type RemotePath } from "./provider";
+import { isFailure, type Provider, type RemoteContent, type RemotePath } from "./provider";
 import { decodeUtf8 } from "./utf8";
 
 /** The Metadata folder's name at the Remote root. */
@@ -82,18 +82,36 @@ export function encodeSettings(settings: RemoteSettings): ArrayBuffer {
 	return encodeJson({ formatVersion: FORMAT_VERSION, ...settings });
 }
 
+/** The shared Remote settings with the revision of `settings.json` they were read from. */
+export interface StoredSettings {
+	readonly settings: RemoteSettings;
+	/** The revision a change to them is written over, as its precondition. */
+	readonly revision: string;
+}
+
 /**
  * The shared Remote settings, read from `settings.json` at the start of
- * every sync; null when the file is missing, is not JSON, is of another
- * format version or lacks a setting.
+ * every sync, with their revision; null when the file is missing, is not
+ * JSON, is of another format version or lacks a setting.
  */
-export async function readRemoteSettings(provider: Provider): Promise<RemoteSettings | null> {
+export async function readRemoteSettings(provider: Provider): Promise<StoredSettings | null> {
 	try {
-		return decodeSettings((await provider.read(SETTINGS_PATH)).data);
+		const { data, revision } = await provider.read(SETTINGS_PATH);
+		const settings = decodeSettings(data);
+		return settings === null ? null : { settings, revision };
 	} catch (error) {
 		if (isFailure(error, "notFound")) return null;
 		throw error;
 	}
+}
+
+/**
+ * Writes `settings` as the shared Remote settings over `revision`, the one
+ * they were read from. Fails with `preconditionFailed`, writing nothing,
+ * when another device replaced them meanwhile.
+ */
+export async function writeRemoteSettings(provider: Provider, settings: RemoteSettings, revision: string): Promise<void> {
+	await provider.write(SETTINGS_PATH, encodeSettings(settings), { kind: "revision", revision });
 }
 
 /** The shared Remote settings in the bytes of `settings.json`, or null if they are not valid ones. */
@@ -107,8 +125,14 @@ function decodeSettings(data: ArrayBuffer): RemoteSettings | null {
 		return null;
 	}
 	if (typeof parsed !== "object" || parsed === null) return null;
-	const { formatVersion, namePolicy, textExtensions, ignoreList, sizeCeilingBytes } = parsed as Record<string, unknown>;
-	if (formatVersion !== FORMAT_VERSION) return null;
+	if ((parsed as Record<string, unknown>).formatVersion !== FORMAT_VERSION) return null;
+	return parseSettings(parsed);
+}
+
+/** The shared Remote settings in `value`, as stored, or null if it holds no valid ones. */
+export function parseSettings(value: unknown): RemoteSettings | null {
+	if (typeof value !== "object" || value === null) return null;
+	const { namePolicy, textExtensions, ignoreList, sizeCeilingBytes } = value as Record<string, unknown>;
 	if (namePolicy !== "skipAndReport" && namePolicy !== "encodeReversibly") return null;
 	if (!isStringList(textExtensions) || !isStringList(ignoreList)) return null;
 	if (typeof sizeCeilingBytes !== "number" || !(sizeCeilingBytes > 0)) return null;
@@ -135,31 +159,61 @@ export const FIRST_SYNC_MARK_MS = 6 * 60 * 60 * 1_000;
  * Records this plugin cannot read are passed over.
  */
 export async function deviceNameInFirstSync(provider: Provider, now: number): Promise<string | null> {
+	const marked = (await readDeviceRecords(provider)).find(
+		({ firstSyncStartedAt }) => firstSyncStartedAt !== undefined && Math.abs(now - firstSyncStartedAt) < FIRST_SYNC_MARK_MS,
+	);
+	return marked?.device.name ?? null;
+}
+
+/** One device's record in the Metadata folder, as read. */
+export interface DeviceRecord {
+	readonly device: DeviceIdentity;
+	/** The revision it was read at, for forgetting it only as read. */
+	readonly revision: string;
+	/** The "First sync in progress" mark: when the device started its First sync, by its own clock. */
+	readonly firstSyncStartedAt?: number;
+}
+
+/**
+ * The records of every device registered on the Remote, in listing order.
+ * Finding them takes a full listing. Records this plugin cannot read, and
+ * any that vanish while being read, are passed over.
+ */
+export async function readDeviceRecords(provider: Provider): Promise<DeviceRecord[]> {
 	const { entries } = await provider.list();
+	const records: DeviceRecord[] = [];
 	for (const entry of entries) {
 		if (entry.kind !== "file" || parentOf(entry.path) !== DEVICES_FOLDER) continue;
-		let data: ArrayBuffer;
+		let content: RemoteContent;
 		try {
-			({ data } = await provider.read(entry.path));
+			content = await provider.read(entry.path);
 		} catch (error) {
 			if (isFailure(error, "notFound")) continue;
 			throw error;
 		}
-		const record = decodeDeviceRecord(data);
-		const startedAt = record?.firstSyncStartedAt;
-		if (record !== null && startedAt !== undefined && Math.abs(now - startedAt) < FIRST_SYNC_MARK_MS) {
-			return record.deviceName;
-		}
+		const record = decodeDeviceRecord(content);
+		if (record !== null) records.push(record);
 	}
-	return null;
+	return records;
 }
 
-/** The fields of a device record this plugin reads, or null if the bytes hold none of its format. */
-function decodeDeviceRecord(data: ArrayBuffer): { readonly deviceName: string; readonly firstSyncStartedAt?: number } | null {
+/**
+ * Deletes the record `record` from the Metadata folder ("Forget this
+ * device"). Fails with `preconditionFailed`, deleting nothing, when its
+ * device rewrote it since it was read.
+ */
+export async function forgetDeviceRecord(provider: Provider, record: DeviceRecord): Promise<void> {
+	await provider.delete(devicePath(record.device), { kind: "revision", revision: record.revision });
+}
+
+/** The device record in `content`, or null if it holds none of this plugin's format. */
+function decodeDeviceRecord({ data, revision }: RemoteContent): DeviceRecord | null {
 	const parsed = parseJson(data);
-	if (parsed === null || parsed.formatVersion !== FORMAT_VERSION || typeof parsed.deviceName !== "string") return null;
-	const { deviceName, firstSyncStartedAt } = parsed;
-	return typeof firstSyncStartedAt === "number" ? { deviceName, firstSyncStartedAt } : { deviceName };
+	if (parsed === null || parsed.formatVersion !== FORMAT_VERSION) return null;
+	const { deviceId, deviceName, firstSyncStartedAt } = parsed;
+	if (typeof deviceId !== "string" || typeof deviceName !== "string") return null;
+	const device = { id: deviceId, name: deviceName };
+	return typeof firstSyncStartedAt === "number" ? { device, revision, firstSyncStartedAt } : { device, revision };
 }
 
 /** The JSON object in `data`, UTF-8, or null if it holds none. */

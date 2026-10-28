@@ -107,4 +107,14 @@ describe("noticeText", () => {
 			"Dropbox больше не принимает вход с этого устройства, поэтому синхронизация здесь приостановлена. Откройте окно синхронизации и подключитесь заново.",
 		);
 	});
+
+	it("names the files that kept the name policy from changing, in English and Russian", () => {
+		const notice = { kind: "namePolicyRefused", paths: ["a＼b.md", "notes/c＼d.md"] } as const;
+		expect(noticeText(notice, selectStrings("en"))).toBe(
+			"The name policy was not changed: these files in Dropbox would get names it cannot keep. Rename them first: a＼b.md, notes/c＼d.md.",
+		);
+		expect(noticeText(notice, selectStrings("ru"))).toBe(
+			"Правило имён не изменено: эти файлы в Dropbox получили бы имена, которые оно не сохранит. Сначала переименуйте их: a＼b.md, notes/c＼d.md.",
+		);
+	});
 });

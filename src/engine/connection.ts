@@ -10,8 +10,16 @@ import type { AccountAccess, Authorization, ConnectStep } from "./connect-step";
 import type { ConnectionEpoch } from "./connection-epoch";
 import { NO_CONFLICTS } from "./conflicts";
 import { detailField } from "./failure-detail";
-import { providerSecretId, type Clock, type DeviceIdentity, type DeviceStore, type SecretStore, type UiPort } from "./ports";
-import { ProviderError, isFailure, isSyncable, type ProviderErrorCategory } from "./provider";
+import {
+	providerSecretId,
+	type Clock,
+	type Connection,
+	type DeviceIdentity,
+	type DeviceStore,
+	type SecretStore,
+	type UiPort,
+} from "./ports";
+import { ProviderError, isFailure, isSyncable, type Provider, type ProviderErrorCategory } from "./provider";
 import {
 	DEFAULT_REMOTE_SETTINGS,
 	DEVICES_FOLDER,
@@ -21,6 +29,10 @@ import {
 	devicePath,
 	encodeDeviceRecord,
 	encodeSettings,
+	forgetDeviceRecord,
+	readDeviceRecords,
+	type DeviceRecord,
+	type RemoteSettings,
 } from "./remote-metadata";
 import { statusOf } from "./status";
 
@@ -109,7 +121,41 @@ export interface ConnectionService {
 	 * Remote and other devices are left untouched.
 	 */
 	disconnect(): Promise<DisconnectOutcome>;
+	/**
+	 * Renames this device to `name`, trimmed: stored in the Connection at
+	 * once, so new conflict labels and messages use it, and written to its
+	 * record in the Metadata folder by the next completed sync. An empty
+	 * name is refused, changing nothing.
+	 */
+	renameDevice(name: string): Promise<RenameOutcome>;
+	/**
+	 * The records of the devices registered on this device's Remote, this
+	 * one left out, read from the Metadata folder with a full listing.
+	 */
+	otherDevices(): Promise<readonly DeviceRecord[]>;
+	/**
+	 * "Forget this device": deletes the record `record`, as listed, from the
+	 * Metadata folder. A record its device rewrote since it was listed is
+	 * kept, since that device is still syncing; one already gone counts as
+	 * forgotten.
+	 */
+	forgetDevice(record: DeviceRecord): Promise<ForgetOutcome>;
+	/**
+	 * The shared Remote settings as this device shows them: those a waiting
+	 * change asks for, else those the last sync read; null before any sync
+	 * read them.
+	 */
+	sharedSettings(): Promise<RemoteSettings | null>;
 }
+
+/**
+ * How renaming this device ended: `renamed`, or `emptyName` when the name
+ * was blank, or `notConnected` without a Connection to rename.
+ */
+export type RenameOutcome = { readonly kind: "renamed" | "emptyName" | "notConnected" };
+
+/** How forgetting a device ended: `forgotten`, or `changed` when its device rewrote its record meanwhile. */
+export type ForgetOutcome = { readonly kind: "forgotten" | "changed" };
 
 /**
  * How disconnecting ended; the local cleanup ran either way:
@@ -389,5 +435,53 @@ export function createConnectionService(ports: ConnectionPorts): ConnectionServi
 				return { kind: "revokeFailed" };
 			}
 		},
+
+		async renameDevice(name: string): Promise<RenameOutcome> {
+			const trimmed = name.trim();
+			if (trimmed === "") return { kind: "emptyName" };
+			const connection = await deviceStore.loadConnection();
+			if (connection === null) return { kind: "notConnected" };
+			if (trimmed !== connection.device.name) {
+				await deviceStore.saveConnection({
+					...connection,
+					device: { ...connection.device, name: trimmed },
+					deviceRecordOutdated: true,
+				});
+			}
+			return { kind: "renamed" };
+		},
+
+		async otherDevices(): Promise<readonly DeviceRecord[]> {
+			const { connection, remote } = await connectedRemote();
+			const records = await readDeviceRecords(remote);
+			return records.filter((record) => record.device.id !== connection.device.id);
+		},
+
+		async forgetDevice(record: DeviceRecord): Promise<ForgetOutcome> {
+			const { remote } = await connectedRemote();
+			try {
+				await forgetDeviceRecord(remote, record);
+			} catch (error) {
+				if (isFailure(error, "preconditionFailed")) return { kind: "changed" };
+				if (!isFailure(error, "notFound")) throw error;
+			}
+			return { kind: "forgotten" };
+		},
+
+		async sharedSettings(): Promise<RemoteSettings | null> {
+			return (await deviceStore.loadSettingsChange())?.wanted ?? (await deviceStore.loadKnownSettings());
+		},
 	};
+
+	/**
+	 * This device's Connection and its Remote, reached with the stored
+	 * secret. Rejects without either: the settings tab offers the device
+	 * list only while connected, and a missing secret is Reconnect needed.
+	 */
+	async function connectedRemote(): Promise<{ readonly connection: Connection; readonly remote: Provider }> {
+		const connection = await deviceStore.loadConnection();
+		const secret = secretStore.getSecret(secretId);
+		if (connection === null || secret === null) throw new ProviderError({ category: "auth" }, "no Connection with a secret");
+		return { connection, remote: connectStep.access(secret).openRoot(connection.remoteRoot) };
+	}
 }
