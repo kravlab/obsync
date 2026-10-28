@@ -434,6 +434,56 @@ export const en = {
 	connectFailureNameTaken: "A folder with this name already exists",
 	connectFailureInvalidName: "The folder name contains \"/\"",
 	connectFailureFirstSyncInProgress: "Another device is doing its first sync with this folder",
+	/** Title of the onboarding window shown after a new connection. */
+	onboardingTitle: "Before you sync",
+	/** What the onboarding's list is. */
+	onboardingIntro: "Four habits keep most conflicts away:",
+	/** The four practices, in the onboarding and in help. */
+	practiceOneDeviceFirst: "Set up one device first, and let it finish its first sync.",
+	practiceEmptyOrCurrent: "Connect each new device with an empty vault or one that is up to date.",
+	practiceWaitForSynced: "Wait until the status says synced before closing Obsidian or going offline.",
+	practiceSyncAfterOffline: "After being offline, sync before editing notes that changed on another device.",
+	/** Button closing the onboarding. */
+	onboardingDone: "Got it",
+	/** Help: the button opening the onboarding again. */
+	showOnboarding: "Show the four habits again",
+	/** Help sections, each a heading and its text. */
+	helpPracticesHeading: "Avoiding conflicts",
+	helpConflictsHeading: "Conflicts",
+	helpConflictBlocks:
+		"When two devices change the same lines of a note, both versions stay in the note as a conflict, marked with this device's name on one side and as the remote version on the other. Choose a version, keep both, or edit the text by hand with the buttons above the conflict.",
+	helpConflictCopies:
+		"A changed file that cannot be merged, such as an image or a JSON file whose edits clash, takes the other device's version, and this device's version is kept beside it as a conflict copy. Compare the two, keep what you need in the original, then delete the copy.",
+	helpOutsideHeading: "Edits outside Obsidian",
+	helpOutsideEdits:
+		"Changes made to the synced folder in Dropbox itself, for example on its website, are picked up like any other change where possible, but only on a best-effort basis.",
+	/** `{folder}` is the name of the plugin's own folder in Dropbox. */
+	helpMetadataFolder: "Never change or delete the {folder} folder in Dropbox: it holds the plugin's own data for every device.",
+	helpConfigurationHeading: "Configuration folder",
+	helpConfigurationCategories:
+		"Each device chooses which parts of its configuration folder sync: settings and hotkeys, themes and snippets, and plugins.",
+	helpConfigurationSecrets:
+		"Other plugins' settings may hold secrets such as API keys or passwords; syncing plugins copies them to Dropbox.",
+	helpConfigurationRestart:
+		"Settings that arrive from another device apply after Obsidian restarts. When both devices changed the same file, changes that do not overlap are merged; otherwise the Dropbox version is used and this device's is kept, to restore from the conflicts list.",
+	helpSkippedHeading: "Skipped files",
+	/** Help: what never syncs and is not listed as skipped. */
+	helpNeverSynced: "Files and folders whose names start with a dot, and this device's workspace layout, never sync.",
+	helpSkipped: "Other files are skipped while one of these holds, and the skipped list in the sync window names each one with its reason:",
+	/** Help: the reasons a file is skipped. */
+	helpSkippedIgnored: "It matches the ignore list.",
+	helpSkippedName: "Its name cannot be stored in Dropbox.",
+	helpSkippedCase: "Its name differs from another file's only in letter case.",
+	helpSkippedSize: "It is larger than the size limit.",
+	/** Settings row opening help. */
+	settingsHelp: "Help",
+	settingsHelpDescription: "How to avoid conflicts, and what the plugin does with them.",
+	/** Settings button opening help. */
+	openHelp: "Open help",
+	/** The command opening the Sync window at its Help tab. */
+	showHelp: "Show help",
+	/** The Sync window's Help tab. */
+	tabHelp: "Help",
 	/** The bug report's lines, always taken from this English table; `{version}`, `{platform}`, `{status}` are filled in. */
 	bugReportTitle: "Obsync bug report",
 	bugReportPluginVersion: "Plugin version: {version}",

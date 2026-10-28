@@ -8,6 +8,7 @@ import { activityLine } from "./activity-text";
 import { keptConfigurationItem } from "./configuration-text";
 import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
+import { helpSections } from "./help-text";
 import { fitForPhone } from "./phone-modal";
 import { skippedLines } from "./skipped-text";
 import { statusTone } from "./status-look";
@@ -15,7 +16,7 @@ import { statusText } from "./status-text";
 import { tabContent } from "./sync-tab-content";
 
 /** The Sync window's tabs. */
-export type SyncTab = "conflicts" | "skipped" | "activity";
+export type SyncTab = "conflicts" | "skipped" | "activity" | "help";
 
 /** What the shell shows about sync: the facts the engine reported last. */
 export interface ShownSync {
@@ -46,16 +47,19 @@ export interface SyncWindowActions {
 	restore(id: string): void;
 	/** Copies the bug report to the clipboard. */
 	copyBugReport(): void;
+	/** Opens the onboarding again, from help. */
+	showOnboarding(): void;
 }
 
 /**
  * The Sync window (spec, "Status, notices, guidance"): the status with its
  * dot and counts, a "Sync now" button, or "Reconnect" while sync is paused
- * for a new login ("Connect" without a Connection), and three tabs:
+ * for a new login ("Connect" without a Connection), and four tabs:
  * Conflicts (files with Conflict blocks, Conflict copies, kept
  * configuration versions with "Restore local"), Skipped (each file with
- * its reason) and Activity (the log in plain words, with "Copy for a bug
- * report"). While open it follows what is shown: the header and tab
+ * its reason), Activity (the log in plain words, with "Copy for a bug
+ * report") and Help (help-text.ts, with the onboarding to open again).
+ * While open it follows what is shown: the header and tab
  * labels are updated in place on every change, and the tab body is redrawn
  * only when its own data changed by value, keeping the scroll position,
  * so a status change does not take the focus away from a list.
@@ -120,7 +124,7 @@ export class SyncWindow extends Modal {
 		};
 		this.header.button.addEventListener("click", () => this.headerAction());
 		const tabs = contentEl.createDiv({ cls: "obsync-sync-tabs", attr: { role: "tablist" } });
-		for (const tab of ["conflicts", "skipped", "activity"] as const) {
+		for (const tab of ["conflicts", "skipped", "activity", "help"] as const) {
 			const button = tabs.createEl("button", { cls: "obsync-sync-tab", attr: { role: "tab" } });
 			button.addEventListener("click", () => {
 				this.tab = tab;
@@ -147,7 +151,8 @@ export class SyncWindow extends Modal {
 		body.empty();
 		if (this.tab === "conflicts") this.renderConflicts(body, shown);
 		else if (this.tab === "skipped") this.renderSkipped(body, shown);
-		else this.renderActivity(body, shown);
+		else if (this.tab === "activity") this.renderActivity(body, shown);
+		else this.renderHelp(body);
 		this.drawn = { tab: this.tab, content };
 		this.contentEl.scrollTop = scrolled.content;
 		this.modalEl.scrollTop = scrolled.modal;
@@ -183,6 +188,7 @@ export class SyncWindow extends Modal {
 			conflicts: fill(strings.tabConflicts, { count: String(conflictCount(shown.conflicts)) }),
 			skipped: fill(strings.tabSkipped, { count: String(shown.skipped.length) }),
 			activity: strings.tabActivity,
+			help: strings.tabHelp,
 		};
 		for (const [tab, button] of this.tabButtons) {
 			const selected = tab === this.tab;
@@ -235,5 +241,23 @@ export class SyncWindow extends Modal {
 			.addButton((button) => button.setButtonText(strings.copyBugReport).onClick(() => actions.copyBugReport()));
 		if (activity.length === 0) body.createEl("p", { text: strings.nothingRecorded });
 		for (const event of activity) body.createDiv({ text: activityLine(event, strings), cls: "obsync-sync-line" });
+	}
+
+	/** The button opening the onboarding again, then every help section under its heading. */
+	private renderHelp(body: HTMLElement): void {
+		const { strings, actions } = this;
+		new Setting(body).addButton((button) =>
+			button.setButtonText(strings.showOnboarding).onClick(() => {
+				this.close();
+				actions.showOnboarding();
+			}),
+		);
+		for (const section of helpSections(strings)) {
+			body.createEl("h4", { text: section.heading });
+			for (const paragraph of section.paragraphs) body.createEl("p", { text: paragraph });
+			if (section.list.length === 0) continue;
+			const list = body.createEl("ul");
+			for (const item of section.list) list.createEl("li", { text: item });
+		}
 	}
 }

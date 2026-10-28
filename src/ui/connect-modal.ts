@@ -56,14 +56,14 @@ export class ConnectModal extends Modal {
 	 * @param service connects this device
 	 * @param strings the UI strings in the user's language
 	 * @param vaultName the default name of a new Remote
-	 * @param onConnected called once the device is connected, or reconnected to the account it was connected to
+	 * @param onConnected called once the device is `connected`, a new Connection, or `reconnected` to the account it was connected to
 	 */
 	constructor(
 		app: App,
 		private readonly service: ConnectionService,
 		private readonly strings: Strings,
 		private readonly vaultName: string,
-		private readonly onConnected: () => void,
+		private readonly onConnected: (kind: "connected" | "reconnected") => void,
 	) {
 		super(app);
 		fitForPhone(this);
@@ -117,7 +117,7 @@ export class ConnectModal extends Modal {
 				this.showMessage({ text: this.strings.otherAccount });
 				return;
 			case "reconnected":
-				this.done(this.strings.noticeReconnected);
+				this.done("reconnected");
 				return;
 			case "authorized":
 				return this.showRemotes(outcome.remotes);
@@ -189,7 +189,7 @@ export class ConnectModal extends Modal {
 		if (!result.ok) return this.showRemotes(remotes, result.message);
 		switch (result.value.kind) {
 			case "connected":
-				this.done(this.strings.noticeConnected);
+				this.done("connected");
 				return;
 			case "nameTaken":
 				this.showMessage({ text: this.strings.folderTaken });
@@ -209,10 +209,10 @@ export class ConnectModal extends Modal {
 		}
 	}
 
-	/** Tells the user the device is connected with `notice`, says so to `onConnected`, and closes the window. */
-	private done(notice: string): void {
-		new Notice(notice);
-		this.onConnected();
+	/** Tells the user the device is `kind` with its notice, says so to `onConnected`, and closes the window. */
+	private done(kind: "connected" | "reconnected"): void {
+		new Notice(kind === "connected" ? this.strings.noticeConnected : this.strings.noticeReconnected);
+		this.onConnected(kind);
 		this.close();
 	}
 

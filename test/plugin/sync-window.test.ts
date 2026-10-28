@@ -69,7 +69,7 @@ describe("the status entry point and the Sync window", { timeout: DEVICE_TEST_TI
 		const opened: Record<string, string> = {};
 		let previous: HTMLElement | undefined;
 
-		for (const command of ["open-sync-window", "show-conflicts", "show-skipped", "show-activity"]) {
+		for (const command of ["open-sync-window", "show-conflicts", "show-skipped", "show-activity", "show-help"]) {
 			laptop.runCommand(command);
 			// Each command opens a window of its own, in place of the one open.
 			expect(syncWindows(laptop)).toHaveLength(1);
@@ -83,7 +83,29 @@ describe("the status entry point and the Sync window", { timeout: DEVICE_TEST_TI
 			"show-conflicts": fill(strings.tabConflicts, { count: "0" }),
 			"show-skipped": fill(strings.tabSkipped, { count: "0" }),
 			"show-activity": strings.tabActivity,
+			"show-help": strings.tabHelp,
 		});
+	});
+
+	it("shows the help in its tab, and the welcome screen again from it", async () => {
+		const { devices } = newDevices();
+		const laptop = await devices.start("Laptop vault");
+
+		laptop.runCommand("show-help");
+		const help = lastSyncWindow(laptop);
+
+		expect([...help.querySelectorAll("h4")].map((heading) => heading.textContent)).toEqual([
+			strings.helpPracticesHeading,
+			strings.helpConflictsHeading,
+			strings.helpOutsideHeading,
+			strings.helpConfigurationHeading,
+			strings.helpSkippedHeading,
+		]);
+		expect(help.textContent).toContain(strings.practiceOneDeviceFirst);
+		expect(help.textContent).toContain(".obsync");
+		buttonIn(help, strings.showOnboarding).click();
+		await vi.waitFor(() => expect(laptop.button(strings.onboardingDone)).toBeDefined(), PLUGIN_WAIT);
+		expect(syncWindows(laptop)).toHaveLength(0);
 	});
 
 	it("lists in each tab the conflicts, the skipped files and the activity", async () => {
@@ -166,6 +188,7 @@ describe("the status entry point and the Sync window", { timeout: DEVICE_TEST_TI
 		const modals = phone.windowsOpened();
 		expect(modals.map((modal) => modal.titleEl.textContent)).toEqual([
 			strings.connectTitle,
+			strings.onboardingTitle,
 			strings.firstSyncTitle,
 			strings.syncWindowTitle,
 		]);

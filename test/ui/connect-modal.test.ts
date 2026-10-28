@@ -48,9 +48,12 @@ function remotesFor(script: Omit<Script, "submitCode">): RemoteChooser {
 	};
 }
 
-/** The open connect window, after it showed the login screen. */
-async function openWindow(script: Pick<Script, "submitCode">): Promise<ConnectModal> {
-	const modal = new ConnectModal({} as never, serviceFor(script), strings, "My vault", () => undefined);
+/** The open connect window, after it showed the login screen; it tells `onConnected` once connected. */
+async function openWindow(
+	script: Pick<Script, "submitCode">,
+	onConnected: (kind: "connected" | "reconnected") => void = () => undefined,
+): Promise<ConnectModal> {
+	const modal = new ConnectModal({} as never, serviceFor(script), strings, "My vault", onConnected);
 	modal.open();
 	await vi.waitFor(() => expect(button(modal, strings.continue)).toBeDefined());
 	return modal;
@@ -266,5 +269,28 @@ describe("the connect window's Connect anyway", () => {
 
 		await vi.waitFor(() => expect(Notice.shown).toEqual([strings.noticeConnected]));
 		expect(useFolder).toHaveBeenLastCalledWith("/Notes", strings.deviceDesktop, { evenDuringFirstSync: true });
+	});
+});
+
+describe("the connect window's end", () => {
+	it("tells a new Connection as connected", async () => {
+		const onConnected = vi.fn();
+		const remotes = remotesFor({});
+		const modal = await openWindow({ submitCode: () => Promise.resolve({ kind: "authorized", remotes }) }, onConnected);
+		submitCode(modal);
+		await vi.waitFor(() => expect(button(modal, strings.useFolder)).toBeDefined());
+
+		button(modal, strings.useFolder)?.click();
+
+		await vi.waitFor(() => expect(onConnected).toHaveBeenCalledWith("connected"));
+	});
+
+	it("tells a login again to the same account as reconnected", async () => {
+		const onConnected = vi.fn();
+		const modal = await openWindow({ submitCode: () => Promise.resolve({ kind: "reconnected" }) }, onConnected);
+
+		submitCode(modal);
+
+		await vi.waitFor(() => expect(onConnected).toHaveBeenCalledWith("reconnected"));
 	});
 });

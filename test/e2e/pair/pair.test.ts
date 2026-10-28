@@ -364,6 +364,8 @@ function writeFiles(files: readonly VaultFile[]): string {
 function connectedAndFirstSync(strings: Strings): string {
 	return `
 		await until(() => [...activeDocument.querySelectorAll(".notice")].find((n) => n.textContent === ${JSON.stringify(strings.noticeConnected)}), 60000, "the Connected notice");
+		// A new Connection shows the onboarding; the first sync starts once it is closed.
+		(await button(${JSON.stringify(strings.onboardingDone)})).click();
 		const firstSyncWindow = await until(
 			() => [...activeDocument.querySelectorAll(".modal")].find((m) => m.querySelector(".modal-title")?.textContent === ${JSON.stringify(strings.firstSyncTitle)}),
 			60000,

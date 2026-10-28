@@ -22,11 +22,12 @@ afterEach(() => {
 /**
  * The settings tab of a connected device named "Laptop", that knows the
  * default shared settings, drawn into the document; the connection service
- * answers as `overrides` say, and Apply calls `changeSettings`.
+ * answers as `overrides` say, Apply calls `changeSettings` and Help `openHelp`.
  */
 async function connectedTab(
 	overrides: Partial<ConnectionService> = {},
 	changeSettings: (base: RemoteSettings, wanted: RemoteSettings) => Promise<void> = () => Promise.resolve(),
+	openHelp: () => void = () => undefined,
 ): Promise<ObsyncSettingTab> {
 	const app = new FakeApp();
 	const service: ConnectionService = {
@@ -48,6 +49,7 @@ async function connectedTab(
 		() => undefined,
 		() => undefined,
 		changeSettings,
+		openHelp,
 		new ObsidianRequestLimitStore(app as never),
 		new ObsidianScheduleStore(app as never),
 		new ObsidianDeletionGuardStore(app as never),
@@ -250,5 +252,17 @@ describe("the settings tab's other devices", () => {
 		expect(forgetDevice).not.toHaveBeenCalled();
 		expect(Notice.shown).toEqual([]);
 		expect(row("Phone")).toBeDefined();
+	});
+});
+
+describe("the settings tab's help", () => {
+	it("opens the help", async () => {
+		const openHelp = vi.fn();
+		await connectedTab({}, undefined, openHelp);
+
+		expect(row(strings.settingsHelp).textContent).toContain(strings.settingsHelpDescription);
+		press(strings.openHelp);
+
+		expect(openHelp).toHaveBeenCalledOnce();
 	});
 });

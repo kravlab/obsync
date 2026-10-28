@@ -88,8 +88,8 @@ interface Row {
 
 /**
  * The plugin's settings tab: this device's Connection, with Connect or
- * Disconnect, "Sync now" and the device name while connected, this
- * device's number settings: the post-edit pause, the polling interval,
+ * Disconnect, "Sync now" and the device name while connected, a row
+ * opening the help, this device's number settings: the post-edit pause, the polling interval,
  * the per-request limit and the Deletion guard thresholds, and, under
  * their own headings, this device's configuration categories and, while
  * connected, the shared Remote settings with "Apply to all devices" and
@@ -122,6 +122,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	 * @param openConnect opens the connect window
 	 * @param syncNow starts a sync of this device
 	 * @param changeSettings brings the shared Remote settings to the wanted ones, edited from the base ones, settling once its sync is done
+	 * @param openHelp opens the help
 	 * @param requestLimit keeps this device's Per-request limit
 	 * @param schedule keeps this device's post-edit pause and polling interval
 	 * @param deletionGuard keeps this device's Deletion guard thresholds
@@ -135,6 +136,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 		private readonly openConnect: () => void,
 		private readonly syncNow: () => void,
 		private readonly changeSettings: (base: RemoteSettings, wanted: RemoteSettings) => Promise<void>,
+		private readonly openHelp: () => void,
 		private readonly requestLimit: ObsidianRequestLimitStore,
 		private readonly schedule: ObsidianScheduleStore,
 		private readonly deletionGuard: ObsidianDeletionGuardStore,
@@ -514,8 +516,20 @@ export class ObsyncSettingTab extends PluginSettingTab {
 		];
 	}
 
-	/** The rows for the Connection as read last: Connect, or Disconnect and Sync now. */
+	/** The rows for the Connection as read last: Connect, or Disconnect and Sync now; then Help. */
 	private rows(): Row[] {
+		const { strings } = this;
+		const help: Row = {
+			name: strings.settingsHelp,
+			description: strings.settingsHelpDescription,
+			button: strings.openHelp,
+			action: this.openHelp,
+		};
+		return [...this.connectionRows(), help];
+	}
+
+	/** The rows for the Connection as read last: Connect, or Disconnect and Sync now. */
+	private connectionRows(): Row[] {
 		const { strings, device } = this;
 		if (device === null) {
 			return [

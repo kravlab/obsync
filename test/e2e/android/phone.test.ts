@@ -130,6 +130,8 @@ describe("check 1: connecting through the phone's real requestUrl", () => {
 				${enterCodeProgram(code, strings)}
 				${newFolderProgram(RUN_FOLDER, strings)}
 				const notice = await until(() => [...activeDocument.querySelectorAll(".notice")].find((n) => n.textContent === ${JSON.stringify(strings.noticeConnected)}), 60000, "the Connected notice");
+				// A new Connection shows the onboarding; the first sync starts once it is closed.
+				(await button(${JSON.stringify(strings.onboardingDone)})).click();
 				return notice.textContent;`,
 				LOGIN_TIMEOUT_MS,
 			);

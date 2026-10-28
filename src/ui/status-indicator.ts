@@ -11,6 +11,7 @@ import { DeletionGuardModal } from "./deletion-guard-modal";
 import { FirstSyncModal } from "./first-sync-modal";
 import type { Strings } from "./i18n/strings";
 import { noticeText } from "./notice-text";
+import { OnboardingModal } from "./onboarding-modal";
 import { SettingsCollisionModal } from "./settings-collision-modal";
 import { statusIcon, statusTone } from "./status-look";
 import { statusText } from "./status-text";
@@ -28,16 +29,24 @@ import type { ShownSync, ShownSyncSource } from "./sync-window";
  *   state, with the same text as its tooltip.
  *
  * A click on either opens the Sync window. Each sync notice is shown as an
- * Obsidian notice, and the Deletion guard, First sync and settings
- * collision prompts are asked through it.
+ * Obsidian notice, the Deletion guard, First sync and settings collision
+ * prompts are asked through it, and the onboarding is shown through it,
+ * so a First sync preview waits behind it.
  */
 export class StatusIndicator implements ActivityUi, ShownSyncSource {
 	/** What the engine reported last. */
 	private facts: ShownSync = { status: { state: "notConnected" }, conflicts: NO_CONFLICTS, skipped: [], activity: [] };
 	/** Called after every change of `facts`, while subscribed. */
 	private readonly listeners = new Set<() => void>();
-	/** Deletion guard, First sync and settings collision prompts open now; the plugin's unload closes them, which answers null. */
-	private readonly prompts = new Set<DeletionGuardModal | FirstSyncModal | SettingsCollisionModal>();
+	/**
+	 * Deletion guard, First sync and settings collision prompts and the
+	 * onboarding open now; the plugin's unload closes them, which answers null.
+	 */
+	private readonly prompts = new Set<DeletionGuardModal | FirstSyncModal | SettingsCollisionModal | OnboardingModal>();
+	/** Settles once the onboarding open now is closed; a First sync preview waits for it. */
+	private onboarding: Promise<unknown> | undefined;
+	/** Whether the plugin unloaded: nothing opens any more. */
+	private unloaded = false;
 	/** The status bar item (desktop) or ribbon icon (mobile). */
 	private readonly element: HTMLElement;
 	/** The status bar item's dot; absent on mobile. */
@@ -59,6 +68,7 @@ export class StatusIndicator implements ActivityUi, ShownSyncSource {
 	) {
 		// A prompt left open would let a sync of the unloaded plugin delete files later.
 		plugin.register(() => {
+			this.unloaded = true;
 			for (const prompt of this.prompts) prompt.close();
 		});
 		if (Platform.isMobile) {
@@ -131,10 +141,32 @@ export class StatusIndicator implements ActivityUi, ShownSyncSource {
 	}
 
 	/**
-	 * Shows `preview` in the First sync modal and resolves with the answer;
-	 * null if it is closed, or the plugin unloads while it is open.
+	 * Shows the onboarding and resolves once it is closed, by the user or
+	 * because the plugin unloads; tells whether the plugin is still loaded
+	 * then. A First sync preview asked for meanwhile waits for it.
+	 */
+	async showOnboarding(): Promise<boolean> {
+		const modal = new OnboardingModal(this.plugin.app, this.strings);
+		this.prompts.add(modal);
+		const closed = modal.ask();
+		this.onboarding = closed;
+		try {
+			await closed;
+		} finally {
+			this.prompts.delete(modal);
+			if (this.onboarding === closed) this.onboarding = undefined;
+		}
+		return !this.unloaded;
+	}
+
+	/**
+	 * Shows `preview` in the First sync modal, once the onboarding open is
+	 * closed, so it never covers it, and resolves with the answer; null if
+	 * it is closed, or the plugin unloads before or while it is open.
 	 */
 	async askFirstSync(preview: FirstSyncPreview): Promise<FirstSyncAnswer> {
+		await this.onboarding;
+		if (this.unloaded) return null;
 		const modal = new FirstSyncModal(this.plugin.app, this.strings, preview);
 		this.prompts.add(modal);
 		try {

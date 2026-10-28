@@ -136,13 +136,16 @@ export interface ConnectChoice {
 	readonly useFolder?: string;
 	/** The device name to give; without it, the one the window suggests. */
 	readonly deviceName?: string;
+	/** Leave the onboarding a new Connection shows open; without it, it is closed with "Got it", which starts the sync. */
+	readonly leaveOnboardingOpen?: boolean;
 }
 
 /**
  * Connects through the settings tab and the connect window, as the user
  * does: Connect, Open Dropbox, the code the fake service shows the account,
  * then the device name and the Remote of `choice`. Resolves once the
- * plugin says it is connected.
+ * plugin says it is connected and, unless `choice` leaves it open, the
+ * onboarding it shows is closed with "Got it".
  */
 export async function connectThroughSettings(run: ConnectRun, choice: ConnectChoice = {}): Promise<void> {
 	openConnectWindow(run.root, run.plugin);
@@ -155,6 +158,9 @@ export async function connectThroughSettings(run: ConnectRun, choice: ConnectCho
 	const shownFailure = (): string =>
 		[...run.root.querySelectorAll(".obsync-message, .obsync-message-detail")].map((line) => line.textContent).join(" ");
 	await vi.waitFor(() => expect(run.notices(), shownFailure()).toContain(strings.noticeConnected), PLUGIN_WAIT);
+	if (choice.leaveOnboardingOpen === true) return;
+	await vi.waitFor(() => buttonIn(run.root, strings.onboardingDone), PLUGIN_WAIT);
+	buttonIn(run.root, strings.onboardingDone).click();
 }
 
 /** Counts the requests to a fake service under way, so a test can wait until none is. */

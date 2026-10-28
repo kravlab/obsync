@@ -7,6 +7,6 @@ import type { ShownSync, SyncTab } from "./sync-window";
  * cost a full rebuild of a long Skipped or Activity list.
  */
 export function tabContent(shown: ShownSync, tab: SyncTab): string {
-	const data: Record<SyncTab, unknown> = { conflicts: shown.conflicts, skipped: shown.skipped, activity: shown.activity };
+	const data: Record<SyncTab, unknown> = { conflicts: shown.conflicts, skipped: shown.skipped, activity: shown.activity, help: null };
 	return JSON.stringify(data[tab]);
 }

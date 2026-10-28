@@ -61,6 +61,64 @@ describe("connecting and disconnecting in the running plugin", { timeout: DEVICE
 		await vi.waitFor(() => rowButton(laptop.root, strings.settingsDropbox, strings.connect), PLUGIN_WAIT);
 	});
 
+	it("shows the welcome screen after a new connection, and the first sync preview only once it is closed", async () => {
+		const { dropbox, devices } = newDevices();
+		const account = dropbox.addAccount("account-1");
+		const laptop = await devices.start("Laptop vault", { files: { "note.md": "hello" } });
+
+		await devices.connect(laptop, account, { leaveOnboardingOpen: true });
+
+		await vi.waitFor(() => laptop.button(strings.onboardingDone), PLUGIN_WAIT);
+		expect(laptop.root.textContent).toContain(strings.practiceOneDeviceFirst);
+		await devices.settle();
+		expect(laptop.root.textContent).not.toContain(strings.firstSyncStart);
+		laptop.button(strings.onboardingDone).click();
+		await devices.startFirstSync(laptop);
+	});
+
+	it("starts the first sync also when the welcome screen is closed without Got it", async () => {
+		const { dropbox, devices } = newDevices();
+		const account = dropbox.addAccount("account-1");
+		const laptop = await devices.start("Laptop vault", { files: { "note.md": "hello" } });
+		await devices.connect(laptop, account, { leaveOnboardingOpen: true });
+		await vi.waitFor(() => laptop.button(strings.onboardingDone), PLUGIN_WAIT);
+
+		laptop.windowsOpened().find((modal) => modal.titleEl.textContent === strings.onboardingTitle)?.close();
+
+		await devices.startFirstSync(laptop);
+	});
+
+	it("keeps the first sync preview behind the welcome screen when a sync starts meanwhile", async () => {
+		const { dropbox, devices } = newDevices();
+		const account = dropbox.addAccount("account-1");
+		const laptop = await devices.start("Laptop vault", { files: { "note.md": "hello" } });
+		await devices.connect(laptop, account, { leaveOnboardingOpen: true });
+		await vi.waitFor(() => laptop.button(strings.onboardingDone), PLUGIN_WAIT);
+
+		laptop.runCommand("sync-now");
+		await devices.settle();
+
+		expect(laptop.root.textContent).not.toContain(strings.firstSyncStart);
+		laptop.button(strings.onboardingDone).click();
+		await devices.startFirstSync(laptop);
+	});
+
+	it("starts no sync when the plugin unloads while the welcome screen is open", async () => {
+		const { dropbox, devices } = newDevices();
+		const account = dropbox.addAccount("account-1");
+		const laptop = await devices.start("Laptop vault", { files: { "note.md": "hello" } });
+		await devices.connect(laptop, account, { leaveOnboardingOpen: true });
+		await vi.waitFor(() => laptop.button(strings.onboardingDone), PLUGIN_WAIT);
+		const requestsBefore = dropbox.requests.length;
+
+		laptop.plugin.unload();
+		await devices.settle();
+
+		expect(laptop.root.textContent).not.toContain(strings.onboardingDone);
+		expect(laptop.windowsOpened().map((modal) => modal.titleEl.textContent)).not.toContain(strings.firstSyncTitle);
+		expect(dropbox.requests.length).toBe(requestsBefore);
+	});
+
 	it("appends a failed connect's line to obsync.log in the plugin's folder", async () => {
 		const { devices } = newDevices();
 		const laptop = await devices.start("Laptop vault");

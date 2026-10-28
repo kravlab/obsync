@@ -135,10 +135,17 @@ export default class ObsyncPlugin extends Plugin {
 			engine.reconcile().catch((error: unknown) => console.error("obsync: reconcile failed", error));
 		};
 		const openConnect = (): void => {
-			new ConnectModal(this.app, connection, strings, this.app.vault.getName(), () => {
+			new ConnectModal(this.app, connection, strings, this.app.vault.getName(), (kind) => {
 				void settingTab.reload();
-				// Syncing starts at once: a new Connection shows its First sync preview, a login again ends a pause for Reconnect needed.
-				syncNow();
+				// A login again ends a pause for Reconnect needed: syncing starts at once.
+				if (kind === "reconnected") {
+					syncNow();
+					return;
+				}
+				// A new Connection shows the onboarding first, then syncs; a plugin unloaded meanwhile syncs nothing.
+				void indicator.showOnboarding().then((loaded) => {
+					if (loaded) syncNow();
+				});
 			}).open();
 		};
 		// One Sync window at a time, closed with the plugin so its buttons never reach an unloaded engine.
@@ -161,6 +168,7 @@ export default class ObsyncPlugin extends Plugin {
 					restore: (id) => {
 						engine.restoreConfiguration(id).catch((error: unknown) => console.error("obsync: restore failed", error));
 					},
+					showOnboarding: () => void indicator.showOnboarding(),
 					copyBugReport: () => {
 						this.copyBugReport(indicator, strings).catch((error: unknown) => {
 							// The clipboard can refuse, e.g. without focus or permission: the user is told, not left waiting.
@@ -177,6 +185,7 @@ export default class ObsyncPlugin extends Plugin {
 		this.addCommand({ id: "show-conflicts", name: strings.showConflicts, callback: () => openSyncWindow("conflicts") });
 		this.addCommand({ id: "show-skipped", name: strings.showSkipped, callback: () => openSyncWindow("skipped") });
 		this.addCommand({ id: "show-activity", name: strings.showActivity, callback: () => openSyncWindow("activity") });
+		this.addCommand({ id: "show-help", name: strings.showHelp, callback: () => openSyncWindow("help") });
 		this.addCommand({
 			id: "reconnect",
 			name: strings.reconnectCommand,
@@ -228,6 +237,7 @@ export default class ObsyncPlugin extends Plugin {
 			openConnect,
 			syncNow,
 			(base, wanted) => engine.changeSettings(base, wanted),
+			() => openSyncWindow("help"),
 			requestLimit,
 			schedule,
 			deletionGuard,
