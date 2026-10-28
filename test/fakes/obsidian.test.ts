@@ -3,13 +3,16 @@ import { afterEach, describe, expect, it } from "vitest";
 // The fake itself, by path: its test-only parts are not in Obsidian's typings.
 import {
 	ButtonComponent,
+	Editor,
 	MarkdownRenderChild,
 	MarkdownRenderer,
+	MarkdownView,
 	Modal,
 	Notice,
 	Platform,
 	Plugin,
 	PluginSettingTab,
+	PostProcessorContext,
 	Setting,
 	SuggestModal,
 	TextAreaComponent,
@@ -26,6 +29,7 @@ import {
 	resetObsidianFake,
 	setIcon,
 	setTooltip,
+	showInto,
 } from "./obsidian";
 
 afterEach(() => {
@@ -420,6 +424,153 @@ describe("the fake obsidian module's files and folders", () => {
 	});
 });
 
+describe("the fake obsidian module's global element helpers", () => {
+	it("creates an element in the main document, attached only to a parent given", () => {
+		const parent = document.body.createDiv();
+
+		const loose = createDiv({ cls: "a b", text: "loose" });
+		const span = createSpan("c");
+		let connectedInCallback: boolean | undefined;
+		const attached = createEl("p", { text: "Attached", parent }, (element) => {
+			element.setAttr("data-made", "yes");
+			connectedInCallback = element.isConnected;
+		});
+		const first = createDiv({ parent, prepend: true });
+
+		expect(loose.isConnected).toBe(false);
+		expect([...loose.classList]).toEqual(["a", "b"]);
+		expect(loose.textContent).toBe("loose");
+		expect(span.tagName).toBe("SPAN");
+		expect(span.className).toBe("c");
+		expect([...parent.children]).toEqual([first, attached]);
+		expect(attached.getAttribute("data-made")).toBe("yes");
+		// The callback runs before the element is appended.
+		expect(connectedInCallback).toBe(false);
+	});
+
+	it("tells the window a node belongs to", () => {
+		expect(document.body.createDiv().win).toBe(window);
+		expect(document.createTextNode("text").win).toBe(window);
+		expect(document.win).toBe(window);
+	});
+});
+
+describe("the fake obsidian module's post processor context", () => {
+	it("tells the same section for every element, or null, and keeps the children added", () => {
+		const section = { text: "a\nb", lineStart: 0, lineEnd: 1 };
+		const context = new PostProcessorContext("note.md", section);
+		const child = new MarkdownRenderChild(createDiv());
+
+		context.addChild(child);
+
+		expect(context.sourcePath).toBe("note.md");
+		expect(context.getSectionInfo(createEl("p"))).toBe(section);
+		expect(context.children).toEqual([child]);
+		expect(new PostProcessorContext("note.md", null).getSectionInfo(createEl("p"))).toBeNull();
+	});
+});
+
+describe("the fake obsidian module's editor and Markdown view", () => {
+	it("turns offsets into positions and back, by line and character", () => {
+		const editor = new Editor("one\ntwo\n");
+
+		expect(editor.offsetToPos(0)).toEqual({ line: 0, ch: 0 });
+		expect(editor.offsetToPos(5)).toEqual({ line: 1, ch: 1 });
+		expect(editor.offsetToPos(8)).toEqual({ line: 2, ch: 0 });
+		expect(editor.posToOffset({ line: 1, ch: 1 })).toBe(5);
+		expect(editor.posToOffset({ line: 2, ch: 0 })).toBe(8);
+	});
+
+	it("fails with a RangeError for an offset or a position outside the text", () => {
+		const editor = new Editor("one\ntwo");
+
+		expect(editor.offsetToPos(7)).toEqual({ line: 1, ch: 3 });
+		expect(() => editor.offsetToPos(8)).toThrow(RangeError);
+		expect(() => editor.offsetToPos(-1)).toThrow(RangeError);
+		expect(() => editor.posToOffset({ line: 0, ch: 4 })).toThrow(RangeError);
+		expect(() => editor.posToOffset({ line: 2, ch: 0 })).toThrow(RangeError);
+		expect(() => editor.setCursor(0, 9)).toThrow(RangeError);
+	});
+
+	it("puts the cursor at a position or at a line and character, at the start until then", () => {
+		const editor = new Editor("one\ntwo\n");
+
+		expect(editor.getCursor()).toEqual({ line: 0, ch: 0 });
+		editor.setCursor({ line: 1, ch: 2 });
+		expect(editor.getCursor()).toEqual({ line: 1, ch: 2 });
+		editor.setCursor(0);
+		expect(editor.getCursor()).toEqual({ line: 0, ch: 0 });
+		editor.setCursor(1, 3);
+		expect(editor.getCursor()).toEqual({ line: 1, ch: 3 });
+	});
+
+	it("replaces a range, or inserts at a position, and tells each change", () => {
+		let changes = 0;
+		const editor = new Editor("one two three", () => (changes += 1));
+
+		editor.replaceRange("2", { line: 0, ch: 4 }, { line: 0, ch: 7 });
+		editor.replaceRange("zero ", { line: 0, ch: 0 });
+
+		expect(editor.getValue()).toBe("zero one 2 three");
+		expect(changes).toBe(2);
+	});
+
+	it("scrolls a range into view without changing the text or the cursor", () => {
+		const editor = new Editor("one\ntwo");
+		editor.setCursor(1, 1);
+
+		editor.scrollIntoView();
+
+		expect(editor.getValue()).toBe("one\ntwo");
+		expect(editor.getCursor()).toEqual({ line: 1, ch: 1 });
+	});
+
+	// The cases checked against CodeMirror 6's own mapping of a cursor through a change.
+	it.each([
+		{ at: "an insertion at the cursor", cursor: 1, from: 1, to: 1, expected: 1 },
+		{ at: "the start of the range", cursor: 1, from: 1, to: 2, expected: 1 },
+		{ at: "the end of the range", cursor: 2, from: 1, to: 2, expected: 3 },
+	])("maps a cursor at $at as CodeMirror 6 does", ({ cursor, from, to, expected }) => {
+		const editor = new Editor("abc");
+		editor.setCursor(0, cursor);
+
+		editor.replaceRange("XX", { line: 0, ch: from }, { line: 0, ch: to });
+
+		expect(editor.getCursor()).toEqual({ line: 0, ch: expected });
+	});
+
+	it("moves a cursor after the range with its text, leaves one before it, and puts one inside at its start", () => {
+		const after = new Editor("one\ntwo\nthree");
+		after.setCursor(2, 3);
+		after.replaceRange("ONE, longer", { line: 0, ch: 0 }, { line: 0, ch: 3 });
+		const before = new Editor("one\ntwo\nthree");
+		before.setCursor(0, 2);
+		before.replaceRange("TWO\nand more", { line: 1, ch: 0 }, { line: 1, ch: 3 });
+		const inside = new Editor("one\ntwo\nthree");
+		inside.setCursor(1, 2);
+		inside.replaceRange("x", { line: 1, ch: 0 }, { line: 2, ch: 1 });
+
+		expect(after.getCursor()).toEqual({ line: 2, ch: 3 });
+		expect(before.getCursor()).toEqual({ line: 0, ch: 2 });
+		expect(inside.getCursor()).toEqual({ line: 1, ch: 0 });
+	});
+
+	it("saves the editor's text through the view's writer", async () => {
+		const file = new TFile("note.md", { size: 0, ctime: 0, mtime: 0 });
+		const saved: string[] = [];
+		const view = new MarkdownView(file, new Editor("hello"), (text) => {
+			saved.push(text);
+			return Promise.resolve();
+		});
+
+		view.editor.replaceRange(" world", { line: 0, ch: 5 });
+		await view.save();
+
+		expect(view.file).toBe(file);
+		expect(saved).toEqual(["hello world"]);
+	});
+});
+
 describe("the fake obsidian module's plugin", () => {
 	/** A plugin of a fake app with a manifest. */
 	const plugin = (): Plugin => new Plugin({}, { id: "test", version: "1.0.0" });
@@ -453,6 +604,29 @@ describe("the fake obsidian module's plugin", () => {
 		expect(icon.getAttribute("aria-label")).toBe("Sync");
 		expect(document.body.contains(icon)).toBe(false);
 		expect(document.body.contains(item)).toBe(false);
+	});
+
+	it("shows modals, ribbon icons and status bar items in the element given by showInto", () => {
+		const own = document.body.createDiv();
+		const added = plugin();
+
+		showInto(own);
+		const modal = new Modal({});
+		modal.open();
+		const icon = added.addRibbonIcon("refresh-cw", "Sync", () => undefined);
+		const item = added.addStatusBarItem();
+
+		expect([modal.modalEl, icon, item].map((element) => element.parentElement)).toEqual([own, own, own]);
+	});
+
+	it("shows modals in the document's body again after a reset", () => {
+		showInto(document.body.createDiv());
+
+		resetObsidianFake();
+		const modal = new Modal({});
+		modal.open();
+
+		expect(modal.modalEl.parentElement).toBe(document.body);
 	});
 
 	it("runs onunload, then every cleanup newest first, on unload, and the cleanups only once", () => {

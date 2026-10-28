@@ -7,8 +7,8 @@ export default defineConfig([
 	// dist/ is build output; *.mjs are build and tool configs outside
 	// the TypeScript project; .agents/ and .claude/ hold vendored agent
 	// skills, and .scratch/ tickets and local prototype builds, not plugin
-	// code.
-	{ ignores: ["dist/", "*.mjs", ".agents/", ".claude/", ".scratch/"] },
+	// code; .e2e/ holds what the desktop and Android runs keep locally.
+	{ ignores: ["dist/", "*.mjs", ".agents/", ".claude/", ".scratch/", ".e2e/"] },
 	...obsidianmd.configs.recommendedWithLocalesEn,
 	{
 		languageOptions: {
@@ -22,5 +22,20 @@ export default defineConfig([
 	{
 		files: ["test/fakes/obsidian.ts"],
 		rules: { "obsidianmd/prefer-create-el": "off" },
+	},
+	// The desktop and Android runs are Node programs that start and drive
+	// Obsidian from outside, not plugin code: they use Node's modules,
+	// `process`, `fetch` and Node's timers, which the plugin rules forbid,
+	// and write `.obsidian` into the vaults they create, whose
+	// configuration folder it is.
+	{
+		files: ["test/e2e/**/*.ts"],
+		languageOptions: { globals: { process: "readonly" } },
+		rules: {
+			"obsidianmd/no-nodejs-modules": "off",
+			"no-restricted-globals": "off",
+			"obsidianmd/hardcoded-config-path": "off",
+			"obsidianmd/prefer-window-timers": "off",
+		},
 	},
 ]);

@@ -3,15 +3,16 @@
  * of the review fixes, item 20): a vault in memory with Obsidian's index
  * (`TFile`, `TFolder`) over everything but hidden paths, the file adapter
  * under it for every path, the vault's events, a workspace whose layout a
- * test makes ready, the secret storage and the per-vault localStorage. It
- * holds what the plugin uses, as Obsidian's typings document it.
+ * test makes ready and where it opens notes in an editor, the secret
+ * storage and the per-vault localStorage. It holds what the plugin uses,
+ * as Obsidian's typings document it.
  *
  * Its limit: the adapter writes the one store the index reads, so a file
  * the adapter writes at a visible path is indexed at once, with no event,
  * where Obsidian would index it later from its file watcher. The plugin
  * writes only hidden paths through the adapter.
  */
-import { TAbstractFile, TFile, TFolder, type FakeEventRef } from "./obsidian";
+import { Editor, MarkdownView, TAbstractFile, TFile, TFolder, type FakeEventRef } from "./obsidian";
 
 /** One stored entry, at its path. */
 type Stored = { readonly kind: "file"; data: ArrayBuffer; ctime: number; mtime: number } | { readonly kind: "folder" };
@@ -92,7 +93,7 @@ export class FakeObsidianVault extends Events {
 				folders: children.filter(([, entry]) => entry.kind === "folder").map(([child]) => child),
 			});
 		},
-		read: (path: string): Promise<string> => this.adapter.readBinary(path).then((data) => new TextDecoder().decode(data)),
+		read: (path: string): Promise<string> => this.adapter.readBinary(path).then(decode),
 		write: (path: string, text: string): Promise<void> => this.adapter.writeBinary(path, encode(text)),
 		readBinary: (path: string): Promise<ArrayBuffer> => {
 			const entry = this.entries.get(path);
@@ -134,9 +135,9 @@ export class FakeObsidianVault extends Events {
 		return this.name;
 	}
 
-	/** Puts the text file `path` in the vault, with its folders, as if it were there when Obsidian started. */
-	seed(path: string, text: string): void {
-		this.store(path, encode(text));
+	/** Puts the file `path`, its text or bytes, in the vault, with its folders, as if it were there when Obsidian started. */
+	seed(path: string, content: string | ArrayBuffer): void {
+		this.store(path, typeof content === "string" ? encode(content) : content);
 	}
 
 	/** Every indexed file and folder, the root first. */
@@ -179,7 +180,7 @@ export class FakeObsidianVault extends Events {
 
 	/** Replaces the text of `file` with what `change` makes of it; returns the new text. */
 	async process(file: TFile, change: (text: string) => string): Promise<string> {
-		const before = new TextDecoder().decode(await this.readBinary(file));
+		const before = decode(await this.readBinary(file));
 		const after = change(before);
 		if (after !== before) await this.modifyBinary(file, encode(after));
 		return after;
@@ -195,11 +196,21 @@ export class FakeObsidianVault extends Events {
 		return Promise.resolve(folder);
 	}
 
-	/** Renames `file` to `newPath`, with everything inside a folder. */
+	/**
+	 * Renames `file` to `newPath`, with everything inside a folder. Tells
+	 * rename as Obsidian's `vault.rename` does (seen in
+	 * test/e2e/desktop/folder-rename-events.test.ts), all before it resolves:
+	 * for the file or folder itself, then for each indexed folder and file
+	 * inside it, in the order the vault came to know them. That order was
+	 * seen for a folder's first rename after its contents were created; after
+	 * a rewrite, a second rename or a restart it is this map's order, not a
+	 * seen one.
+	 */
 	rename(file: TAbstractFile, newPath: string): Promise<void> {
 		const oldPath = file.path;
-		this.move(oldPath, newPath);
+		const inside = this.move(oldPath, newPath).filter(({ from }) => from !== oldPath);
 		this.trigger("rename", this.indexOf(newPath), oldPath);
+		for (const { from, to } of inside) if (!isHidden(to)) this.trigger("rename", this.indexOf(to), from);
 		return Promise.resolve();
 	}
 
@@ -232,12 +243,14 @@ export class FakeObsidianVault extends Events {
 		if (!this.entries.has(path)) this.entries.set(path, { kind: "folder" });
 	}
 
-	/** Moves the entry at `from`, with everything inside it, to `to`. */
-	private move(from: string, to: string): void {
+	/** Moves the entry at `from`, with everything inside it, to `to`; returns each path moved, in this map's order. */
+	private move(from: string, to: string): { from: string; to: string }[] {
 		this.makeFolders(parentOf(to));
+		const movedPaths: { from: string; to: string }[] = [];
 		for (const [path, entry] of [...this.entries]) {
 			if (path !== from && !path.startsWith(`${from}/`)) continue;
 			const moved = to + path.slice(from.length);
+			movedPaths.push({ from: path, to: moved });
 			this.entries.delete(path);
 			this.entries.set(moved, entry);
 			const indexed = this.indexed.get(path);
@@ -248,6 +261,7 @@ export class FakeObsidianVault extends Events {
 				this.indexed.set(moved, indexed);
 			}
 		}
+		return movedPaths;
 	}
 
 	/** Removes the entry at `path` with everything inside it. */
@@ -275,13 +289,20 @@ export class FakeObsidianVault extends Events {
 	}
 }
 
-/** The workspace: its events, and a layout that a test makes ready. */
+/** The workspace: its events, a layout that a test makes ready, and the notes a test opens in an editor. */
 export class FakeWorkspace extends Events {
 	/** The workspace's own element, in the main window's document. */
 	readonly containerEl: HTMLElement = document.body.createDiv();
 	/** Whether the layout is ready. */
 	layoutReady = false;
 	private readonly waiting: (() => void)[] = [];
+	/** The leaves of the notes open in an editor, oldest first. */
+	private readonly markdownLeaves: { readonly view: MarkdownView }[] = [];
+
+	/** @param vault the vault whose notes open here */
+	constructor(private readonly vault: FakeObsidianVault) {
+		super();
+	}
 
 	/** Runs `callback` once the layout is ready: at once if it is. */
 	onLayoutReady(callback: () => void): void {
@@ -295,12 +316,25 @@ export class FakeWorkspace extends Events {
 		for (const callback of this.waiting.splice(0)) callback();
 	}
 
-	/** The leaves showing a view of `type`: the fake opens none. */
-	getLeavesOfType(_type: string): never[] {
-		return [];
+	/**
+	 * Opens `file` in a Markdown view of its own, as the user does. Its
+	 * editor holds the file's text and tells each change as `editor-change`;
+	 * the file changes only when the view's `save` is called.
+	 */
+	async openInEditor(file: TFile): Promise<MarkdownView> {
+		const text = decode(await this.vault.readBinary(file));
+		const editor = new Editor(text, () => this.trigger("editor-change", editor, view));
+		const view = new MarkdownView(file, editor, (saved) => this.vault.modifyBinary(file, encode(saved)));
+		this.markdownLeaves.push({ view });
+		return view;
 	}
 
-	/** A leaf to open a file in; the fake shows nothing. */
+	/** The leaves showing a view of `type`: for "markdown", those of the notes open in an editor; none of any other type. */
+	getLeavesOfType(type: string): { readonly view: MarkdownView }[] {
+		return type === "markdown" ? [...this.markdownLeaves] : [];
+	}
+
+	/** A leaf to open a file in; the fake opens nothing in it, and it shows no view. */
 	getLeaf(_newLeaf?: boolean): { view: null; openFile: () => Promise<void> } {
 		return { view: null, openFile: () => Promise.resolve() };
 	}
@@ -309,7 +343,7 @@ export class FakeWorkspace extends Events {
 /** The fake app: vault, workspace, file manager, secrets and per-vault localStorage. */
 export class FakeApp {
 	readonly vault: FakeObsidianVault;
-	readonly workspace = new FakeWorkspace();
+	readonly workspace: FakeWorkspace;
 	/** Obsidian's secret storage, by id. */
 	readonly secrets = new Map<string, string>();
 	/** The per-vault localStorage, by key, each value as the JSON it is kept as. */
@@ -330,6 +364,23 @@ export class FakeApp {
 	/** @param vaultName the vault's name */
 	constructor(vaultName?: string) {
 		this.vault = new FakeObsidianVault(vaultName);
+		this.workspace = new FakeWorkspace(this.vault);
+	}
+
+	/**
+	 * Takes over from `before`, the app of the same vault before Obsidian
+	 * restarted, what outlives a restart: the vault's files and folders and
+	 * its clock, so files written after are timed later, the secrets and the
+	 * per-vault localStorage. IndexedDB, fake-indexeddb's one for every app,
+	 * needs nothing.
+	 */
+	persistFrom(before: FakeApp): void {
+		for (const [path, stored] of before.vault.entries) {
+			this.vault.entries.set(path, stored.kind === "file" ? { ...stored, data: copy(stored.data) } : stored);
+		}
+		this.vault.now = before.vault.now;
+		for (const [id, secret] of before.secrets) this.secrets.set(id, secret);
+		for (const [key, value] of before.localStorage) this.localStorage.set(key, value);
 	}
 
 	/** The value stored under `key` for this vault, parsed afresh each time, or null. */
@@ -346,6 +397,11 @@ export class FakeApp {
 		if (value === null || value === undefined) this.localStorage.delete(key);
 		else this.localStorage.set(key, JSON.stringify(value));
 	}
+}
+
+/** The UTF-8 text of `data`. */
+function decode(data: ArrayBuffer): string {
+	return new TextDecoder().decode(data);
 }
 
 /** `text` as UTF-8 bytes in a fresh ArrayBuffer. */

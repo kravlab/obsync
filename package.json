@@ -11,7 +11,10 @@
 		"dev": "node esbuild.config.mjs",
 		"typecheck": "tsc --noEmit",
 		"lint": "eslint . --max-warnings 0",
-		"test": "vitest run"
+		"test": "vitest run",
+		"test:e2e:desktop": "pnpm build && vitest run --config vitest.e2e.desktop.config.mjs",
+		"test:e2e:android": "pnpm build && vitest run --config vitest.e2e.android.config.mjs",
+		"test:e2e:pair": "pnpm build && vitest run --config vitest.e2e.pair.config.mjs"
 	},
 	"devDependencies": {
 		"@codemirror/state": "6.7.6",

@@ -7,3 +7,7 @@ dist/
 
 # Local build settings, such as the Dropbox app key (see esbuild.config.mjs).
 .env
+
+# What the desktop and Android runs keep on this machine: the Obsidian they
+# start, and each run's settings and vault while it runs.
+.e2e/

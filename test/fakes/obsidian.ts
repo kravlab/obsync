@@ -5,13 +5,18 @@
  * `obsidian` here. It holds the parts the plugin uses, behaving as
  * Obsidian's typings document where a test can see it:
  *
- * - the element helpers (`createEl`, `empty`, `setText`, `hide`, …) and
+ * - the element helpers (`createEl`, `empty`, `setText`, `hide`, …), the
+ *   global `createEl`, `createDiv` and `createSpan`, a node's `win`, and
  *   the `activeWindow` global;
  * - modals, settings rows and their components, notices, settings tabs;
  * - the plugin, which keeps what it adds and undoes it on `unload`;
- * - the index's files and folders, Markdown rendering as plain text;
+ * - the index's files and folders, Markdown rendering as plain text, and a
+ *   post processor's context (`PostProcessorContext`);
+ * - a Markdown view with its editor: text, one cursor, ranges replaced;
  * - the platform flags, the language, the API version, and `requestUrl`,
- *   answered by the handler a test sets (`answerRequestsWith`).
+ *   answered by the handler a test sets (`answerRequestsWith`);
+ * - where windows show: the document's body, or the element a test gives
+ *   (`showInto`).
  *
  * The App itself is in obsidian-app.ts. The fake grows with the tests
  * that need more of Obsidian; an element option it does not know fails
@@ -117,19 +122,36 @@ function applyInfo(element: HTMLElement, info: ElementInfo): void {
 	if (info.href !== undefined) element.setAttribute("href", info.href);
 }
 
+/**
+ * Creates a `tag` element in `doc` as `info` says (a string is a class),
+ * passes it to `callback`, then appends it to the `parent` option, or else
+ * to `fallback`; with neither, it stays out of the document.
+ */
+function makeElement<K extends keyof HTMLElementTagNameMap>(
+	doc: Document,
+	tag: K,
+	info: ElementInfo | string | undefined,
+	callback: ((element: HTMLElementTagNameMap[K]) => void) | undefined,
+	fallback: Node | null,
+): HTMLElementTagNameMap[K] {
+	const element = doc.createElement(tag);
+	const options: ElementInfo = typeof info === "string" ? { cls: info } : (info ?? {});
+	applyInfo(element, options);
+	callback?.(element);
+	const parent = options.parent ?? fallback;
+	if (parent !== null) {
+		if (options.prepend === true) parent.insertBefore(element, parent.firstChild);
+		else parent.appendChild(element);
+	}
+	return element;
+}
+
 /** Adds Obsidian's element helpers to jsdom's elements; in Node, where there is no DOM, it does nothing. */
 function installElementHelpers(): void {
 	if (typeof HTMLElement === "undefined") return;
 	const helpers: ElementHelpers & ThisType<HTMLElement & ElementHelpers> = {
 		createEl(tag, info, callback) {
-			const element = this.ownerDocument.createElement(tag);
-			const options: ElementInfo = typeof info === "string" ? { cls: info } : (info ?? {});
-			applyInfo(element, options);
-			callback?.(element);
-			const parent = options.parent ?? this;
-			if (options.prepend === true) parent.insertBefore(element, parent.firstChild);
-			else parent.appendChild(element);
-			return element;
+			return makeElement(this.ownerDocument, tag, info, callback, this);
 		},
 		createDiv(info, callback) {
 			return this.createEl("div", info, callback);
@@ -174,6 +196,38 @@ function installElementHelpers(): void {
 }
 
 installElementHelpers();
+
+/**
+ * Adds Obsidian's global `createEl`, `createDiv` and `createSpan`, which
+ * make an element appended only to the `parent` option, and every node's
+ * `win`, the window it belongs to; in Node, where there is no DOM, it does
+ * nothing. The fake has one window, so `win` cannot tell a popout window
+ * from the main one.
+ */
+function installGlobalHelpers(): void {
+	if (typeof window === "undefined") return;
+	/** Creates a `tag` element in the main document as `info` says, passes it to `callback`, then appends it to `parent` if given. */
+	function createEl<K extends keyof HTMLElementTagNameMap>(
+		tag: K,
+		info?: ElementInfo | string,
+		callback?: (element: HTMLElementTagNameMap[K]) => void,
+	): HTMLElementTagNameMap[K] {
+		return makeElement(document, tag, info, callback, null);
+	}
+	Object.assign(window, {
+		createEl,
+		createDiv: (info?: ElementInfo | string, callback?: (element: HTMLDivElement) => void) => createEl("div", info, callback),
+		createSpan: (info?: ElementInfo | string, callback?: (element: HTMLSpanElement) => void) => createEl("span", info, callback),
+	});
+	Object.defineProperty(Node.prototype, "win", {
+		configurable: true,
+		get(this: Node): Window {
+			return this.ownerDocument?.defaultView ?? window;
+		},
+	});
+}
+
+installGlobalHelpers();
 
 // Obsidian's global for the window in focus; the fake has one window.
 if (typeof window !== "undefined") Object.assign(window, { activeWindow: window });
@@ -272,16 +326,34 @@ export function setTooltip(element: HTMLElement, text: string): void {
 	element.setAttribute("aria-label", text);
 }
 
+/** Where modals, ribbon icons and status bar items are shown; the document's body unless a test gave another element. */
+let shownIn: HTMLElement | undefined;
+
+/** The element modals, ribbon icons and status bar items are shown in now. */
+function showingElement(): HTMLElement {
+	return shownIn ?? document.body;
+}
+
+/**
+ * Shows modals, ribbon icons and status bar items in `element` instead of
+ * the document's body, so a test running several plugins, each over its
+ * own instance of this module, tells their windows apart.
+ */
+export function showInto(element: HTMLElement): void {
+	shownIn = element;
+}
+
 /**
  * Puts the fake's shared state back as a test starts: no notices shown,
- * the desktop platform, English, no `requestUrl` handler. The vitest
- * setup file calls it before every test.
+ * the desktop platform, English, no `requestUrl` handler, windows shown in
+ * the document's body. The vitest setup file calls it before every test.
  */
 export function resetObsidianFake(): void {
 	Notice.shown.length = 0;
 	Object.assign(Platform, DESKTOP_PLATFORM);
 	language.code = "en";
 	requestHandler = undefined;
+	shownIn = undefined;
 }
 
 /** A modal: its elements exist from construction, and `open` and `close` run its hooks. */
@@ -306,9 +378,9 @@ export class Modal {
 		return this;
 	}
 
-	/** Shows the modal in the document and runs `onOpen`. */
+	/** Shows the modal, in the element `showInto` gave or else the document's body, and runs `onOpen`. */
 	open(): void {
-		document.body.appendChild(this.modalEl);
+		showingElement().appendChild(this.modalEl);
 		this.onOpen();
 	}
 
@@ -565,8 +637,99 @@ export class TFolder extends TAbstractFile {
 	}
 }
 
-/** A Markdown view; the fake opens none, so only the class exists, for `instanceof`. */
-export class MarkdownView {}
+/** A position in an editor: a line and a character on it, both from 0. */
+export interface EditorPosition {
+	line: number;
+	ch: number;
+}
+
+/**
+ * A note's editor, as Obsidian's `Editor` gives it: the text, one cursor,
+ * positions and offsets, and ranges replaced. A replacement maps the cursor
+ * as CodeMirror 6 does: one after the range, or at the end of a range that
+ * removes text, moves along with the text there; one before it, at its
+ * start, or at an insertion point stays; one inside it goes to the range's
+ * start. Every change is told to `changed`, as Obsidian tells
+ * `editor-change`. A position or offset outside the text fails with a
+ * `RangeError`. There is no selection: `getCursor` gives the one cursor
+ * whatever side is asked.
+ */
+export class Editor {
+	/** The cursor, as an offset into the text. */
+	private cursor = 0;
+
+	/**
+	 * @param text the text the editor opens with
+	 * @param changed called after every change of the text
+	 */
+	constructor(
+		private text: string,
+		private readonly changed: () => void = () => undefined,
+	) {}
+
+	/** The whole text. */
+	getValue(): string {
+		return this.text;
+	}
+
+	/** The position of `offset` in the text; fails with a RangeError outside it. */
+	offsetToPos(offset: number): EditorPosition {
+		if (offset < 0 || offset > this.text.length) throw new RangeError(`offset ${offset} is outside the text`);
+		const before = this.text.slice(0, offset).split("\n");
+		return { line: before.length - 1, ch: before[before.length - 1]?.length ?? 0 };
+	}
+
+	/** The offset of `pos` in the text; fails with a RangeError for a line or character outside it. */
+	posToOffset(pos: EditorPosition): number {
+		const lines = this.text.split("\n");
+		const line = lines[pos.line];
+		if (line === undefined || pos.ch < 0 || pos.ch > line.length) {
+			throw new RangeError(`position ${pos.line}:${pos.ch} is outside the text`);
+		}
+		return lines.slice(0, pos.line).reduce((offset, before) => offset + before.length + 1, 0) + pos.ch;
+	}
+
+	/** The cursor's position. */
+	getCursor(): EditorPosition {
+		return this.offsetToPos(this.cursor);
+	}
+
+	/** Puts the cursor at `pos`, or at line `pos` and character `ch`. */
+	setCursor(pos: EditorPosition | number, ch = 0): void {
+		this.cursor = this.posToOffset(typeof pos === "number" ? { line: pos, ch } : pos);
+	}
+
+	/** Replaces the text from `from` to `to` (or inserts it at `from`) with `replacement`, moving the cursor as the class says. */
+	replaceRange(replacement: string, from: EditorPosition, to: EditorPosition = from): void {
+		const [start, end] = [this.posToOffset(from), this.posToOffset(to)];
+		this.text = this.text.slice(0, start) + replacement + this.text.slice(end);
+		if (this.cursor > end || (this.cursor === end && end > start)) this.cursor += replacement.length - (end - start);
+		else if (this.cursor > start) this.cursor = start;
+		this.changed();
+	}
+
+	/** Scrolls a range into view; the fake shows nothing. */
+	scrollIntoView(): void {}
+}
+
+/** A Markdown view: the file it shows, its editor, and saving the editor's text to the file. */
+export class MarkdownView {
+	/**
+	 * @param file the file shown
+	 * @param editor the file's editor
+	 * @param write writes the editor's text to the file, as saving does
+	 */
+	constructor(
+		readonly file: TFile,
+		readonly editor: Editor,
+		private readonly write: (text: string) => Promise<void>,
+	) {}
+
+	/** Writes the editor's text to the file. */
+	save(): Promise<void> {
+		return this.write(this.editor.getValue());
+	}
+}
 
 /** A child of rendered Markdown that lives as long as its element. */
 export class MarkdownRenderChild {
@@ -589,13 +752,58 @@ export const MarkdownRenderer = {
 	},
 };
 
+/** Where an element of rendered Markdown comes from in its note, as Obsidian's `MarkdownSectionInformation` tells it. */
+export interface SectionInfo {
+	/** The text Obsidian gives with the section. */
+	readonly text: string;
+	/** The section's first line, from 0. */
+	readonly lineStart: number;
+	/** The section's last line, from 0. */
+	readonly lineEnd: number;
+}
+
+/**
+ * The context Obsidian gives a Markdown post processor for one rendered
+ * section of a note (test-only): the note's path, the section's
+ * information, or null as Obsidian may give, and the children added, kept
+ * for the test to look at.
+ */
+export class PostProcessorContext {
+	/** The id of this rendering of the note. */
+	readonly docId = "fake-rendering";
+	/** The note's frontmatter: the fake gives none. */
+	readonly frontmatter = null;
+	/** The children added, oldest first. */
+	readonly children: MarkdownRenderChild[] = [];
+
+	/**
+	 * @param sourcePath the path of the note rendered
+	 * @param section what `getSectionInfo` tells for every element
+	 */
+	constructor(
+		readonly sourcePath: string,
+		private readonly section: SectionInfo | null,
+	) {}
+
+	/** Keeps `child`, whose lifecycle the renderer would manage. */
+	addChild(child: MarkdownRenderChild): void {
+		this.children.push(child);
+	}
+
+	/** The section's information, the same for every element. */
+	getSectionInfo(_el: HTMLElement): SectionInfo | null {
+		return this.section;
+	}
+}
+
 /** A command as the plugin adds it, as far as tests run it. */
 interface Command {
 	readonly id: string;
 	readonly name: string;
 	readonly callback?: () => unknown;
 	readonly checkCallback?: (checking: boolean) => boolean | void;
-	readonly editorCallback?: (...args: never[]) => unknown;
+	/** Obsidian's `ctx` is a `MarkdownView` or a `MarkdownFileInfo`; both give the file shown. */
+	readonly editorCallback?: (editor: Editor, ctx: { readonly file: TFile | null }) => unknown;
 }
 
 /** A handle to a registered event listener, which `off` removes. */
@@ -688,7 +896,7 @@ export class Plugin {
 
 	/** Adds a ribbon icon that runs `onClick`, removed on unload. */
 	addRibbonIcon(icon: string, title: string, onClick: (event: MouseEvent) => unknown): HTMLElement {
-		const element = document.body.createDiv({ cls: "side-dock-ribbon-action" });
+		const element = showingElement().createDiv({ cls: "side-dock-ribbon-action" });
 		setIcon(element, icon);
 		setTooltip(element, title);
 		element.addEventListener("click", (event) => void onClick(event));
@@ -699,7 +907,7 @@ export class Plugin {
 
 	/** Adds a status bar item, removed on unload. */
 	addStatusBarItem(): HTMLElement {
-		const element = document.body.createDiv({ cls: "status-bar-item" });
+		const element = showingElement().createDiv({ cls: "status-bar-item" });
 		this.statusBarItems.push(element);
 		this.register(() => element.remove());
 		return element;

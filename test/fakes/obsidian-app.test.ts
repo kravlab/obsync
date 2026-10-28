@@ -46,6 +46,17 @@ describe("the fake vault's index", () => {
 	it("names the vault", () => {
 		expect(new FakeApp("Work").vault.getName()).toBe("Work");
 	});
+
+	it("seeds a binary file byte for byte, bytes that are no UTF-8 text included", async () => {
+		const app = new FakeApp();
+		const image = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0xff, 0x00, 0xfe]);
+
+		app.vault.seed("images/photo.png", image.buffer);
+
+		const file = app.vault.getFileByPath("images/photo.png");
+		expect(file?.stat.size).toBe(image.byteLength);
+		expect([...new Uint8Array(await app.vault.adapter.readBinary("images/photo.png"))]).toEqual([...image]);
+	});
 });
 
 describe("the fake vault's writes and events", () => {
@@ -94,7 +105,7 @@ describe("the fake vault's writes and events", () => {
 		expect(modifications).toBe(1);
 	});
 
-	it("renames a folder with everything inside, keeping the objects, and tells rename with the old path", async () => {
+	it("renames a folder with everything inside, keeping the objects, and tells each rename with the old path", async () => {
 		const app = new FakeApp();
 		app.vault.seed("old/a.md", "a");
 		const file = app.vault.getFileByPath("old/a.md");
@@ -108,7 +119,79 @@ describe("the fake vault's writes and events", () => {
 		expect(app.vault.getFileByPath("new/a.md")).toBe(file);
 		expect(file?.path).toBe("new/a.md");
 		expect(app.vault.getAbstractFileByPath("old")).toBeNull();
-		expect(renamed).toEqual(["old -> new"]);
+		expect(renamed).toEqual(["old -> new", "old/a.md -> new/a.md"]);
+	});
+
+	it("tells a renamed folder's rename first, then one for each folder and file inside in the order they were created, as Obsidian does", async () => {
+		// The layout and the order of test/e2e/desktop/folder-rename-events.test.ts, seen in Obsidian.
+		const app = new FakeApp();
+		await app.vault.createFolder("Box");
+		app.vault.seed("Box/z.md", "z");
+		await app.vault.createFolder("Box/Inner");
+		app.vault.seed("Box/Inner/b.md", "b");
+		await app.vault.createFolder("Box/Inner/Deep");
+		app.vault.seed("Box/Inner/Deep/c.md", "c");
+		app.vault.seed("Box/a.md", "a");
+		await app.vault.createFolder("Box/Alpha");
+		app.vault.seed("Box/Inner/late.md", "late");
+		app.vault.seed("Other/x.md", "x");
+		const folder = app.vault.getAbstractFileByPath("Box");
+		if (folder === null) throw new Error("no folder");
+		const renamed: string[] = [];
+		const told: unknown[] = [];
+		app.vault.on("rename", (entry, oldPath) => {
+			renamed.push(`${String(oldPath)} -> ${pathOf(entry)}${entry instanceof TFolder ? " (folder)" : ""}`);
+			told.push(entry);
+		});
+
+		await app.vault.rename(folder, "Crate");
+
+		expect(renamed).toEqual([
+			"Box -> Crate (folder)",
+			"Box/z.md -> Crate/z.md",
+			"Box/Inner -> Crate/Inner (folder)",
+			"Box/Inner/b.md -> Crate/Inner/b.md",
+			"Box/Inner/Deep -> Crate/Inner/Deep (folder)",
+			"Box/Inner/Deep/c.md -> Crate/Inner/Deep/c.md",
+			"Box/a.md -> Crate/a.md",
+			"Box/Alpha -> Crate/Alpha (folder)",
+			"Box/Inner/late.md -> Crate/Inner/late.md",
+		]);
+		// Each event tells the vault's own object at the new path, as the index gives it.
+		told.forEach((entry) => expect(entry).toBe(app.vault.getAbstractFileByPath(pathOf(entry))));
+	});
+
+	it("tells no rename for hidden entries inside a renamed folder, nor for a sibling whose name starts the same", async () => {
+		const app = new FakeApp();
+		app.vault.seed("Box/a.md", "a");
+		app.vault.seed("Box/.hidden/y.md", "y");
+		app.vault.seed("Box/.z", "z");
+		app.vault.seed("Box2/b.md", "b");
+		app.vault.seed("Boxer.md", "c");
+		const folder = app.vault.getAbstractFileByPath("Box");
+		if (folder === null) throw new Error("no folder");
+		const renamed: string[] = [];
+		app.vault.on("rename", (entry, oldPath) => renamed.push(`${String(oldPath)} -> ${pathOf(entry)}`));
+
+		await app.vault.rename(folder, "Crate");
+
+		expect(renamed).toEqual(["Box -> Crate", "Box/a.md -> Crate/a.md"]);
+		expect(await app.vault.adapter.exists("Crate/.hidden/y.md")).toBe(true);
+		expect(app.vault.getFileByPath("Box2/b.md")?.path).toBe("Box2/b.md");
+		expect(app.vault.getFileByPath("Boxer.md")?.path).toBe("Boxer.md");
+	});
+
+	it("tells one rename for a renamed file", async () => {
+		const app = new FakeApp();
+		app.vault.seed("a.md", "a");
+		const file = app.vault.getFileByPath("a.md");
+		if (file === null) throw new Error("no file");
+		const renamed: string[] = [];
+		app.vault.on("rename", (entry, oldPath) => renamed.push(`${String(oldPath)} -> ${pathOf(entry)}`));
+
+		await app.vault.rename(file, "b.md");
+
+		expect(renamed).toEqual(["a.md -> b.md"]);
 	});
 
 	it("trashes a folder with everything inside through the file manager, telling delete", async () => {
@@ -191,6 +274,70 @@ describe("the fake workspace", () => {
 		app.workspace.trigger("editor-change");
 
 		expect(heard).toEqual([["editor", "info"]]);
+	});
+
+	it("opens a note in an editor holding its text, among the Markdown leaves only", async () => {
+		const app = new FakeApp();
+		app.vault.seed("note.md", "hello");
+		const file = app.vault.getFileByPath("note.md");
+		if (file === null) throw new Error("no note");
+		const before = app.workspace.getLeavesOfType("markdown");
+
+		const view = await app.workspace.openInEditor(file);
+
+		expect(before).toEqual([]);
+		expect(view.file).toBe(file);
+		expect(view.editor.getValue()).toBe("hello");
+		expect(app.workspace.getLeavesOfType("markdown").map((leaf) => leaf.view)).toEqual([view]);
+		expect(app.workspace.getLeavesOfType("canvas")).toEqual([]);
+	});
+
+	it("tells each change of an open note's editor, and writes it to the file only on save", async () => {
+		const app = new FakeApp();
+		app.vault.seed("note.md", "hello");
+		const file = app.vault.getFileByPath("note.md");
+		if (file === null) throw new Error("no note");
+		const view = await app.workspace.openInEditor(file);
+		const heard: unknown[][] = [];
+		app.workspace.on("editor-change", (...args) => heard.push(args));
+
+		view.editor.replaceRange(" world", { line: 0, ch: 5 });
+		const unsaved = textOf(await app.vault.readBinary(file));
+		await view.save();
+
+		expect(heard).toEqual([[view.editor, view]]);
+		expect(unsaved).toBe("hello");
+		expect(textOf(await app.vault.readBinary(file))).toBe("hello world");
+	});
+});
+
+describe("the fake app after a restart", () => {
+	it("takes over the vault's files, folders and clock, the secrets and the localStorage, as copies", async () => {
+		const before = new FakeApp("My vault");
+		before.vault.seed("notes/a.md", "a");
+		await before.vault.adapter.write(`${before.vault.configDir}/app.json`, "{}");
+		before.vault.now = 5_000;
+		before.secretStorage.setSecret("token", "secret");
+		before.saveLocalStorage("key", { kept: 1 });
+		const after = new FakeApp("My vault");
+
+		after.persistFrom(before);
+		await before.vault.adapter.write("notes/a.md", "changed before");
+
+		/** The bytes `app`'s vault keeps for the untouched configuration file. */
+		const data = (app: FakeApp) => {
+			const entry = app.vault.entries.get(`${app.vault.configDir}/app.json`);
+			return entry?.kind === "file" ? entry.data : undefined;
+		};
+		expect(data(after)?.byteLength).toBe(2);
+		expect(data(after)).not.toBe(data(before));
+		expect(after.vault.getFileByPath("notes/a.md")).toBeInstanceOf(TFile);
+		expect(after.vault.getAbstractFileByPath("notes")).toBeInstanceOf(TFolder);
+		expect(textOf(await after.vault.adapter.readBinary("notes/a.md"))).toBe("a");
+		expect(await after.vault.adapter.read(`${after.vault.configDir}/app.json`)).toBe("{}");
+		expect(after.vault.now).toBe(5_000);
+		expect(after.secretStorage.getSecret("token")).toBe("secret");
+		expect(after.loadLocalStorage("key")).toEqual({ kept: 1 });
 	});
 });
 
