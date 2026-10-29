@@ -17,6 +17,6 @@ export default defineConfig({
 		// The first run downloads and extracts Obsidian (about 140 MB) in beforeAll.
 		hookTimeout: 600_000,
 		// The manual checks this run covers, each printed in the summary even if its file fails to load.
-		reporters: ["default", ["./test/e2e/support/check-reporter.ts", { checks: [3, 8, 14] }]],
+		reporters: ["default", ["./test/e2e/support/check-reporter.ts", { checks: [3, 8, 14, 19] }]],
 	},
 });

@@ -16,6 +16,6 @@ export default defineConfig({
 		// Booting the emulator, and the first run's download of Obsidian's APK, happen in beforeAll.
 		hookTimeout: 600_000,
 		// The manual checks this run covers, each printed in the summary even if its file fails to load.
-		reporters: ["default", ["./test/e2e/support/check-reporter.ts", { checks: [1, 2, 3, 14, 16, 17] }]],
+		reporters: ["default", ["./test/e2e/support/check-reporter.ts", { checks: [1, 2, 3, 14, 16, 17, 19] }]],
 	},
 });

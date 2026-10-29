@@ -1,9 +1,9 @@
 // The Android run's manual checks, on one phone in the order they need it:
-// first what needs no login (checks 3, 14 and 17), with check 3 offline so
-// nothing is sent; then the login through Dropbox's authorize page
-// (check 1), the First sync window (check 14), the 50 MB file (check 16),
-// and last Disconnect (check 2), which deletes the run's Remote folder
-// first. A later check fails when the login it needs failed.
+// first what needs no login (checks 3, 14, 17 and 19), with check 3 offline so
+// nothing is sent; then the login through Dropbox's authorize page (check 1,
+// which also reads the onboarding), the First sync window (check 14), the 50 MB
+// file (check 16), and last Disconnect (check 2), which deletes the run's
+// Remote folder first. A later check fails when the login it needs failed.
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -18,7 +18,17 @@ import {
 	openConnectWindowProgram,
 } from "../support/dropbox-login";
 import { dropboxAppKey, dropboxHelpers } from "../support/dropbox-page";
-import { CALL_MS, describePhoneButtons, expectPhoneButtons, PAGE_HELPERS, TEST_HEADROOM_MS, type ButtonsFound } from "../support/page";
+import {
+	CALL_MS,
+	describeOnboardingHelp,
+	describePhoneButtons,
+	expectedOnboarding,
+	expectPhoneButtons,
+	PAGE_HELPERS,
+	TEST_HEADROOM_MS,
+	type ButtonsFound,
+	type OnboardingFound,
+} from "../support/page";
 
 /** The run's Remote folder, in the app folder: named with the run's time, deleted at the end. */
 const RUN_FOLDER = `e2e-${new Date().toISOString().replace(/[:.]/g, "-")}`;
@@ -112,6 +122,8 @@ describe("check 17: a long note merges within the time limit on the phone", () =
 	});
 });
 
+describeOnboardingHelp("check 19 (partial: no settings row): onboarding and help, in English and Russian", phone, { settingsRow: false });
+
 describe("check 1: connecting through the phone's real requestUrl", () => {
 	it(
 		"logs in through Dropbox's authorize page and connects to a new Remote folder",
@@ -124,18 +136,21 @@ describe("check 1: connecting through the phone's real requestUrl", () => {
 				(await button(${JSON.stringify(strings.openDropbox)})).click();`);
 			const code = await authorize(phone());
 			await phone().showObsidian();
-			const connected = await phone().eval(
+			const connected = (await phone().eval(
 				`
 				${PAGE_HELPERS}
 				${enterCodeProgram(code, strings)}
 				${newFolderProgram(RUN_FOLDER, strings)}
 				const notice = await until(() => [...activeDocument.querySelectorAll(".notice")].find((n) => n.textContent === ${JSON.stringify(strings.noticeConnected)}), 60000, "the Connected notice");
-				// A new Connection shows the onboarding; the first sync starts once it is closed.
-				(await button(${JSON.stringify(strings.onboardingDone)})).click();
-				return notice.textContent;`,
+				// A new Connection shows the onboarding, read before it is closed; the first sync starts once it is closed.
+				const onboarding = await onboardingWindow(${JSON.stringify(strings.onboardingDone)});
+				const read = readOnboarding(onboarding);
+				(await button(${JSON.stringify(strings.onboardingDone)}, onboarding)).click();
+				return { notice: notice.textContent, onboarding: read };`,
 				LOGIN_TIMEOUT_MS,
-			);
-			expect(connected).toBe(strings.noticeConnected);
+			)) as { notice: string; onboarding: OnboardingFound };
+			expect(connected.notice).toBe(strings.noticeConnected);
+			expect(connected.onboarding).toEqual(expectedOnboarding(strings));
 		},
 		CALL_MS * 2 + LOGIN_TIMEOUT_MS * 2 + TEST_HEADROOM_MS,
 	);
@@ -212,6 +227,7 @@ describe("check 2: Disconnect ends without an error and the login no longer work
 		async () => {
 			const strings = await phone().strings();
 			const result = (await phone().eval(`
+				${PAGE_HELPERS}
 				${dropboxHelpers(dropboxAppKey())}
 				const secret = pluginSecret();
 				if (!secret) throw new Error("the plugin is not connected");
@@ -221,7 +237,7 @@ describe("check 2: Disconnect ends without an error and the login no longer work
 				// 60 s) landing in between would sync against a Remote without it. Turning the plugin off meanwhile
 				// is no way out, as turning it on again starts a sync at once.
 				const deleted = await dropboxCall(access.token, "files/delete_v2", { path: ${JSON.stringify(`/${RUN_FOLDER}`)} });
-				${disconnectProgram(strings, phone().pluginId)}
+				${disconnectProgram(strings)}
 				// The one request expected to be refused (plan, step 14): the old login, after Disconnect revoked it.
 				const refused = await dropboxAccess(secret);
 				return { deleted: deleted.status, notice, secretLeft: pluginSecret() !== null, refused: { status: refused.status, error: refused.error } };`)) as {

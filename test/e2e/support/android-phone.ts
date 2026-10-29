@@ -15,7 +15,7 @@ import { selectStrings, type Strings } from "../../../src/ui/i18n/strings";
 import { DevToolsPage } from "./devtools";
 import { evalProgram, readAnswer } from "./obsidian-cli";
 import { ensureApk, typedObsidianVersion } from "./obsidian-release";
-import { CALL_MS, type ObsidianPage } from "./page";
+import { CALL_MS, POLL_CALL_MS, reloadedInLanguageProgram, reloadInLanguageProgram, untilAnswered, type LanguagePage } from "./page";
 import { endGroupWithProcess, signalGroup } from "./process-group";
 
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
@@ -49,6 +49,8 @@ const DEVTOOLS_TIMEOUT_MS = 60_000;
 const ADB_TIMEOUT_MS = 120_000;
 /** How long the emulator may take to exit once told to. */
 const EXIT_TIMEOUT_MS = 30_000;
+/** How long Obsidian may take to reload in another language: not measured on the phone (1.6 s on the desktop); 60 s only fails a hang. */
+const RELOAD_TIMEOUT_MS = 60_000;
 
 /** The Android SDK folder, from the environment, as Android's own tools take it. */
 function sdkRoot(): string {
@@ -92,7 +94,7 @@ export function installedVersion(dumpsys: string): string | undefined {
 const RUNNING = new Set<AndroidPhone>();
 
 /** The emulator with Obsidian open on a fresh vault and the plugin loaded. */
-export class AndroidPhone implements ObsidianPage {
+export class AndroidPhone implements LanguagePage {
 	/** Called by stop(): unties the emulator from the run, which otherwise kills it on exit, Ctrl+C or SIGTERM. */
 	private readonly untie: () => void;
 	private obsidian: DevToolsPage | undefined;
@@ -180,6 +182,24 @@ export class AndroidPhone implements ObsidianPage {
 	 */
 	async strings(): Promise<Strings> {
 		return selectStrings(String(await this.eval("return moment.locale();")));
+	}
+
+	/**
+	 * Sets Obsidian's language, or with `null` removes it, and reloads its page
+	 * (see `reloadInLanguageProgram`); resolves once the plugin has loaded
+	 * again, and fails after RELOAD_TIMEOUT_MS with the last failure. Should the
+	 * WebView close DevTools' connection on the reload, the page is opened
+	 * over DevTools again.
+	 */
+	async setLanguage(language: string | null): Promise<void> {
+		await this.eval(reloadInLanguageProgram(language));
+		await untilAnswered(
+			async () => {
+				if (this.obsidian?.isClosed()) this.obsidian = await DevToolsPage.open(await forwardDevTools(OBSIDIAN_PACKAGE));
+				return this.eval(reloadedInLanguageProgram(language, this.pluginId), POLL_CALL_MS);
+			},
+			{ timeoutMs: RELOAD_TIMEOUT_MS, what: language === null ? "Obsidian did not reload with no language set" : `Obsidian did not reload in ${language}` },
+		);
 	}
 
 	/**

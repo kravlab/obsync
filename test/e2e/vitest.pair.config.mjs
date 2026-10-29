@@ -20,6 +20,6 @@ export default defineConfig({
 		// Starting Obsidian and booting the emulator, with the first run's downloads, happen in beforeAll.
 		hookTimeout: 600_000,
 		// The manual checks this run covers, each printed in the summary even if its file fails to load.
-		reporters: ["default", ["./test/e2e/support/check-reporter.ts", { checks: [5, 6, 7, 9] }]],
+		reporters: ["default", ["./test/e2e/support/check-reporter.ts", { checks: [5, 6, 7, 9, 20] }]],
 	},
 });

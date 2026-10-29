@@ -129,6 +129,11 @@ export class DevToolsPage {
 		});
 	}
 
+	/** Whether the connection is closed, from either end: the page must then be opened again to be evaluated in. */
+	isClosed(): boolean {
+		return this.closed;
+	}
+
 	/** Closes the connection; evaluations still waiting fail. */
 	close(): void {
 		this.socket.close();

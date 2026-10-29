@@ -4,8 +4,8 @@ Status: draft 2026-10-24
 
 ## Problem
 
-Every change is checked by hand on a desktop and on phones, through an
-18-point list (below). Most of those points have engine tests, but the
+Every change is checked by hand on a desktop and on phones, through a
+20-point list (below). Most of those points have engine tests, but the
 plugin as Obsidian runs it is barely tested: two end-to-end tests in
 `test/main.test.ts`, no test of `ObsidianLocalVault`, of the Sync window,
 the status indicator, the conflict commands, the reading view, or any
@@ -84,7 +84,8 @@ Numbers are those of the manual check list. "Vitest", "Desktop" and
     files and Show activity open their tab; each tab shows its list; on a
     phone (`Platform.isPhone`) every modal has the `obsync-phone` class.
     Desktop with mobile emulation and Android: every modal button is at
-    least 44 px high.
+    least 44 px high, among them the buttons of the Help tab and of the
+    onboarding it opens.
 15. **Reconnect.** Vitest: in the existing end-to-end test, exactly one
     "Reconnect needed" notice and no First sync preview after the login.
 16. **Large file.** Android: a 50 MB attachment goes up and comes back
@@ -95,6 +96,27 @@ Numbers are those of the manual check list. "Vitest", "Desktop" and
 18. **Snapshot database upgrade.** Vitest: a schema 3 database, as the
     build before First sync wrote it, opens as a complete snapshot, so no
     First sync preview.
+19. **Onboarding and help.** The help and the onboarding show the
+    strings of the language Obsidian is set to, English and Russian.
+    Desktop (`test/e2e/desktop/onboarding-help.test.ts`): the "Show help"
+    command and the settings row "Open help" open the Sync window at the
+    Help tab with every section in order; "Show the four habits again"
+    opens the onboarding with its title, intro and four practices, and
+    "Got it" closes it. Android: the same except the settings row; check 1
+    also reads the onboarding a new Connection shows. Desktop with mobile
+    emulation and Android: every button of the Help tab and the onboarding
+    is at least 44 px high (part of check 14).
+20. **Shared settings and devices.** Pair run
+    (`test/e2e/pair/pair.test.ts`): a pattern the desktop adds to the
+    ignore list and applies to all devices reaches the phone, and a note
+    the phone writes under it does not reach the desktop; the size limit
+    changed on both while the phone is offline opens the collision window
+    on the phone, closing it shows "Paused (choose shared settings)", and
+    the value picked shows on both; the phone renamed shows under its new
+    name in the desktop's "Other devices"; after the phone's Disconnect
+    the desktop forgets it, and neither "Other devices" nor the run's
+    Remote folder holds it. The name-policy change is covered by Vitest
+    engine tests only (it needs Remote names Dropbox cannot store).
 
 ## Still checked by hand
 
@@ -104,6 +126,8 @@ Numbers are those of the manual check list. "Vitest", "Desktop" and
 - The trash honouring Obsidian's "Deleted files" setting (check 11).
 - How Obsidian itself reacts to configuration changing under it (check 13).
 - A real phone's memory for 50 MB (check 16): the emulator's differs.
+- The Help settings row on a phone (check 19): the Android run opens
+  help from the command only.
 
 ## Test infrastructure
 

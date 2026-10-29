@@ -2,7 +2,7 @@
 // output, one line per manual check (check-summary.ts). Its options name the
 // checks the run covers: `["./check-reporter.ts", { checks: [3, 8] }]`.
 import type { Reporter, TestCase, TestModule, Vitest } from "vitest/node";
-import { checkSummary, outcomeOf, type TestOutcome } from "./check-summary";
+import { checkSummary, outcomeOf, type ErrorsAbove, type TestOutcome } from "./check-summary";
 
 /** Prints the manual checks' summary once the run ends. */
 export default class CheckReporter implements Reporter {
@@ -35,11 +35,11 @@ export default class CheckReporter implements Reporter {
 	}
 }
 
-/** The error messages of the describes and the file above `test`, nearest first: a failing hook's error is there. */
-function errorsAbove(test: TestCase): string[] {
-	const messages: string[] = [];
-	for (let parent = test.parent; ; parent = parent.parent) {
-		messages.push(...parent.errors().map((error) => error.message));
-		if (parent.type === "module") return messages;
+/** The error messages of the describes around `test` and of its file, each nearest first: a failing hook's error is there. */
+function errorsAbove(test: TestCase): ErrorsAbove {
+	const describes: string[] = [];
+	for (let parent = test.parent; parent.type !== "module"; parent = parent.parent) {
+		describes.push(...parent.errors().map((error) => error.message));
 	}
+	return { describes, file: test.module.errors().map((error) => error.message) };
 }

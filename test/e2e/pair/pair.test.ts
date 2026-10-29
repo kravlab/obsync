@@ -4,10 +4,15 @@
 // writes a note and an image; the desktop logs in and creates the run's
 // Remote folder, the phone logs in and connects to it; both First sync
 // windows are read and both vaults then hold the union (checks 5, 9). A
-// note open in the desktop's editor is changed on the phone (check 7). Last,
+// note open in the desktop's editor is changed on the phone (check 7). Then
 // changes made on the desktop reach the phone when it comes back from the
-// background and when its network comes back (check 6). Each check needs
-// the ones before it, so the run stops at the first failure (`bail`).
+// background and when its network comes back (check 6). Last, the shared
+// settings and devices (check 20): a pattern the desktop adds to the ignore
+// list reaches the phone; both change the size limit while the phone is
+// offline, so the phone's sync meets the desktop's change in the collision
+// window; the phone is renamed; and after the phone's Disconnect, which the
+// cleanup below then skips, the desktop forgets it. Each check needs the
+// ones before it, so the run stops at the first failure (`bail`).
 //
 // Two logins per run, one per device, both passed in the emulator's
 // browser, where the test account is logged in: the desktop's authorize
@@ -16,13 +21,20 @@
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
+import { NO_CONFLICTS } from "../../../src/engine/conflicts";
+import { DEFAULT_REMOTE_SETTINGS } from "../../../src/engine/remote-metadata";
+import { MEBIBYTE } from "../../../src/engine/request-limit";
+import { parseIgnoreList } from "../../../src/engine/settings-change";
 import { DEFAULT_SYNC_SCHEDULE } from "../../../src/engine/sync-schedule";
 import { fill } from "../../../src/ui/i18n/fill";
 import type { Strings } from "../../../src/ui/i18n/strings";
+import { settingNameText, settingValueText } from "../../../src/ui/shared-settings-text";
+import { statusText } from "../../../src/ui/status-text";
 import { useAndroidPhone } from "../support/android-phone";
 import { useDesktopObsidian } from "../support/desktop-obsidian";
 import {
 	authorize,
+	disconnectProgram,
 	enterCodeProgram,
 	hasLogin,
 	leaveDropbox,
@@ -32,12 +44,9 @@ import {
 } from "../support/dropbox-login";
 import { ASK_EVERY_MS, dropboxAppKey, dropboxHelpers, SHA256_HELPER, THROTTLED_WAIT_MS } from "../support/dropbox-page";
 import { CALL_MS, PAGE_HELPERS, TEST_HEADROOM_MS } from "../support/page";
+import { COMPLETE_SYNC_MS, DEVICE_NAMES_HELPER, DEVICES_LIST_MS, otherDevicesHelpers, RUN_FOLDER, statusHelpers, SYNC_TIMEOUT_MS } from "../support/pair-page";
 import { onePixelPng } from "../support/png";
 
-/** The run's Remote folder, in the app folder: named with the run's time, deleted at the end. */
-const RUN_FOLDER = `e2e-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-/** How long a sync started by a test may take: a few small files. */
-const SYNC_TIMEOUT_MS = 120_000;
 /**
  * How long a connect's page code may wait in all: the code field, the
  * Remote screen, the Connected notice, the First sync window, then the
@@ -68,6 +77,15 @@ const PHONE_IMAGE: VaultFile = { path: "phone.png", bytes: onePixelPng([0, 90, 2
 
 /** What check 7's phone adds after the cursor in the desktop's note. */
 const PHONE_ADDITION = "Added on the phone.\n";
+
+/** The pattern check 20's desktop adds to the shared ignore list, and a note the phone then writes that it matches. */
+const IGNORED_PATTERN = "*.local.md";
+const IGNORED_NOTE = "Kept on the phone.local.md";
+/** The size limits, in MiB, check 20 sets on the desktop and on the phone; the collision window keeps the phone's. */
+const DESKTOP_CEILING_MIB = 70;
+const PHONE_CEILING_MIB = 50;
+/** The name check 20 gives the phone. */
+const PHONE_NAME = "Renamed phone";
 
 /** A device's vault: each file's path with the SHA-256 of its bytes. */
 type Listing = Record<string, string>;
@@ -116,21 +134,13 @@ describe("check 6: a change made on the desktop reaches the phone when it comes 
 		async () => {
 			const strings = await phone().strings();
 			const description = await phone().eval(`
-				app.setting.open();
-				try {
-					app.setting.openTabById(${JSON.stringify(phone().pluginId)});
-					const row = await until(
-						() => [...app.setting.activeTab.containerEl.querySelectorAll(".setting-item")].find((item) => item.querySelector(".setting-item-name")?.textContent === ${JSON.stringify(strings.settingsPollInterval)}),
-						10000,
-						"the polling interval setting",
-					);
+				${PAGE_HELPERS}
+				return withSettings(async (tab) => {
+					const row = await settingRow(${JSON.stringify(strings.settingsPollInterval)}, tab);
 					const input = row.querySelector("input");
-					input.value = ${JSON.stringify(String(PHONE_POLL_SECONDS))};
-					input.dispatchEvent(new Event("input"));
+					typeInto(input, ${JSON.stringify(String(PHONE_POLL_SECONDS))});
 					return row.querySelector(".setting-item-description").textContent;
-				} finally {
-					app.setting.close();
-				}`);
+				});`);
 			phonePollSetAt = Date.now();
 			expect(description).toBe(strings.settingsPollIntervalDescription);
 		},
@@ -301,6 +311,269 @@ describe("check 6: a change made on the desktop reaches the phone when it comes 
 	);
 });
 
+describe("check 20: shared settings and devices", () => {
+	it(
+		"a pattern the desktop adds to the ignore list reaches the phone, and a note the phone writes under it does not reach the desktop",
+		async () => {
+			const desktopStrings = await desktop().strings();
+			const phoneStrings = await phone().strings();
+			await desktop().eval(
+				`
+				${PAGE_HELPERS}
+				${statusHelpers(desktopStrings)}
+				${applySharedProgram(
+					desktopStrings,
+					`
+					const ignoreList = (await settingRow(${JSON.stringify(desktopStrings.settingsIgnoreList)}, tab)).querySelector("textarea");
+					typeInto(ignoreList, [ignoreList.value, ${JSON.stringify(IGNORED_PATTERN)}].filter((line) => line !== "").join("\\n"));`,
+				)}
+				await completeSync("the desktop's sync writing the ignore list");`,
+				COMPLETE_SYNC_MS + CALL_MS,
+			);
+
+			const phoneIgnoreList = (await phone().eval(
+				`
+				${PAGE_HELPERS}
+				${statusHelpers(phoneStrings)}
+				await completeSync("the phone's sync bringing the ignore list");
+				return withSettings(async (tab) => (await settingRow(${JSON.stringify(phoneStrings.settingsIgnoreList)}, tab)).querySelector("textarea").value);`,
+				COMPLETE_SYNC_MS + CALL_MS,
+			)) as string;
+			expect(parseIgnoreList(phoneIgnoreList)).toContain(IGNORED_PATTERN);
+
+			const phoneStatus = await phone().eval(
+				`
+				${PAGE_HELPERS}
+				${statusHelpers(phoneStrings)}
+				await app.vault.create(${JSON.stringify(IGNORED_NOTE)}, "Written on the phone, under the ignore list.\\n");
+				await completeSync("the phone's sync after its note");
+				return shownStatus();`,
+				COMPLETE_SYNC_MS + CALL_MS,
+			);
+			// The phone's sync passed the note over as ignored, and says so.
+			expect(phoneStatus).toBe(statusText({ state: "synced" }, NO_CONFLICTS, [{ path: IGNORED_NOTE, reason: "ignored" }], phoneStrings));
+			const remoteNames = await phone().eval(`
+				${dropboxAccessProgram()}
+				const listed = await dropboxCall(access.token, "files/list_folder", { path: ${JSON.stringify(`/${RUN_FOLDER}`)} });
+				if (listed.status !== 200) throw new Error("listing the run's Remote folder: HTTP " + listed.status);
+				return listed.json.entries.map((entry) => entry.name);`);
+			expect(remoteNames).toContain(PHONE_NOTE.path);
+			expect(remoteNames).not.toContain(IGNORED_NOTE);
+			const desktopHasNote = await desktop().eval(
+				`
+				${PAGE_HELPERS}
+				${statusHelpers(desktopStrings)}
+				await completeSync("the desktop's sync after the phone's note");
+				return app.vault.getAbstractFileByPath(${JSON.stringify(IGNORED_NOTE)}) !== null;`,
+				COMPLETE_SYNC_MS + CALL_MS,
+			);
+			expect(desktopHasNote).toBe(false);
+		},
+		(COMPLETE_SYNC_MS + CALL_MS) * 4 + CALL_MS * 3 + TEST_HEADROOM_MS,
+	);
+
+	it(
+		"the size limit changed on both devices asks on the phone which value to keep; closed, sync is paused; the value picked then shows on both",
+		async () => {
+			const desktopStrings = await desktop().strings();
+			const phoneStrings = await phone().strings();
+			/** Page code, in the plugin's settings tab `tab`, typing `mebibytes` into the size limit field. */
+			const typeSizeLimit = (strings: Strings, mebibytes: number): string => `
+				const sizeLimit = (await settingRow(${JSON.stringify(strings.settingsSizeCeiling)}, tab)).querySelector("input");
+				typeInto(sizeLimit, ${JSON.stringify(String(mebibytes))});`;
+			/** Page code reading the size limit field of the plugin's settings tab. */
+			const readSizeLimit = (strings: Strings): string => `
+				return withSettings(async (tab) => (await settingRow(${JSON.stringify(strings.settingsSizeCeiling)}, tab)).querySelector("input").value);`;
+
+			// Offline, the phone keeps its change (stored before its sync starts) while the desktop writes another.
+			try {
+				await phone().setNetwork(false);
+				await phone().eval(
+					`
+					${PAGE_HELPERS}
+					${statusHelpers(phoneStrings)}
+					const watch = watchStatus();
+					try {
+						${applySharedProgram(phoneStrings, typeSizeLimit(phoneStrings, PHONE_CEILING_MIB))}
+						await untilShown(watch, ${JSON.stringify(phoneStrings.statusOffline)}, ${SYNC_TIMEOUT_MS}, "the phone's sync to end offline");
+					} finally {
+						watch.stop();
+					}`,
+					SYNC_TIMEOUT_MS + CALL_MS,
+				);
+				await desktop().eval(
+					`
+					${PAGE_HELPERS}
+					${statusHelpers(desktopStrings)}
+					${applySharedProgram(desktopStrings, typeSizeLimit(desktopStrings, DESKTOP_CEILING_MIB))}
+					await completeSync("the desktop's sync writing its size limit");`,
+					COMPLETE_SYNC_MS + CALL_MS,
+				);
+			} finally {
+				await phone().setNetwork(true);
+			}
+
+			// The phone's sync when its network comes back meets the desktop's change.
+			const collisionWindow = `() => modalTitled(${JSON.stringify(phoneStrings.collisionTitle)})`;
+			const shown = (await phone().eval(
+				`
+				${PAGE_HELPERS}
+				${statusHelpers(phoneStrings)}
+				try {
+					await until(${collisionWindow}, ${SYNC_TIMEOUT_MS}, "the collision window once the network came back");
+					await closeModals();
+					const paused = await until(() => statusIs(shownStatus(), ${JSON.stringify(phoneStrings.statusSettingsCollision)}) && shownStatus(), 10000, "the paused status");
+					const watch = watchStatus();
+					try {
+						// Sync now asks again.
+						app.commands.executeCommandById("obsync:sync-now");
+						const modal = await until(${collisionWindow}, ${SYNC_TIMEOUT_MS}, "the collision window after Sync now");
+						const rows = [...modal.querySelectorAll(".setting-item")].filter((row) => dropdowns(row).length > 0).map((row) => ({
+							name: row.querySelector(".setting-item-name")?.textContent,
+							options: [...dropdown(row).options].map((option) => option.textContent),
+						}));
+						// The phone's value: "mine" in the window's dropdown, which preselects this device's value.
+						const choice = dropdown(modal);
+						const preselected = choice.value;
+						choice.value = "mine";
+						choice.dispatchEvent(new Event("change"));
+						(await button(${JSON.stringify(phoneStrings.collisionApply)}, modal)).click();
+						await untilShown(watch, ${JSON.stringify(phoneStrings.statusSynced)}, ${SYNC_TIMEOUT_MS}, "the phone's sync after the choice");
+						return { paused, rows, preselected };
+					} finally {
+						watch.stop();
+					}
+				} finally {
+					await closeModals();
+				}`,
+				SYNC_TIMEOUT_MS * 3 + CALL_MS,
+			)) as { paused: string; rows: { name: string; options: string[] }[]; preselected: string };
+			// The phone still shows the count of check 20's ignored note.
+			expect(shown.paused).toBe(statusText({ state: "settingsCollision" }, NO_CONFLICTS, [{ path: IGNORED_NOTE, reason: "ignored" }], phoneStrings));
+			// The window preselects this device's value.
+			expect(shown.preselected).toBe("mine");
+			// The size limit as the window shows it, for a limit of `mebibytes`.
+			const ceiling = (mebibytes: number): string => settingValueText("sizeCeilingBytes", { ...DEFAULT_REMOTE_SETTINGS, sizeCeilingBytes: mebibytes * MEBIBYTE }, phoneStrings);
+			expect(shown.rows).toEqual([
+				{
+					name: settingNameText("sizeCeilingBytes", phoneStrings),
+					options: [fill(phoneStrings.collisionMine, { value: ceiling(PHONE_CEILING_MIB) }), fill(phoneStrings.collisionRemote, { value: ceiling(DESKTOP_CEILING_MIB) })],
+				},
+			]);
+
+			const desktopShows = await desktop().eval(
+				`
+				${PAGE_HELPERS}
+				${statusHelpers(desktopStrings)}
+				await completeSync("the desktop's sync bringing the phone's size limit");
+				${readSizeLimit(desktopStrings)}`,
+				COMPLETE_SYNC_MS + CALL_MS,
+			);
+			const phoneShows = await phone().eval(`
+				${PAGE_HELPERS}
+				${readSizeLimit(phoneStrings)}`);
+			expect({ desktop: desktopShows, phone: phoneShows }).toEqual({ desktop: String(PHONE_CEILING_MIB), phone: String(PHONE_CEILING_MIB) });
+		},
+		CALL_MS * 8 + SYNC_TIMEOUT_MS * 4 + COMPLETE_SYNC_MS * 2 + TEST_HEADROOM_MS,
+	);
+
+	it(
+		"the phone renamed in its settings shows under its new name in the desktop's Other devices",
+		async () => {
+			const desktopStrings = await desktop().strings();
+			const phoneStrings = await phone().strings();
+			await phone().eval(`
+				${PAGE_HELPERS}
+				await withSettings(async (tab) => {
+					const row = await settingRow(${JSON.stringify(phoneStrings.deviceName)}, tab);
+					const name = row.querySelector("input");
+					typeInto(name, ${JSON.stringify(PHONE_NAME)});
+					(await button(${JSON.stringify(phoneStrings.rename)}, row)).click();
+				});`);
+			// The next completed sync writes the new name to the phone's record: each ask runs one.
+			await phone().eval(
+				`
+				${dropboxAccessProgram()}
+				${DEVICE_NAMES_HELPER}
+				await askDropbox(async () => {
+					app.commands.executeCommandById("obsync:sync-now");
+					const found = await deviceNames(access.token);
+					return { status: found.status, done: found.names?.includes(${JSON.stringify(PHONE_NAME)}) === true };
+				}, ${SYNC_TIMEOUT_MS}, "the phone's record under its new name");`,
+				SYNC_TIMEOUT_MS + ASK_EVERY_MS + THROTTLED_WAIT_MS + CALL_MS,
+			);
+			const others = await desktop().eval(
+				`
+				${PAGE_HELPERS}
+				${otherDevicesHelpers(desktopStrings)}
+				return withSettings((tab) => showOtherDevices(tab));`,
+				DEVICES_LIST_MS + CALL_MS,
+			);
+			expect(others).toEqual([PHONE_NAME]);
+		},
+		CALL_MS * 6 + SYNC_TIMEOUT_MS + ASK_EVERY_MS + THROTTLED_WAIT_MS + DEVICES_LIST_MS + TEST_HEADROOM_MS,
+	);
+
+	it(
+		"after the phone's Disconnect, the desktop forgets it: Other devices and the run's Remote folder no longer hold it",
+		async () => {
+			const desktopStrings = await desktop().strings();
+			const phoneStrings = await phone().strings();
+			// The cleanup then finds no login on the phone and deletes the run's folder through the desktop's.
+			const disconnected = await phone().eval(`
+				${PAGE_HELPERS}
+				${disconnectProgram(phoneStrings)}
+				return notice;`);
+			expect(disconnected).toBe(phoneStrings.noticeDisconnected);
+
+			const forgotten = (await desktop().eval(
+				`
+				${PAGE_HELPERS}
+				${otherDevicesHelpers(desktopStrings)}
+				try {
+					return await withSettings(async (tab) => {
+						const desktopName = (await settingRow(${JSON.stringify(desktopStrings.deviceName)}, tab)).querySelector("input").value;
+						// The list shown is the one part 3 read, so it does not show that the record survived the phone's Disconnect: the Remote check below carries that proof.
+						await showOtherDevices(tab);
+						// The list is drawn again as it is read, so rows are looked up in the whole page.
+						const row = await settingRow(${JSON.stringify(PHONE_NAME)});
+						(await button(${JSON.stringify(desktopStrings.forgetDevice)}, row)).click();
+						const confirmation = await until(
+							() => modalTitled(${JSON.stringify(fill(desktopStrings.forgetDeviceTitle, { device: PHONE_NAME }))}),
+							10000,
+							"the Forget confirmation",
+						);
+						(await button(${JSON.stringify(desktopStrings.forgetDevice)}, confirmation)).click();
+						const outcomes = ${JSON.stringify([desktopStrings.noticeDeviceForgotten, desktopStrings.noticeDeviceInUse].map((template) => fill(template, { device: PHONE_NAME })))};
+						const notice = await until(() => noticeAmong(outcomes), 30000, "the Forget notice");
+						if (notice !== outcomes[0]) return { desktopName, notice, after: otherDeviceNames() };
+						// Forget reads the other devices again.
+						await until(() => rowNames().includes(${JSON.stringify(desktopStrings.settingsNoOtherDevices)}), ${DEVICES_LIST_MS}, "Other devices read again");
+						return { desktopName, notice, after: otherDeviceNames() };
+					});
+				} finally {
+					await closeModals();
+				}`,
+				DEVICES_LIST_MS * 3 + CALL_MS,
+			)) as { desktopName: string; notice: string; after: string[] };
+			const { desktopName, ...shown } = forgotten;
+			expect(desktopName).not.toBe("");
+			expect(shown).toEqual({
+				notice: fill(desktopStrings.noticeDeviceForgotten, { device: PHONE_NAME }),
+				after: [],
+			});
+
+			// The phone's login is gone after its Disconnect, so the desktop's is used, as the cleanup's folder deletion does: only the desktop's record is left.
+			const remote = await desktop().eval(`
+				${dropboxAccessProgram()}
+				${DEVICE_NAMES_HELPER}
+				return await deviceNames(access.token);`);
+			expect(remote).toEqual({ status: 200, names: [desktopName] });
+		},
+		CALL_MS * 6 + DEVICES_LIST_MS * 2 + TEST_HEADROOM_MS,
+	);
+});
+
 /** What a First sync window showed: its paragraphs, and each listed section's heading with its files. */
 interface FirstSyncShown {
 	readonly paragraphs: readonly string[];
@@ -358,8 +631,9 @@ function writeFiles(files: readonly VaultFile[]): string {
  * Page code waiting for the Connected notice and the First sync window,
  * leaving what the window shows in `firstSync`, then starting the first
  * sync and waiting until the device shows Synced: the ribbon icon's label
- * on a phone, the status bar item's text on a desktop. A device never
- * synced before shows Synced only once that first sync is done.
+ * on a phone, the status bar item's text on a desktop (see `statusHelpers`,
+ * which the code defines for the rest of the body). A device never synced
+ * before shows Synced only once that first sync is done.
  */
 function connectedAndFirstSync(strings: Strings): string {
 	return `
@@ -367,7 +641,7 @@ function connectedAndFirstSync(strings: Strings): string {
 		// A new Connection shows the onboarding; the first sync starts once it is closed.
 		(await button(${JSON.stringify(strings.onboardingDone)})).click();
 		const firstSyncWindow = await until(
-			() => [...activeDocument.querySelectorAll(".modal")].find((m) => m.querySelector(".modal-title")?.textContent === ${JSON.stringify(strings.firstSyncTitle)}),
+			() => modalTitled(${JSON.stringify(strings.firstSyncTitle)}),
 			60000,
 			"the First sync window",
 		);
@@ -381,12 +655,8 @@ function connectedAndFirstSync(strings: Strings): string {
 			),
 		};
 		(await button(${JSON.stringify(strings.firstSyncStart)}, firstSyncWindow)).click();
-		const synced = ${JSON.stringify(strings.statusSynced)};
-		await until(
-			() => activeDocument.querySelector("[aria-label=" + JSON.stringify(synced) + "]") || [...activeDocument.querySelectorAll(".obsync-status")].some((item) => item.textContent === synced),
-			${SYNC_TIMEOUT_MS},
-			"the Synced status",
-		);`;
+		${statusHelpers(strings)}
+		await until(() => statusIs(shownStatus(), ${JSON.stringify(strings.statusSynced)}), ${SYNC_TIMEOUT_MS}, "the Synced status");`;
 }
 
 /**
@@ -420,15 +690,42 @@ async function changeOnDesktop(path: string): Promise<void> {
 		app.commands.executeCommandById("obsync:sync-now");`);
 	await phone().eval(
 		`
-		${dropboxHelpers(dropboxAppKey())}
-		const secret = pluginSecret();
-		if (!secret) throw new Error("the phone is not connected");
-		const access = await dropboxAccess(secret);
-		if (!access.token) throw new Error("no access token: HTTP " + access.status);
+		${dropboxAccessProgram()}
 		await askDropbox(async () => {
 			const listed = await dropboxCall(access.token, "files/list_folder", { path: ${JSON.stringify(`/${RUN_FOLDER}`)} });
 			return { status: listed.status, done: listed.json?.entries?.some((entry) => entry.name === ${JSON.stringify(path)}) === true };
 		}, ${SYNC_TIMEOUT_MS}, "the desktop's change");`,
 		SYNC_TIMEOUT_MS + ASK_EVERY_MS + THROTTLED_WAIT_MS + CALL_MS,
 	);
+}
+
+/**
+ * Page code changing the shared settings in the plugin's settings tab as a
+ * user does: `edit`, page code given the tab's contents as `tab`, then
+ * "Apply to all devices"; the settings close however it ends. The change is
+ * stored on the device before its sync starts. The body starts with
+ * PAGE_HELPERS.
+ */
+function applySharedProgram(strings: Strings, edit: string): string {
+	return `
+		await withSettings(async (tab) => {
+			${edit}
+			const applyRow = await settingRow(${JSON.stringify(strings.settingsApplyShared)}, tab);
+			(await button(${JSON.stringify(strings.settingsApplyShared)}, applyRow)).click();
+		});`;
+}
+
+/**
+ * Page code leaving an access token of the device's own login in
+ * `access.token`: defines dropboxHelpers' helpers, then reads the plugin's
+ * stored login and exchanges it for the token; fails when the device is not
+ * connected or Dropbox refuses the login.
+ */
+function dropboxAccessProgram(): string {
+	return `
+		${dropboxHelpers(dropboxAppKey())}
+		const secret = pluginSecret();
+		if (!secret) throw new Error("the device is not connected");
+		const access = await dropboxAccess(secret);
+		if (!access.token) throw new Error("no access token: HTTP " + access.status);`;
 }

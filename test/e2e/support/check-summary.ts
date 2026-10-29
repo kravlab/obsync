@@ -21,16 +21,28 @@ export interface ReportedTest {
 
 const CHECK_NAME = /^check (\d+)( \([^)]*\))?: (.*)$/s;
 
+/** The errors above a test, each nearest first: those of the describes around it, and those of its file. */
+export interface ErrorsAbove {
+	readonly describes: readonly string[];
+	readonly file: readonly string[];
+}
+
 /**
- * The outcome of `test`, given the errors of the describes and file above
- * it (`aboveErrors`, nearest first). A test a failing hook kept from running
- * (Vitest marks it skipped, the error on its describe) is a failure with
- * that error, so the summary tells why a check did not run.
+ * The outcome of `test`, given the errors above it. A failed test keeps its
+ * own error. A test that passed is a failure with the error of the nearest
+ * describe around it that has one, such as a failing `afterAll`, so the
+ * summary never says passed for a check whose describe failed. A test that
+ * did not run (Vitest marks one a failing hook kept from running skipped,
+ * the error on its describe) is a failure with the nearest error of its
+ * describes, else of its file, so the summary tells why a check did not run.
+ * The file's errors are not held against a test that passed, so a failing
+ * file teardown does not fail every check of the file.
  */
-export function outcomeOf(test: ReportedTest, aboveErrors: readonly string[]): TestOutcome {
+export function outcomeOf(test: ReportedTest, above: ErrorsAbove): TestOutcome {
 	const { fullName, state } = test;
 	if (state === "failed") return { fullName, state, error: test.errors?.[0] };
-	if (state !== "passed" && aboveErrors.length > 0) return { fullName, state: "failed", error: aboveErrors[0] };
+	const error = above.describes[0] ?? (state === "passed" ? undefined : above.file[0]);
+	if (error !== undefined) return { fullName, state: "failed", error };
 	return { fullName, state };
 }
 

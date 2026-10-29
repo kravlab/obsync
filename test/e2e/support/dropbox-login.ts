@@ -5,7 +5,7 @@
 // page's address holds the app key, so nothing here prints it.
 import type { Strings } from "../../../src/ui/i18n/strings";
 import { dropboxAppKey, dropboxHelpers, PLUGIN_SECRET_HELPER } from "./dropbox-page";
-import type { ObsidianPage } from "./page";
+import { PAGE_HELPERS, type ObsidianPage } from "./page";
 
 /** How long the login may take: the browser loading Dropbox's three pages. */
 export const LOGIN_TIMEOUT_MS = 120_000;
@@ -125,11 +125,8 @@ export function newFolderProgram(name: string, strings: Strings): string {
 		(await button(${JSON.stringify(strings.create)})).click();`;
 }
 
-/** A device's page with the plugin's id, as the cleanup needs it. */
-type PluginPage = ObsidianPage & { readonly pluginId: string };
-
 /** Whether `device`'s plugin still holds a login that Disconnect was not pressed for: read in the page, nothing sent. */
-export async function hasLogin(device: PluginPage): Promise<boolean> {
+export async function hasLogin(device: ObsidianPage): Promise<boolean> {
 	return (await device.eval(`
 		${PLUGIN_SECRET_HELPER}
 		return !window.${DISCONNECT_PRESSED} && pluginSecret() !== null;`)) === true;
@@ -147,7 +144,7 @@ type Deleted = { readonly status: number; readonly json?: { readonly error_summa
  * pressed in the page, nor without a login. A body that deletes nothing
  * holds no app key.
  */
-export async function leaveDropbox(device: PluginPage, runFolder: string, { deleteFolder }: { readonly deleteFolder: boolean }): Promise<void> {
+export async function leaveDropbox(device: ObsidianPage, runFolder: string, { deleteFolder }: { readonly deleteFolder: boolean }): Promise<void> {
 	const strings = await device.strings();
 	const deletion = deleteFolder
 		? `
@@ -159,13 +156,14 @@ export async function leaveDropbox(device: PluginPage, runFolder: string, { dele
 		}`
 		: "";
 	const left = (await device.eval(`
+		${PAGE_HELPERS}
 		${deleteFolder ? dropboxHelpers(dropboxAppKey()) : PLUGIN_SECRET_HELPER}
 		if (window.${DISCONNECT_PRESSED}) return null;
 		const secret = pluginSecret();
 		if (!secret) return null;
 		let deleted = null;
 		${deletion}
-		${disconnectProgram(strings, device.pluginId)}
+		${disconnectProgram(strings)}
 		return { deleted, notice };`)) as null | { deleted: Deleted | null; notice: string };
 	if (left === null) return;
 	const failures = [left.deleted === null ? null : deletionFailure(left.deleted), left.notice === strings.noticeDisconnected ? null : `disconnecting after the run: ${left.notice}`];
@@ -185,30 +183,21 @@ function deletionFailure(deleted: Deleted): string | null {
 }
 
 /**
- * Page code that presses Disconnect in the plugin `pluginId`'s settings
- * tab and leaves the notice it ended with in `notice`: an action row of
- * the declarative tab (Obsidian 1.13 and later), named after its button.
- * The page flag DISCONNECT_PRESSED is set first, so a cleanup after the
- * run sends nothing with the old login. The settings close however it
- * ends, so a window left open takes no later typing.
+ * Page code that presses Disconnect in the plugin's settings tab and
+ * leaves the notice it ended with in `notice`: an action row of the
+ * declarative tab (Obsidian 1.13 and later), named after its button. The
+ * page flag DISCONNECT_PRESSED is set first, so a cleanup after the run
+ * sends nothing with the old login. The settings close however it ends
+ * (`withSettings`). The body starts with PAGE_HELPERS.
  */
-export function disconnectProgram(strings: Strings, pluginId: string): string {
+export function disconnectProgram(strings: Strings): string {
 	return `
-	let notice;
-	app.setting.open();
-	try {
-		app.setting.openTabById(${JSON.stringify(pluginId)});
-		const disconnectRow = await until(
-			() => [...app.setting.activeTab.containerEl.querySelectorAll(".setting-item.mod-action")].find((item) => item.querySelector(".setting-item-name")?.textContent === ${JSON.stringify(strings.disconnect)}),
-			10000,
-			"the Disconnect setting",
-		);
+	const notice = await withSettings(async (tab) => {
+		const disconnectRow = await settingRow(${JSON.stringify(strings.disconnect)}, tab);
 		window.${DISCONNECT_PRESSED} = true;
 		disconnectRow.click();
 		// Whichever way Disconnect ends, its notice shows it.
 		const outcomes = ${JSON.stringify([strings.noticeDisconnected, strings.noticeDisconnectedRevokeFailed, strings.noticeDisconnectFailed])};
-		notice = await until(() => [...activeDocument.querySelectorAll(".notice")].map((n) => n.textContent).find((text) => outcomes.includes(text)), 30000, "the Disconnect notice");
-	} finally {
-		app.setting.close();
-	}`;
+		return until(() => noticeAmong(outcomes), 30000, "the Disconnect notice");
+	});`;
 }

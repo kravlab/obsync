@@ -146,6 +146,16 @@ describe("a page open over DevTools", () => {
 		expect(socket.sent).toEqual([]);
 	});
 
+	it("tells whether its connection is closed, from either end", async () => {
+		const closedHere = await openFakePage();
+		expect(closedHere.page.isClosed()).toBe(false);
+		closedHere.page.close();
+		expect(closedHere.page.isClosed()).toBe(true);
+		const dropped = await openFakePage();
+		dropped.socket.drop();
+		expect(dropped.page.isClosed()).toBe(true);
+	});
+
 	it("skips a frame that is not JSON, and still takes the answer after it", async () => {
 		const { page, socket } = await openFakePage();
 		const value = page.evaluate("1", 1000);

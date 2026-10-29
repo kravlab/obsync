@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { createContext, isContext, runInContext } from "node:vm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { selectStrings } from "../../../src/ui/i18n/strings";
 import {
@@ -15,34 +14,10 @@ import {
 	PRESS_PROGRAM,
 	type Browser,
 } from "./dropbox-login";
-import { evalProgram, readAnswer } from "./obsidian-cli";
 import { PAGE_HELPERS } from "./page";
+import { runInPage } from "./page-runner";
 
 const strings = selectStrings("en");
-
-/**
- * Runs `body` as a run's page does (`evalProgram`), with `globals` as the
- * page's global object, over jsdom's document: what one evaluation sets
- * there, such as a page flag, the next one sees. The page's clock moves a
- * second per reading, so a wait that is never met fails at once instead
- * of after its real time.
- */
-function runInPage(body: string, globals: Record<string, unknown>): Promise<unknown> {
-	if (!isContext(globals)) {
-		let clock = Date.now();
-		Object.assign(globals, {
-			activeDocument: document,
-			document,
-			Event,
-			KeyboardEvent,
-			setTimeout: (callback: () => void) => setTimeout(callback, 0),
-			Date: { now: () => (clock += 1000) },
-		});
-		globals.window = globals;
-		createContext(globals);
-	}
-	return (runInContext(evalProgram(body), globals) as Promise<unknown>).then(readAnswer);
-}
 
 /** An element of `tag` with `classes`, holding `text`. */
 function element(tag: keyof HTMLElementTagNameMap, classes: string, text = ""): HTMLElement {
@@ -265,7 +240,7 @@ function deviceWith({ secret, token = { status: 200, json: { access_token: "acce
 		setting: {
 			open: () => events.push("settings opened"),
 			openTabById: (id: string) => events.push(`tab ${id}`),
-			activeTab: { containerEl: tab },
+			activeTab: { id: "obsync", containerEl: tab },
 			close: () => events.push("settings closed"),
 		},
 	};
@@ -365,7 +340,7 @@ describe("leaving Dropbox after a run", () => {
 
 	it("closes the settings even when Disconnect is not found", async () => {
 		const { device, events } = deviceWith({ secret: "refresh" });
-		await expect(leaveDropbox(device, "e2e-run", { deleteFolder: false })).rejects.toThrow("the Disconnect setting");
+		await expect(leaveDropbox(device, "e2e-run", { deleteFolder: false })).rejects.toThrow("the Disconnect row");
 		expect(events.at(-1)).toBe("settings closed");
 	});
 });
@@ -386,7 +361,7 @@ describe("whether a device still has a login to leave", () => {
 describe("Disconnect, pressed in the page", () => {
 	it("leaves the notice it ended with, and closes the settings", async () => {
 		const { device, events } = deviceWith({ secret: "refresh", disconnect: strings.noticeDisconnectFailed });
-		expect(await device.eval(`${disconnectProgram(strings, "obsync")}\nreturn notice;`)).toBe(strings.noticeDisconnectFailed);
+		expect(await device.eval(`${PAGE_HELPERS}\n${disconnectProgram(strings)}\nreturn notice;`)).toBe(strings.noticeDisconnectFailed);
 		expect(events).toEqual(["settings opened", "tab obsync", "Disconnect pressed, flag true", "settings closed"]);
 	});
 });

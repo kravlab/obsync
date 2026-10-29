@@ -56,24 +56,54 @@ describe("the summary of a run, one line per manual check", () => {
 });
 
 describe("the outcome of one test", () => {
+	const none = { describes: [], file: [] };
+
 	it("is the test's own result when it ran", () => {
-		expect(outcomeOf({ fullName: "check 3: a", state: "failed", errors: ["own"] }, ["start failed"])).toEqual({
+		expect(outcomeOf({ fullName: "check 3: a", state: "failed", errors: ["own"] }, { describes: ["teardown failed"], file: ["file failed"] })).toEqual({
 			fullName: "check 3: a",
 			state: "failed",
 			error: "own",
 		});
-		expect(outcomeOf({ fullName: "check 3: a", state: "passed" }, [])).toEqual({ fullName: "check 3: a", state: "passed" });
+		expect(outcomeOf({ fullName: "check 3: a", state: "passed" }, none)).toEqual({ fullName: "check 3: a", state: "passed" });
 	});
 
 	it("is a failure with its describe's error when a hook failing skipped it", () => {
-		expect(outcomeOf({ fullName: "check 3: a", state: "skipped" }, ["start failed"])).toEqual({
+		expect(outcomeOf({ fullName: "check 3: a", state: "skipped" }, { describes: ["start failed"], file: [] })).toEqual({
 			fullName: "check 3: a",
 			state: "failed",
 			error: "start failed",
 		});
 	});
 
+	it("is a failure with its file's error when a hook failing skipped it and no describe has an error", () => {
+		expect(outcomeOf({ fullName: "check 3: a", state: "pending" }, { describes: [], file: ["file setup failed"] })).toEqual({
+			fullName: "check 3: a",
+			state: "failed",
+			error: "file setup failed",
+		});
+	});
+
+	it("takes the nearest describe's error, before the next describe's and the file's", () => {
+		expect(outcomeOf({ fullName: "check 3: a", state: "skipped" }, { describes: ["inner", "outer"], file: ["file"] })).toMatchObject({ error: "inner" });
+		expect(outcomeOf({ fullName: "check 3: a", state: "passed" }, { describes: ["inner", "outer"], file: ["file"] })).toMatchObject({ error: "inner" });
+	});
+
+	it("is a failure with its describe's error when it passed but the describe's afterAll failed", () => {
+		expect(outcomeOf({ fullName: "check 3: a", state: "passed" }, { describes: ["restoring failed"], file: [] })).toEqual({
+			fullName: "check 3: a",
+			state: "failed",
+			error: "restoring failed",
+		});
+	});
+
+	it("stays passed when only its file has an error, such as a failing file teardown", () => {
+		expect(outcomeOf({ fullName: "check 3: a", state: "passed" }, { describes: [], file: ["teardown failed"] })).toEqual({
+			fullName: "check 3: a",
+			state: "passed",
+		});
+	});
+
 	it("stays skipped when nothing above it failed", () => {
-		expect(outcomeOf({ fullName: "check 3: a", state: "skipped" }, [])).toEqual({ fullName: "check 3: a", state: "skipped" });
+		expect(outcomeOf({ fullName: "check 3: a", state: "skipped" }, none)).toEqual({ fullName: "check 3: a", state: "skipped" });
 	});
 });

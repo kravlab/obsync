@@ -12,7 +12,15 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll } from "vitest";
 import { selectStrings, type Strings } from "../../../src/ui/i18n/strings";
-import { CALL_MS, PAGE_HELPERS, type ObsidianPage } from "./page";
+import {
+	CALL_MS,
+	PAGE_HELPERS,
+	POLL_CALL_MS,
+	reloadedInLanguageProgram,
+	reloadInLanguageProgram,
+	untilAnswered,
+	type LanguagePage,
+} from "./page";
 import { evalProgram, parseEvalAnswer } from "./obsidian-cli";
 import { ensureObsidian, typedObsidianVersion, type ObsidianInstall } from "./obsidian-release";
 
@@ -25,24 +33,19 @@ const VAULT_NAME = "vault";
 const PLUGIN_FILES = ["main.js", "manifest.json", "styles.css"];
 
 /**
- * How long Obsidian may take to start, or to reload into phone emulation,
- * before it answers the CLI: about 2 s was seen for either; 60 s leaves
- * room for a loaded machine, so only a hang fails.
+ * How long Obsidian may take to start, or to reload, before it answers
+ * the CLI. Seen: about 2 s to start or to reload into phone emulation,
+ * 1.6 s to reload in another language. 60 s leaves room for a loaded
+ * machine, so only a hang fails.
  */
 const START_TIMEOUT_MS = 60_000;
-/**
- * How long one call may take while waiting for Obsidian to answer: a call
- * lost in a reload is given up and asked again, so the wait stays within
- * START_TIMEOUT_MS. A call that answers took well under a second.
- */
-const POLL_CALL_MS = 5_000;
 /** How long Obsidian may take to exit after SIGTERM before it is killed. */
 const EXIT_TIMEOUT_MS = 10_000;
 /** How many lines of Obsidian's log a failed start quotes. */
 const LOG_LINES_QUOTED = 20;
 
 /** A desktop Obsidian started for a scenario file, with the plugin loaded. */
-export class DesktopObsidian implements ObsidianPage {
+export class DesktopObsidian implements LanguagePage {
 	/** Removed by stop(): ends Obsidian if the run itself ends first, e.g. on Ctrl+C. */
 	private readonly killOnExit: () => void;
 	/** Why the process could not be started, once `spawn` says so. */
@@ -169,6 +172,16 @@ export class DesktopObsidian implements ObsidianPage {
 	}
 
 	/**
+	 * Sets Obsidian's language, or with `null` removes it, and reloads the
+	 * window (see `reloadInLanguageProgram`); resolves once the plugin has
+	 * loaded again.
+	 */
+	async setLanguage(language: string | null): Promise<void> {
+		await this.eval(reloadInLanguageProgram(language));
+		await this.answering(reloadedInLanguageProgram(language, this.pluginId));
+	}
+
+	/**
 	 * Turns this Obsidian into a phone: Obsidian's mobile emulation takes a
 	 * window at least 1024 px wide for a tablet, so the window is first made
 	 * 400 px wide through Electron, then emulation is turned on (the
@@ -206,23 +219,15 @@ export class DesktopObsidian implements ObsidianPage {
 	 * returns true; fails after START_TIMEOUT_MS with the last failure, or at
 	 * once if Obsidian exits or cannot be started.
 	 */
-	private async answering(ready = "return true;"): Promise<void> {
-		const end = Date.now() + START_TIMEOUT_MS;
-		let last: unknown;
-		while (Date.now() < end) {
-			this.mustRun();
+	private answering(ready = "return true;"): Promise<void> {
+		return untilAnswered(
 			// Asked only once this Obsidian holds its socket, so a call never meets a half-started one.
-			if (existsSync(join(this.runDir, "config", "obsidian", "SingletonSocket"))) {
-				try {
-					if ((await this.eval(ready, POLL_CALL_MS)) === true) return;
-					last = "not ready yet";
-				} catch (error) {
-					last = error;
-				}
-			}
-			await delay(250);
-		}
-		throw new Error(`Obsidian did not answer within ${START_TIMEOUT_MS} ms: ${String(last)}`);
+			async () => {
+				if (!existsSync(join(this.runDir, "config", "obsidian", "SingletonSocket"))) throw new Error("no SingletonSocket yet");
+				return (await this.eval(ready, POLL_CALL_MS)) === true;
+			},
+			{ timeoutMs: START_TIMEOUT_MS, what: "Obsidian did not answer", mustGoOn: () => this.mustRun() },
+		);
 	}
 
 	/** Throws if this Obsidian could not be started or has exited. */
