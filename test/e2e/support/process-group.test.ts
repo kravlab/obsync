@@ -1,5 +1,6 @@
 import type { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Signal } from "./process-group";
@@ -7,6 +8,22 @@ import type { Signal } from "./process-group";
 const MODULE = fileURLToPath(new URL("./process-group.ts", import.meta.url));
 /** How long the process may take to end: well under a second was seen. */
 const ENDING_LIMIT_MS = 5000;
+
+/**
+ * Whether `pid` is a running process. A killed process that nobody has
+ * reaped yet, as when its orphan went to a PID 1 that never reaps, is a
+ * zombie: it has ended, although signal 0 still reaches it.
+ */
+function isRunning(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		// The state is the first field after the parenthesised command name.
+		const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+		return stat[stat.lastIndexOf(")") + 2] !== "Z";
+	} catch {
+		return false;
+	}
+}
 
 /**
  * Runs a Node process that starts a detached `sleep` deaf to SIGTERM and SIGINT in a group of its own
@@ -35,12 +52,7 @@ async function sleepAfter(end: { signal: Signal } | "exit", untie = false): Prom
 	clearTimeout(stuck);
 	// The group is signalled synchronously before the process ends; give the kernel a moment to reap.
 	await new Promise((resolve) => setTimeout(resolve, 200));
-	let alive = true;
-	try {
-		process.kill(pid, 0);
-	} catch {
-		alive = false;
-	}
+	const alive = isRunning(pid);
 	if (alive) process.kill(-pid, "SIGKILL");
 	return { alive, ...how };
 }
