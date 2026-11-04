@@ -31,7 +31,7 @@ export function conflictReadingView(app: App, strings: Strings): MarkdownPostPro
 			if (piece.kind === "text") {
 				await MarkdownRenderer.render(app, piece.text, el.createDiv(), ctx.sourcePath, child);
 			} else {
-				await renderPanel(app, strings, piece.block, el.createDiv({ cls: "obsync-conflict-panel" }), ctx.sourcePath, child);
+				await renderPanel(app, strings, piece.block, el.createDiv({ cls: "seamsync-conflict-panel" }), ctx.sourcePath, child);
 			}
 		}
 	};
@@ -46,11 +46,11 @@ async function renderPanel(
 	sourcePath: string,
 	component: MarkdownRenderChild,
 ): Promise<void> {
-	panel.createDiv({ cls: "obsync-conflict-panel-title", text: strings.conflictUnresolved });
-	panel.createDiv({ cls: "obsync-conflict-panel-hint", text: strings.conflictUnresolvedHint });
+	panel.createDiv({ cls: "seamsync-conflict-panel-title", text: strings.conflictUnresolved });
+	panel.createDiv({ cls: "seamsync-conflict-panel-hint", text: strings.conflictUnresolvedHint });
 	for (const { label, text, cls } of shownSides(block, strings)) {
-		const side = panel.createDiv({ cls: `obsync-conflict-panel-side ${cls}` });
-		side.createDiv({ cls: "obsync-conflict-panel-label", text: label });
+		const side = panel.createDiv({ cls: `seamsync-conflict-panel-side ${cls}` });
+		side.createDiv({ cls: "seamsync-conflict-panel-label", text: label });
 		await MarkdownRenderer.render(app, text, side.createDiv(), sourcePath, component);
 	}
 }

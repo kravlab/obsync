@@ -92,7 +92,7 @@ export class SyncWindow extends Modal {
 	) {
 		super(app);
 		fitForPhone(this);
-		this.modalEl.addClass("obsync-sync-window");
+		this.modalEl.addClass("seamsync-sync-window");
 	}
 
 	override onOpen(): void {
@@ -116,23 +116,23 @@ export class SyncWindow extends Modal {
 	private drawFrame(): void {
 		const { contentEl } = this;
 		contentEl.empty();
-		const header = contentEl.createDiv({ cls: "obsync-sync-header" });
+		const header = contentEl.createDiv({ cls: "seamsync-sync-header" });
 		this.header = {
 			dot: header.createSpan(),
 			text: header.createSpan(),
 			button: header.createEl("button", { cls: "mod-cta" }),
 		};
 		this.header.button.addEventListener("click", () => this.headerAction());
-		const tabs = contentEl.createDiv({ cls: "obsync-sync-tabs", attr: { role: "tablist" } });
+		const tabs = contentEl.createDiv({ cls: "seamsync-sync-tabs", attr: { role: "tablist" } });
 		for (const tab of ["conflicts", "skipped", "activity", "help"] as const) {
-			const button = tabs.createEl("button", { cls: "obsync-sync-tab", attr: { role: "tab" } });
+			const button = tabs.createEl("button", { cls: "seamsync-sync-tab", attr: { role: "tab" } });
 			button.addEventListener("click", () => {
 				this.tab = tab;
 				this.update();
 			});
 			this.tabButtons.set(tab, button);
 		}
-		this.body = contentEl.createDiv({ cls: "obsync-sync-body" });
+		this.body = contentEl.createDiv({ cls: "seamsync-sync-body" });
 	}
 
 	/**
@@ -163,7 +163,7 @@ export class SyncWindow extends Modal {
 		if (this.header === undefined) return;
 		const { strings } = this;
 		const { state } = shown.status;
-		this.header.dot.className = `obsync-dot obsync-dot-${statusTone(shown.status)}`;
+		this.header.dot.className = `seamsync-dot seamsync-dot-${statusTone(shown.status)}`;
 		this.header.text.setText(statusText(shown.status, shown.conflicts, shown.skipped, strings));
 		const label =
 			state === "reconnectNeeded" ? strings.reconnect : state === "notConnected" ? strings.connect : strings.syncNow;
@@ -193,7 +193,7 @@ export class SyncWindow extends Modal {
 		for (const [tab, button] of this.tabButtons) {
 			const selected = tab === this.tab;
 			button.setText(labels[tab]);
-			button.toggleClass("obsync-sync-tab-selected", selected);
+			button.toggleClass("seamsync-sync-tab-selected", selected);
 			button.setAttribute("aria-selected", String(selected));
 		}
 	}
@@ -208,7 +208,7 @@ export class SyncWindow extends Modal {
 			if (paths.length === 0) return;
 			body.createEl("h4", { text: heading });
 			for (const path of paths) {
-				const item = body.createEl("button", { text: path, cls: "obsync-sync-item" });
+				const item = body.createEl("button", { text: path, cls: "seamsync-sync-item" });
 				item.addEventListener("click", () => {
 					this.close();
 					actions.openFile(path, atFirstConflict);
@@ -230,7 +230,7 @@ export class SyncWindow extends Modal {
 	private renderSkipped(body: HTMLElement, { skipped }: ShownSync): void {
 		const lines = skippedLines(skipped, this.strings);
 		if (lines.length === 0) body.createEl("p", { text: this.strings.nothingSkipped });
-		for (const line of lines) body.createDiv({ text: line, cls: "obsync-sync-line" });
+		for (const line of lines) body.createDiv({ text: line, cls: "seamsync-sync-line" });
 	}
 
 	/** "Copy for a bug report" with what the report holds, then every event, newest first. */
@@ -240,7 +240,7 @@ export class SyncWindow extends Modal {
 			.setDesc(strings.copyBugReportHint)
 			.addButton((button) => button.setButtonText(strings.copyBugReport).onClick(() => actions.copyBugReport()));
 		if (activity.length === 0) body.createEl("p", { text: strings.nothingRecorded });
-		for (const event of activity) body.createDiv({ text: activityLine(event, strings), cls: "obsync-sync-line" });
+		for (const event of activity) body.createDiv({ text: activityLine(event, strings), cls: "seamsync-sync-line" });
 	}
 
 	/** The button opening the onboarding again, then every help section under its heading. */

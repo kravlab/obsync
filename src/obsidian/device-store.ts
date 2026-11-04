@@ -9,16 +9,16 @@ import { isArrayBuffer } from "./is-array-buffer";
 import { isRecord } from "./is-record";
 
 /** The localStorage key of this vault's Connection. */
-const CONNECTION_KEY = "obsync-connection";
+const CONNECTION_KEY = "seamsync-connection";
 
 /** The localStorage key naming this vault's snapshot database. */
-const SNAPSHOT_DATABASE_KEY = "obsync-snapshot-database";
+const SNAPSHOT_DATABASE_KEY = "seamsync-snapshot-database";
 
 /** The localStorage key of the shared Remote settings the last sync read. */
-const KNOWN_SETTINGS_KEY = "obsync-known-settings";
+const KNOWN_SETTINGS_KEY = "seamsync-known-settings";
 
 /** The localStorage key of the change of the shared Remote settings waiting for a sync. */
-const SETTINGS_CHANGE_KEY = "obsync-settings-change";
+const SETTINGS_CHANGE_KEY = "seamsync-settings-change";
 
 /** The format version of the stored Connection. */
 const CONNECTION_FORMAT_VERSION = 1;
@@ -261,7 +261,7 @@ export class ObsidianDeviceStore implements DeviceStore {
 	private newDatabase(): string {
 		const stored = this.storedDatabase();
 		if (stored !== null) void this.discardDatabase(stored.name);
-		const name = `obsync-snapshot-${crypto.randomUUID()}`;
+		const name = `seamsync-snapshot-${crypto.randomUUID()}`;
 		this.app.saveLocalStorage(SNAPSHOT_DATABASE_KEY, { formatVersion: SNAPSHOT_FORMAT_VERSION, name });
 		return name;
 	}
@@ -334,7 +334,7 @@ export class ObsidianDeviceStore implements DeviceStore {
 		try {
 			await this.deleteDatabase(name);
 		} catch (error) {
-			console.error("obsync: deleting a snapshot database failed", error);
+			console.error("seamsync: deleting a snapshot database failed", error);
 		}
 	}
 

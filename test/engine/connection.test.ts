@@ -61,7 +61,7 @@ describe("connecting while another device does its First sync", () => {
 
 		expect(outcome).toEqual({ kind: "firstSyncInProgress", deviceName: "Tablet" });
 		expect(phone.deviceStore.connection).toBeNull();
-		expect(account.folders.get("My vault")?.get(".obsync/devices/phone-1.json")).toBeUndefined();
+		expect(account.folders.get("My vault")?.get(".seamsync/devices/phone-1.json")).toBeUndefined();
 	});
 
 	it("connects anyway when the user asks to", async () => {
@@ -100,7 +100,7 @@ describe("connecting a device", () => {
 			remoteRoot: "My vault",
 			device: { id: "laptop-1", name: "Laptop" },
 		});
-		expect(laptop.secretStore.getSecret("obsync-fake-service")).not.toBeNull();
+		expect(laptop.secretStore.getSecret("seamsync-fake-service")).not.toBeNull();
 		expect(laptop.ui.lastStatus).toEqual({ state: "connected" });
 	});
 
@@ -111,7 +111,7 @@ describe("connecting a device", () => {
 
 		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
 
-		expect(readJson(account.folders.get("My vault"), ".obsync/settings.json")).toEqual({
+		expect(readJson(account.folders.get("My vault"), ".seamsync/settings.json")).toEqual({
 			formatVersion: 1,
 			namePolicy: "skipAndReport",
 			textExtensions: ["md", "txt"],
@@ -127,7 +127,7 @@ describe("connecting a device", () => {
 
 		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
 
-		expect(readJson(account.folders.get("My vault"), ".obsync/devices/laptop-1.json")).toEqual({
+		expect(readJson(account.folders.get("My vault"), ".seamsync/devices/laptop-1.json")).toEqual({
 			formatVersion: 1,
 			deviceId: "laptop-1",
 			deviceName: "Laptop",
@@ -155,14 +155,14 @@ describe("connecting a device", () => {
 		const account = service.addAccount("account-1");
 		await (await authorize(createConnectingDevice(service, "laptop"), account)).createRemote("My vault", "Laptop");
 		const vault = account.folders.get("My vault");
-		const settingsBefore = vault?.get(".obsync/settings.json");
+		const settingsBefore = vault?.get(".seamsync/settings.json");
 		const phone = createConnectingDevice(service, "phone");
 
 		await (await authorize(phone, account)).useFolder("My vault", "Phone");
 
-		expect(vault?.get(".obsync/settings.json")).toBe(settingsBefore);
-		expect(readJson(vault, ".obsync/devices/laptop-1.json")).toMatchObject({ deviceName: "Laptop" });
-		expect(readJson(vault, ".obsync/devices/phone-1.json")).toMatchObject({ deviceName: "Phone" });
+		expect(vault?.get(".seamsync/settings.json")).toBe(settingsBefore);
+		expect(readJson(vault, ".seamsync/devices/laptop-1.json")).toMatchObject({ deviceName: "Laptop" });
+		expect(readJson(vault, ".seamsync/devices/phone-1.json")).toMatchObject({ deviceName: "Phone" });
 		expect(phone.deviceStore.connection).toMatchObject({ remoteRoot: "My vault", device: { id: "phone-1" } });
 		expect(phone.ui.lastStatus).toEqual({ state: "connected" });
 	});
@@ -176,8 +176,8 @@ describe("connecting a device", () => {
 		await (await authorize(laptop, account)).useFolder("Notes", "Laptop");
 
 		const notes = account.folders.get("Notes");
-		expect(readJson(notes, ".obsync/settings.json")).toMatchObject({ formatVersion: 1, namePolicy: "skipAndReport" });
-		expect(readJson(notes, ".obsync/devices/laptop-1.json")).toMatchObject({ deviceName: "Laptop" });
+		expect(readJson(notes, ".seamsync/settings.json")).toMatchObject({ formatVersion: 1, namePolicy: "skipAndReport" });
+		expect(readJson(notes, ".seamsync/devices/laptop-1.json")).toMatchObject({ deviceName: "Laptop" });
 	});
 
 	it("keeps one settings file when two devices set up the same folder at once", async () => {
@@ -190,9 +190,9 @@ describe("connecting a device", () => {
 		await Promise.all([laptop.useFolder("Notes", "Laptop"), phone.useFolder("Notes", "Phone")]);
 
 		const notes = account.folders.get("Notes");
-		expect(readJson(notes, ".obsync/settings.json")).toMatchObject({ formatVersion: 1 });
-		expect(readJson(notes, ".obsync/devices/laptop-1.json")).toMatchObject({ deviceName: "Laptop" });
-		expect(readJson(notes, ".obsync/devices/phone-1.json")).toMatchObject({ deviceName: "Phone" });
+		expect(readJson(notes, ".seamsync/settings.json")).toMatchObject({ formatVersion: 1 });
+		expect(readJson(notes, ".seamsync/devices/laptop-1.json")).toMatchObject({ deviceName: "Laptop" });
+		expect(readJson(notes, ".seamsync/devices/phone-1.json")).toMatchObject({ deviceName: "Phone" });
 	});
 	it("refuses to create a Remote under a taken name, storing nothing", async () => {
 		const service = new FakeService();
@@ -203,7 +203,7 @@ describe("connecting a device", () => {
 		const outcome = await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
 
 		expect(outcome).toEqual({ kind: "nameTaken" });
-		expect(account.folders.get("My vault")?.get(".obsync")).toBeUndefined();
+		expect(account.folders.get("My vault")?.get(".seamsync")).toBeUndefined();
 		expect(laptop.deviceStore.connection).toBeNull();
 	});
 
@@ -234,7 +234,7 @@ describe("connecting a device", () => {
 
 		await remotes.useFolder("My vault", "Laptop");
 
-		expect(readJson(account.folders.get("My vault"), ".obsync/devices/laptop-2.json")).toMatchObject({
+		expect(readJson(account.folders.get("My vault"), ".seamsync/devices/laptop-2.json")).toMatchObject({
 			deviceName: "Laptop",
 		});
 		expect(laptop.deviceStore.connection).toMatchObject({ remoteRoot: "My vault" });
@@ -253,7 +253,7 @@ describe("refusing a provider without conditional writes", () => {
 		expect(outcome).toEqual({ kind: "unsupportedProvider" });
 		expect(account.folders.get("Notes")?.list()).toEqual([]);
 		expect(laptop.deviceStore.connection).toBeNull();
-		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBeNull();
+		expect(laptop.secretStore.getSecret("seamsync-fake-service")).toBeNull();
 	});
 
 	it("refuses a new Remote before writing its Metadata folder", async () => {
@@ -264,7 +264,7 @@ describe("refusing a provider without conditional writes", () => {
 		const outcome = await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
 
 		expect(outcome).toEqual({ kind: "unsupportedProvider" });
-		expect(account.folders.get("My vault")?.get(".obsync")).toBeUndefined();
+		expect(account.folders.get("My vault")?.get(".seamsync")).toBeUndefined();
 		expect(laptop.deviceStore.connection).toBeNull();
 	});
 
@@ -287,7 +287,7 @@ describe("logging in", () => {
 
 		expect(await pending.submitCode("expired-code")).toEqual({ kind: "codeRejected", detail: "code refused: expired-code" });
 		expect(laptop.deviceStore.connection).toBeNull();
-		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBeNull();
+		expect(laptop.secretStore.getSecret("seamsync-fake-service")).toBeNull();
 	});
 
 	it("refuses a login to another account while connected, keeping the Connection and secret", async () => {
@@ -297,11 +297,11 @@ describe("logging in", () => {
 		const laptop = createConnectingDevice(service, "laptop");
 		await (await authorize(laptop, first)).createRemote("My vault", "Laptop");
 		const connection = laptop.deviceStore.connection;
-		const secret = laptop.secretStore.getSecret("obsync-fake-service");
+		const secret = laptop.secretStore.getSecret("seamsync-fake-service");
 
 		expect(await logIn(laptop, second)).toEqual({ kind: "otherAccount" });
 		expect(laptop.deviceStore.connection).toBe(connection);
-		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBe(secret);
+		expect(laptop.secretStore.getSecret("seamsync-fake-service")).toBe(secret);
 	});
 
 	it("keeps the Connection and takes the new secret on a login to the same account", async () => {
@@ -310,11 +310,11 @@ describe("logging in", () => {
 		const laptop = createConnectingDevice(service, "laptop");
 		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
 		const connection = laptop.deviceStore.connection;
-		const oldSecret = laptop.secretStore.getSecret("obsync-fake-service");
+		const oldSecret = laptop.secretStore.getSecret("seamsync-fake-service");
 
 		expect(await logIn(laptop, account)).toEqual({ kind: "reconnected" });
 		expect(laptop.deviceStore.connection).toBe(connection);
-		expect(laptop.secretStore.getSecret("obsync-fake-service")).not.toBe(oldSecret);
+		expect(laptop.secretStore.getSecret("seamsync-fake-service")).not.toBe(oldSecret);
 		expect(laptop.ui.lastStatus).toEqual({ state: "connected" });
 	});
 });
@@ -473,13 +473,13 @@ describe("disconnecting", () => {
 		const account = service.addAccount("account-1");
 		const laptop = createConnectingDevice(service, "laptop");
 		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
-		const secret = laptop.secretStore.getSecret("obsync-fake-service") ?? "";
+		const secret = laptop.secretStore.getSecret("seamsync-fake-service") ?? "";
 
 		const outcome = await createConnectionService(laptop.ports).disconnect();
 
 		expect(outcome).toEqual({ kind: "disconnected" });
 		expect(() => service.accountOf(secret)).toThrow();
-		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBeNull();
+		expect(laptop.secretStore.getSecret("seamsync-fake-service")).toBeNull();
 		expect(laptop.deviceStore.connection).toBeNull();
 		expect(laptop.ui.lastStatus).toEqual({ state: "notConnected" });
 	});
@@ -513,14 +513,14 @@ describe("disconnecting", () => {
 		const account = service.addAccount("account-1");
 		const laptop = createConnectingDevice(service, "laptop");
 		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
-		const secret = laptop.secretStore.getSecret("obsync-fake-service") ?? "";
+		const secret = laptop.secretStore.getSecret("seamsync-fake-service") ?? "";
 		laptop.connectStep.failNext("revoke", { category: "transient" });
 
 		const outcome = await createConnectionService(laptop.ports).disconnect();
 
 		expect(outcome).toEqual({ kind: "revokeFailed" });
 		expect(service.accountOf(secret)).toBe(account);
-		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBeNull();
+		expect(laptop.secretStore.getSecret("seamsync-fake-service")).toBeNull();
 		expect(laptop.deviceStore.connection).toBeNull();
 		expect(laptop.ui.lastStatus).toEqual({ state: "notConnected" });
 	});
@@ -553,7 +553,7 @@ describe("disconnecting", () => {
 		const account = service.addAccount("account-1");
 		const laptop = createConnectingDevice(service, "laptop");
 		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
-		service.revoke(laptop.secretStore.getSecret("obsync-fake-service") ?? "");
+		service.revoke(laptop.secretStore.getSecret("seamsync-fake-service") ?? "");
 
 		expect(await createConnectionService(laptop.ports).disconnect()).toEqual({ kind: "disconnected" });
 
@@ -575,7 +575,7 @@ describe("disconnecting", () => {
 
 		expect(outcome).toEqual({ kind: "revokeFailed" });
 		expect(laptop.ui.revokeFailures).toEqual([{ cause: "bug", detail: "TypeError: boom" }]);
-		expect(laptop.secretStore.getSecret("obsync-fake-service")).toBeNull();
+		expect(laptop.secretStore.getSecret("seamsync-fake-service")).toBeNull();
 		expect(laptop.deviceStore.connection).toBeNull();
 		expect(laptop.ui.lastStatus).toEqual({ state: "notConnected" });
 	});
@@ -594,8 +594,8 @@ describe("disconnecting", () => {
 
 		expect(vault?.list()).toEqual(entriesBefore);
 		expect(phone.deviceStore.connection).toMatchObject({ remoteRoot: "My vault" });
-		const phoneSecret = phone.secretStore.getSecret("obsync-fake-service") ?? "";
-		expect(await phone.connectStep.access(phoneSecret).listRoots(".obsync")).toHaveLength(1);
+		const phoneSecret = phone.secretStore.getSecret("seamsync-fake-service") ?? "";
+		expect(await phone.connectStep.access(phoneSecret).listRoots(".seamsync")).toHaveLength(1);
 	});
 
 	it("counts a secret the service already refuses as revoked", async () => {
@@ -603,7 +603,7 @@ describe("disconnecting", () => {
 		const account = service.addAccount("account-1");
 		const laptop = createConnectingDevice(service, "laptop");
 		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
-		service.revoke(laptop.secretStore.getSecret("obsync-fake-service") ?? "");
+		service.revoke(laptop.secretStore.getSecret("seamsync-fake-service") ?? "");
 
 		const outcome = await createConnectionService(laptop.ports).disconnect();
 
@@ -616,7 +616,7 @@ describe("disconnecting", () => {
 		const account = service.addAccount("account-1");
 		const laptop = createConnectingDevice(service, "laptop");
 		await (await authorize(laptop, account)).createRemote("My vault", "Laptop");
-		laptop.secretStore.deleteSecret("obsync-fake-service");
+		laptop.secretStore.deleteSecret("seamsync-fake-service");
 
 		const outcome = await createConnectionService(laptop.ports).disconnect();
 

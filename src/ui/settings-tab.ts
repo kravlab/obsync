@@ -103,7 +103,7 @@ interface Row {
  * The other devices take a full listing of the Remote, so they are read
  * only when the user asks for them.
  */
-export class ObsyncSettingTab extends PluginSettingTab {
+export class SeamsyncSettingTab extends PluginSettingTab {
 	private device: DeviceIdentity | null = null;
 	/** The shared settings as edited in the tab, starting from those read last; null before a sync read them. */
 	private draft: RemoteSettings | null = null;
@@ -222,7 +222,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 	 */
 	override display(): void {
 		this.draw();
-		this.reload().catch((error: unknown) => console.error("obsync: reading the settings failed", error));
+		this.reload().catch((error: unknown) => console.error("seamsync: reading the settings failed", error));
 	}
 
 	/** Draws the rows into the tab, as Obsidian before 1.13 shows them. */
@@ -274,7 +274,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 			})
 			.catch((error: unknown) => {
 				// A bug: the user is told, and the console keeps it for the bug report.
-				console.error("obsync: renaming the device failed", error);
+				console.error("seamsync: renaming the device failed", error);
 				new Notice(this.strings.noticeRenameFailed);
 			});
 	}
@@ -366,7 +366,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 			.then(() => this.reload())
 			.catch((error: unknown) => {
 				// A bug: the user is told, and the console keeps it for the bug report.
-				console.error("obsync: applying the shared settings failed", error);
+				console.error("seamsync: applying the shared settings failed", error);
 				new Notice(this.strings.noticeApplyFailed);
 			});
 	}
@@ -423,7 +423,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 			})
 			.catch((error: unknown) => {
 				// Offline, or a bug: the user is told, and the console keeps it for the bug report.
-				console.error("obsync: forgetting a device failed", error);
+				console.error("seamsync: forgetting a device failed", error);
 				new Notice(strings.noticeForgetFailed);
 			});
 	}
@@ -549,7 +549,7 @@ export class ObsyncSettingTab extends PluginSettingTab {
 				action: () => {
 					this.disconnect().catch((error: unknown) => {
 						// A bug: the user is told, and the console keeps it for the bug report.
-						console.error("obsync: disconnecting failed", error);
+						console.error("seamsync: disconnecting failed", error);
 						new Notice(this.strings.noticeDisconnectFailed);
 					});
 				},

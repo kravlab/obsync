@@ -213,14 +213,14 @@ describe("what a sync leaves out", () => {
 	it("never downloads the Metadata folder", async () => {
 		const remote = new FakeRemote();
 		const setup = remote.openProvider();
-		await setup.createFolder(".obsync");
-		await setup.write(".obsync/settings.json", bytes("{}"));
+		await setup.createFolder(".seamsync");
+		await setup.write(".seamsync/settings.json", bytes("{}"));
 		const phone = connectTestDevice(remote, "Phone");
 
 		await syncNow(phone);
 
-		expect(await phone.vault.stat(".obsync")).toBeNull();
-		expect(await phone.vault.stat(".obsync/settings.json")).toBeNull();
+		expect(await phone.vault.stat(".seamsync")).toBeNull();
+		expect(await phone.vault.stat(".seamsync/settings.json")).toBeNull();
 	});
 
 	it("never uploads the configuration folder", async () => {
@@ -400,7 +400,7 @@ describe("sync status and runs", () => {
 	it("shows Reconnect needed when the login secret is missing", async () => {
 		const remote = new FakeRemote();
 		const laptop = connectTestDevice(remote, "Laptop");
-		laptop.secretStore.deleteSecret("obsync-fake-service");
+		laptop.secretStore.deleteSecret("seamsync-fake-service");
 
 		await syncNow(laptop);
 

@@ -67,12 +67,12 @@ describe("configuration categories", () => {
 		await writeConfig(laptop, "workspace.json", "{}");
 		await writeConfig(laptop, "workspace-mobile.json", "{}");
 		await writeConfig(laptop, "workspaces.json", "{}");
-		await writeConfig(laptop, "plugins/obsync/data.json", "{}");
+		await writeConfig(laptop, "plugins/seamsync/data.json", "{}");
 		await writeConfig(laptop, "plugins/calendar/data.json", "{}");
 		await syncNow(laptop);
-		expect(laptop.pluginDir).toBe(localConfig(laptop, "plugins/obsync"));
+		expect(laptop.pluginDir).toBe(localConfig(laptop, "plugins/seamsync"));
 		expect(remote.get(remoteConfig("plugins/calendar/data.json"))?.kind).toBe("file");
-		for (const path of ["workspace.json", "workspace-mobile.json", "workspaces.json", "plugins/obsync"]) {
+		for (const path of ["workspace.json", "workspace-mobile.json", "workspaces.json", "plugins/seamsync"]) {
 			expect(remote.get(remoteConfig(path))).toBeUndefined();
 		}
 		putRemoteFile(remote, remoteConfig("workspace.json"), '{"other":1}');

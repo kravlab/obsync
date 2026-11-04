@@ -7,7 +7,7 @@ import {
 } from "../engine/sync-schedule";
 
 /** The localStorage key of this vault's sync schedule settings. */
-const SCHEDULE_KEY = "obsync-schedule";
+const SCHEDULE_KEY = "seamsync-schedule";
 
 /** The format version of the stored schedule. */
 const SCHEDULE_FORMAT_VERSION = 1;

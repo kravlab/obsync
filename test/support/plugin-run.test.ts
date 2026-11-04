@@ -26,14 +26,14 @@ afterEach(() => {
 
 /** A fake plugin to add commands to. */
 function plugin(): Plugin {
-	return new Plugin({}, { id: "obsync", version: "0.1.0" });
+	return new Plugin({}, { id: "seamsync", version: "0.1.0" });
 }
 
 describe("the plugin's manifest in tests", () => {
 	it("puts the plugin's folder under the vault's configuration folder", () => {
 		const app = new FakeApp();
 
-		expect(pluginManifest(app)).toEqual({ id: "obsync", version: "0.1.0", dir: `${app.vault.configDir}/plugins/obsync` });
+		expect(pluginManifest(app)).toEqual({ id: "seamsync", version: "0.1.0", dir: `${app.vault.configDir}/plugins/seamsync` });
 	});
 });
 

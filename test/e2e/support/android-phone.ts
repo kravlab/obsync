@@ -59,10 +59,10 @@ function sdkRoot(): string {
 	return root;
 }
 
-/** The emulator's virtual device, named by `OBSYNC_E2E_AVD` in the environment or `.env`. */
+/** The emulator's virtual device, named by `SEAMSYNC_E2E_AVD` in the environment or `.env`. */
 function avdName(): string {
-	const name = process.env.OBSYNC_E2E_AVD;
-	if (!name) throw new Error("Set OBSYNC_E2E_AVD, in the environment or in .env, to the virtual device in .e2e/android/avd");
+	const name = process.env.SEAMSYNC_E2E_AVD;
+	if (!name) throw new Error("Set SEAMSYNC_E2E_AVD, in the environment or in .env, to the virtual device in .e2e/android/avd");
 	return name;
 }
 

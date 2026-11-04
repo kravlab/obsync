@@ -2,7 +2,7 @@ import type { App } from "obsidian";
 import { DEFAULT_CONFIGURATION_CATEGORIES, type ConfigurationCategories } from "../engine/configuration";
 
 /** The localStorage key of this vault's configuration categories. */
-const CATEGORIES_KEY = "obsync-configuration-categories";
+const CATEGORIES_KEY = "seamsync-configuration-categories";
 
 /** The format version of the stored categories. */
 const CATEGORIES_FORMAT_VERSION = 1;

@@ -43,7 +43,7 @@ function opened(path: string, text = NOTE): string {
 			} finally {
 				observer.disconnect();
 			}
-			return { panels: root.querySelectorAll(".obsync-conflict-panel").length, text: root.textContent };
+			return { panels: root.querySelectorAll(".seamsync-conflict-panel").length, text: root.textContent };
 		};`;
 }
 
@@ -59,7 +59,7 @@ describe("check 8: a conflict block in the editor and in Reading view", () => {
 			for (const [name, value] of Object.entries(quoteStyle)) leaf.view.containerEl.style.setProperty(name, value);
 			// The note's lines: the editor's lines and blocks the plugin shows in place of a line; the action row is none.
 			const lines = await until(() => {
-				const found = [...leaf.view.contentEl.querySelectorAll(".cm-content > div:not(.obsync-conflict-actions)")];
+				const found = [...leaf.view.contentEl.querySelectorAll(".cm-content > div:not(.seamsync-conflict-actions)")];
 				return found.some((line) => line.textContent === "after") ? found : null;
 			}, 10000, "the editor's lines");
 			const source = ${JSON.stringify(NOTE.split("\n"))};
@@ -136,7 +136,7 @@ describe("check 8: a conflict block in the editor and in Reading view", () => {
 				const selections = leaf.view.editor.listSelections();
 				leaf.view.editor.setCursor({ line: 0, ch: 0 });
 				const again = await until(() => (marker()?.classList.contains("cm-line") === false ? marker() : null), 10000, "the marker line shown plain again");
-				return { selections, typedIsMarker: typed.classList.contains("obsync-conflict-marker"), againIsMarker: again.classList.contains("obsync-conflict-marker") };
+				return { selections, typedIsMarker: typed.classList.contains("seamsync-conflict-marker"), againIsMarker: again.classList.contains("seamsync-conflict-marker") };
 			};
 			return { text: await click("text"), beside: await click("beside") };`)) as Record<"text" | "beside", { selections: { anchor: { line: number; ch: number }; head: unknown }[] }>;
 		const line = NOTE.split("\n").indexOf(">>>>>>> Remote");

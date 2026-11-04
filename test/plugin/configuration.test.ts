@@ -154,7 +154,7 @@ describe("the configuration folder in sync", { timeout: DEVICE_TEST_TIMEOUT_MS }
 		// Obsidian draws a suggest window's items and calls these methods; the fake leaves that to the test.
 		// Not covered: typing a query, nor what Obsidian does around the choice.
 		const list = lists()[0] as unknown as RestoreConfigurationModal;
-		expect(list.modalEl.classList).toContain("obsync-phone");
+		expect(list.modalEl.classList).toContain("seamsync-phone");
 		const [kept, ...others] = list.getSuggestions("");
 		if (kept === undefined) throw new Error("no kept version listed");
 		expect(others).toEqual([]);

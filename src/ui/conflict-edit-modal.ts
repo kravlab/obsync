@@ -33,16 +33,16 @@ export class ConflictEditModal extends Modal {
 	override onOpen(): void {
 		const { contentEl, strings, block } = this;
 		this.setTitle(strings.conflictEditTitle);
-		this.modalEl.addClass("obsync-conflict-edit");
-		const sides = contentEl.createDiv({ cls: "obsync-conflict-edit-sides" });
+		this.modalEl.addClass("seamsync-conflict-edit");
+		const sides = contentEl.createDiv({ cls: "seamsync-conflict-edit-sides" });
 		for (const { label, text, cls } of shownSides(block, strings)) {
-			const side = sides.createDiv({ cls: `obsync-conflict-edit-side ${cls}` });
+			const side = sides.createDiv({ cls: `seamsync-conflict-edit-side ${cls}` });
 			side.createEl("strong", { text: label });
 			side.createEl("pre", { text });
 		}
 		contentEl.createEl("p", { text: strings.conflictEditDescription });
 		const field = new TextAreaComponent(contentEl).setValue(block.local + block.remote);
-		field.inputEl.addClass("obsync-conflict-edit-text");
+		field.inputEl.addClass("seamsync-conflict-edit-text");
 		new Setting(contentEl)
 			.addButton((button) => button.setButtonText(strings.cancel).onClick(() => this.close()))
 			.addButton((button) =>

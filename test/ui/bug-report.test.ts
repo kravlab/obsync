@@ -22,7 +22,7 @@ describe("bugReport", () => {
 
 		expect(report).toBe(
 			[
-				"Obsync bug report",
+				"Seamsync bug report",
 				"Plugin version: 0.1.0",
 				"Obsidian version: 1.11.4",
 				"Platform: Android",

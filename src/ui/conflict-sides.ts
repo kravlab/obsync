@@ -9,13 +9,13 @@ import { fill } from "./i18n/fill";
 import type { Strings } from "./i18n/strings";
 
 /** The class of marker lines, shown in the editor as blocks of their own; styled in styles.css. */
-export const MARKER_CLASS = "obsync-conflict-marker";
+export const MARKER_CLASS = "seamsync-conflict-marker";
 
 /** The class of this device's side, styled in styles.css. */
-export const LOCAL_CLASS = "obsync-conflict-local";
+export const LOCAL_CLASS = "seamsync-conflict-local";
 
 /** The class of the other device's side, styled in styles.css. */
-export const REMOTE_CLASS = "obsync-conflict-remote";
+export const REMOTE_CLASS = "seamsync-conflict-remote";
 
 /** One side of a Conflict block as the UI shows it. */
 export interface ShownSide {

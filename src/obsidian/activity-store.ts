@@ -7,7 +7,7 @@ import type { SyncFailureCause, SyncStatus } from "../engine/status";
 import { isRecord } from "./is-record";
 
 /** The localStorage key of this vault's activity log. */
-const ACTIVITY_KEY = "obsync-activity";
+const ACTIVITY_KEY = "seamsync-activity";
 
 /** The format version of the stored activity log. */
 const ACTIVITY_FORMAT_VERSION = 1;

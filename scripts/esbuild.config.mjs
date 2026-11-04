@@ -1,6 +1,6 @@
 // Bundles src/main.ts into dist/main.js, the one script Obsidian loads, and
 // copies manifest.json and src/styles.css next to it, so dist/ holds exactly
-// the files of <vault>/.obsidian/plugins/obsync/.
+// the files of <vault>/.obsidian/plugins/seamsync/.
 // `node scripts/esbuild.config.mjs production`, run from the repository
 // root as every path here is, builds once, minified; without an argument it
 // watches and rebuilds with inline source maps.
@@ -32,11 +32,11 @@ const copyPluginFiles = {
 
 // The Dropbox app key is never written in the repository. It comes from the
 // environment or from a git-ignored .env file (the environment wins), and
-// esbuild bundles it into main.js in place of OBSYNC_DROPBOX_APP_KEY.
+// esbuild bundles it into main.js in place of SEAMSYNC_DROPBOX_APP_KEY.
 if (existsSync(".env")) process.loadEnvFile(".env");
-const dropboxAppKey = process.env.OBSYNC_DROPBOX_APP_KEY;
+const dropboxAppKey = process.env.SEAMSYNC_DROPBOX_APP_KEY;
 if (!dropboxAppKey) {
-	console.error("Set OBSYNC_DROPBOX_APP_KEY, in the environment or in .env, to the plugin's Dropbox app key.");
+	console.error("Set SEAMSYNC_DROPBOX_APP_KEY, in the environment or in .env, to the plugin's Dropbox app key.");
 	process.exit(1);
 }
 
@@ -69,7 +69,7 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: `${outdir}/main.js`,
 	minify: production,
-	define: { OBSYNC_DROPBOX_APP_KEY: JSON.stringify(dropboxAppKey) },
+	define: { SEAMSYNC_DROPBOX_APP_KEY: JSON.stringify(dropboxAppKey) },
 	plugins: [copyPluginFiles],
 });
 

@@ -219,8 +219,8 @@ export class ConnectModal extends Modal {
 	/** Clears the window for a new screen, with `message` at the top if given. */
 	private startScreen(message?: ScreenMessage): void {
 		this.contentEl.empty();
-		this.messageEl = this.contentEl.createEl("p", { cls: "obsync-message" });
-		this.detailLineEl = this.contentEl.createEl("p", { cls: "obsync-message-detail" });
+		this.messageEl = this.contentEl.createEl("p", { cls: "seamsync-message" });
+		this.detailLineEl = this.contentEl.createEl("p", { cls: "seamsync-message-detail" });
 		this.actionsEl = this.contentEl.createDiv();
 		if (message) this.showMessage(message);
 	}
@@ -245,7 +245,7 @@ export class ConnectModal extends Modal {
 				navigator.clipboard.writeText(copiedError(message)).then(
 					() => new Notice(this.strings.errorCopied),
 					(error: unknown) => {
-						console.error("obsync: copying the connect error failed", error);
+						console.error("seamsync: copying the connect error failed", error);
 						new Notice(this.strings.errorNotCopied);
 					},
 				);
@@ -281,7 +281,7 @@ export class ConnectModal extends Modal {
 		try {
 			return { ok: true, value: await request() };
 		} catch (error) {
-			if (!(error instanceof ProviderError)) console.error("obsync: connecting failed unexpectedly", error);
+			if (!(error instanceof ProviderError)) console.error("seamsync: connecting failed unexpectedly", error);
 			const text = error instanceof ProviderError ? providerErrorMessage(error, this.strings) : this.strings.connectUnexpected;
 			return { ok: false, message: { text, detailLine: errorDetailLine(error, this.strings) } };
 		} finally {

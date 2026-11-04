@@ -33,7 +33,7 @@ describe("helpSections", () => {
 
 	it("says outside edits are best effort and names the Metadata folder not to touch", () => {
 		expect(helpSections(en)[2]?.paragraphs).toEqual([en.helpOutsideEdits, fill(en.helpMetadataFolder, { folder: METADATA_FOLDER })]);
-		expect(helpSections(en)[2]?.paragraphs[1]).toContain(".obsync");
+		expect(helpSections(en)[2]?.paragraphs[1]).toContain(".seamsync");
 	});
 
 	it("warns about secrets in plugin settings and the restart", () => {

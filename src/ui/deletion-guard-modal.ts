@@ -32,7 +32,7 @@ export class DeletionGuardModal extends PromptModal<NonNullable<DeletionAnswer>>
 		for (const line of [text.toRemote, text.toVault]) {
 			if (line !== null) contentEl.createEl("p", { text: line });
 		}
-		const list = contentEl.createDiv({ cls: "obsync-guard-list" });
+		const list = contentEl.createDiv({ cls: "seamsync-guard-list" });
 		list.hide();
 		for (const [heading, paths] of [
 			[text.toRemote, prompt.toRemote],

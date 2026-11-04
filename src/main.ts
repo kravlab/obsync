@@ -29,7 +29,7 @@ import { defaultDeviceName } from "./ui/device-name";
 import { fill } from "./ui/i18n/fill";
 import { selectStrings, type Strings } from "./ui/i18n/strings";
 import { RestoreConfigurationModal } from "./ui/restore-configuration-modal";
-import { ObsyncSettingTab } from "./ui/settings-tab";
+import { SeamsyncSettingTab } from "./ui/settings-tab";
 import { StatusIndicator } from "./ui/status-indicator";
 import { SyncWindow, type ShownSyncSource, type SyncTab } from "./ui/sync-window";
 
@@ -37,7 +37,7 @@ import { SyncWindow, type ShownSyncSource, type SyncTab } from "./ui/sync-window
  * The plugin shell: Obsidian's entry point. It owns only wiring and UI; all
  * sync logic lives in the engine (src/engine), which never imports Obsidian.
  */
-export default class ObsyncPlugin extends Plugin {
+export default class SeamsyncPlugin extends Plugin {
 	/**
 	 * Called by Obsidian when the plugin is enabled or the app starts. Builds
 	 * the connection service and the sync engine over Dropbox and this
@@ -84,7 +84,7 @@ export default class ObsyncPlugin extends Plugin {
 		const epoch = createConnectionEpoch();
 		// Obsidian sets it for every plugin it loads; the typings leave it optional for manifests of plugins not loaded.
 		const pluginDir = this.manifest.dir;
-		if (pluginDir === undefined) throw new Error("obsync: Obsidian gave no folder for this plugin");
+		if (pluginDir === undefined) throw new Error("seamsync: Obsidian gave no folder for this plugin");
 		const configurationConflicts = new ObsidianConfigurationConflicts(
 			this.app.vault.adapter,
 			`${pluginDir}/configuration-conflicts`,
@@ -120,19 +120,19 @@ export default class ObsyncPlugin extends Plugin {
 			newDeviceId: () => crypto.randomUUID(),
 			epoch,
 			// A bug of a sync on its own, already shown as Sync failed, goes to the console for the bug report.
-			reportError: (error) => console.error("obsync: sync failed", error),
+			reportError: (error) => console.error("seamsync: sync failed", error),
 		});
 		// The engine shows Sync failed itself; an error reaching here is a
 		// bug, logged for the bug report.
 		const syncNow = (): void => {
-			engine.sync().catch((error: unknown) => console.error("obsync: sync failed", error));
+			engine.sync().catch((error: unknown) => console.error("seamsync: sync failed", error));
 		};
 		// Visibility and network events sync on their own, so they do not lift a Deletion guard hold.
 		const syncAutomatically = (): void => {
-			engine.sync("automatic").catch((error: unknown) => console.error("obsync: sync failed", error));
+			engine.sync("automatic").catch((error: unknown) => console.error("seamsync: sync failed", error));
 		};
 		const fullReconcile = (): void => {
-			engine.reconcile().catch((error: unknown) => console.error("obsync: reconcile failed", error));
+			engine.reconcile().catch((error: unknown) => console.error("seamsync: reconcile failed", error));
 		};
 		const openConnect = (): void => {
 			new ConnectModal(this.app, connection, strings, this.app.vault.getName(), (kind) => {
@@ -162,17 +162,17 @@ export default class ObsyncPlugin extends Plugin {
 					connect: openConnect,
 					openFile: (path, atFirstConflict) => {
 						this.openVaultFile(path, atFirstConflict, strings).catch((error: unknown) =>
-							console.error("obsync: opening a file failed", error),
+							console.error("seamsync: opening a file failed", error),
 						);
 					},
 					restore: (id) => {
-						engine.restoreConfiguration(id).catch((error: unknown) => console.error("obsync: restore failed", error));
+						engine.restoreConfiguration(id).catch((error: unknown) => console.error("seamsync: restore failed", error));
 					},
 					showOnboarding: () => void indicator.showOnboarding(),
 					copyBugReport: () => {
 						this.copyBugReport(indicator, strings).catch((error: unknown) => {
 							// The clipboard can refuse, e.g. without focus or permission: the user is told, not left waiting.
-							console.error("obsync: copying the bug report failed", error);
+							console.error("seamsync: copying the bug report failed", error);
 							new Notice(strings.bugReportNotCopied);
 						});
 					},
@@ -203,7 +203,7 @@ export default class ObsyncPlugin extends Plugin {
 			name: strings.restoreConfiguration,
 			callback: () => {
 				this.openRestoreConfiguration(configurationConflicts, strings, (id) => engine.restoreConfiguration(id)).catch(
-					(error: unknown) => console.error("obsync: restore list failed", error),
+					(error: unknown) => console.error("seamsync: restore list failed", error),
 				);
 			},
 		});
@@ -218,7 +218,7 @@ export default class ObsyncPlugin extends Plugin {
 			// Nothing syncs before the vault's files are all loaded.
 			const started = engine.start();
 			this.register(started.stop);
-			started.opened.catch((error: unknown) => console.error("obsync: start failed", error));
+			started.opened.catch((error: unknown) => console.error("seamsync: start failed", error));
 			// The main workspace's own document and window, not whichever window has focus.
 			const mainDocument = this.app.workspace.containerEl.ownerDocument;
 			// Only `visible` is acted on; `hidden` is not relied on, since the OS
@@ -229,7 +229,7 @@ export default class ObsyncPlugin extends Plugin {
 			const mainWindow = mainDocument.defaultView;
 			if (mainWindow !== null) this.registerDomEvent(mainWindow, "online", () => syncAutomatically());
 		});
-		const settingTab = new ObsyncSettingTab(
+		const settingTab = new SeamsyncSettingTab(
 			this.app,
 			this,
 			connection,
@@ -250,7 +250,7 @@ export default class ObsyncPlugin extends Plugin {
 			indicator.onChange(() => {
 				const { state } = indicator.shown().status;
 				if (state === "synced" && lastState !== "synced") {
-					settingTab.refreshShared().catch((error: unknown) => console.error("obsync: reading the settings failed", error));
+					settingTab.refreshShared().catch((error: unknown) => console.error("seamsync: reading the settings failed", error));
 				}
 				lastState = state;
 			}),
@@ -304,7 +304,7 @@ export default class ObsyncPlugin extends Plugin {
 			return;
 		}
 		new RestoreConfigurationModal(this.app, strings, kept, (version) => {
-			restore(version.id).catch((error: unknown) => console.error("obsync: restore failed", error));
+			restore(version.id).catch((error: unknown) => console.error("seamsync: restore failed", error));
 		}).open();
 	}
 

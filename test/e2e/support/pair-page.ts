@@ -47,7 +47,7 @@ export function statusHelpers(strings: Strings): string {
 		const countedStatus = ${JSON.stringify(counted)};
 		const statusIs = (shown, label) => typeof shown === "string" && (shown === label || shown.startsWith(countedStatus[label]));
 		const shownStatus = () => {
-			const item = activeDocument.querySelector(".obsync-status");
+			const item = activeDocument.querySelector(".seamsync-status");
 			if (item) return item.textContent;
 			const icon = [...activeDocument.querySelectorAll("[aria-label]")].find((element) => Object.keys(countedStatus).some((label) => statusIs(element.getAttribute("aria-label"), label)));
 			return icon ? icon.getAttribute("aria-label") : null;
@@ -72,7 +72,7 @@ export function statusHelpers(strings: Strings): string {
 			for (const round of [1, 2]) {
 				const watch = watchStatus();
 				try {
-					app.commands.executeCommandById("obsync:sync-now");
+					app.commands.executeCommandById("seamsync:sync-now");
 					await untilShown(watch, ${JSON.stringify(strings.statusSynced)}, ${SYNC_TIMEOUT_MS}, what + " (Sync now " + round + " of 2)");
 				} finally {
 					watch.stop();

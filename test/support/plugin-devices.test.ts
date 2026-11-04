@@ -66,7 +66,7 @@ describe("plugin devices in one test", { timeout: DEVICE_TEST_TIMEOUT_MS }, () =
 		const laptop = await devices.start("Laptop vault");
 		const phone = await devices.start("Phone vault", { phone: true });
 
-		// What the plugin itself does with it (the `obsync-phone` class) is checked with the Sync window's tests.
+		// What the plugin itself does with it (the `seamsync-phone` class) is checked with the Sync window's tests.
 		expect(phone.obsidian.Platform.isPhone).toBe(true);
 		expect(laptop.obsidian.Platform.isPhone).toBe(false);
 	});

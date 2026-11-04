@@ -23,7 +23,7 @@ class MemoryAdapter implements ConnectionErrorLogAdapter {
 	}
 }
 
-const LOG = ".vault-config/plugins/obsync/obsync.log";
+const LOG = ".vault-config/plugins/seamsync/seamsync.log";
 
 // A console spy is taken off even when a test fails before its end.
 afterEach(() => {
@@ -34,7 +34,7 @@ describe("the connection error log file", () => {
 	it("is created with the first line in the plugin's folder", async () => {
 		const adapter = new MemoryAdapter();
 
-		await new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync").append("2026-10-21 16:37 Connecting failed.");
+		await new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/seamsync").append("2026-10-21 16:37 Connecting failed.");
 
 		expect(adapter.files.get(LOG)).toBe("2026-10-21 16:37 Connecting failed.\n");
 	});
@@ -42,7 +42,7 @@ describe("the connection error log file", () => {
 	it("adds each line after the ones it holds", async () => {
 		const adapter = new MemoryAdapter();
 		adapter.files.set(LOG, "first\n");
-		const log = new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync");
+		const log = new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/seamsync");
 
 		await log.append("second");
 		await log.append("third");
@@ -52,7 +52,7 @@ describe("the connection error log file", () => {
 
 	it("keeps every line of appends started together, in the order they were started", async () => {
 		const adapter = new MemoryAdapter();
-		const log = new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync");
+		const log = new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/seamsync");
 
 		await Promise.all([log.append("first"), log.append("second"), log.append("third")]);
 
@@ -61,7 +61,7 @@ describe("the connection error log file", () => {
 
 	it("goes on appending after a write that failed, the queue of appends unbroken", async () => {
 		const adapter = new MemoryAdapter();
-		const log = new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync");
+		const log = new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/seamsync");
 		vi.spyOn(console, "error").mockImplementation(() => undefined);
 		adapter.writeError = new Error("disk full");
 		await log.append("lost");
@@ -76,7 +76,7 @@ describe("the connection error log file", () => {
 		const adapter = new MemoryAdapter();
 		adapter.files.set(LOG, `${Array.from({ length: 100 }, (_, index) => `old ${index}`).join("\n")}\n`);
 
-		await new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync").append("new");
+		await new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/seamsync").append("new");
 
 		const lines = adapter.files.get(LOG)?.split("\n") ?? [];
 		expect(lines).toHaveLength(101);
@@ -90,8 +90,8 @@ describe("the connection error log file", () => {
 		adapter.writeError = new Error("read-only file system");
 		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-		await expect(new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/obsync").append("lost")).resolves.toBeUndefined();
+		await expect(new ObsidianConnectionErrorLog(adapter, ".vault-config/plugins/seamsync").append("lost")).resolves.toBeUndefined();
 
-		expect(consoleError).toHaveBeenCalledWith("obsync: writing the connection error log failed", adapter.writeError);
+		expect(consoleError).toHaveBeenCalledWith("seamsync: writing the connection error log failed", adapter.writeError);
 	});
 });

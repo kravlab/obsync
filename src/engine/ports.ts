@@ -168,11 +168,11 @@ export interface DeviceStore {
 }
 
 /**
- * The Secret store id of a provider's login secret, e.g. `obsync-dropbox`:
+ * The Secret store id of a provider's login secret, e.g. `seamsync-dropbox`:
  * the connect step stores the secret there and syncing reads it back.
  */
 export function providerSecretId(providerId: string): string {
-	return `obsync-${providerId}`;
+	return `seamsync-${providerId}`;
 }
 
 /** Secrets kept on this device only, over Obsidian's `SecretStorage`. */

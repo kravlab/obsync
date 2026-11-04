@@ -78,7 +78,7 @@ function editorOn(device: PluginDevice, text: string): EditorView {
 
 /** The action rows the editor `view` shows, top to bottom. */
 function actionRows(view: EditorView): HTMLElement[] {
-	return [...view.dom.querySelectorAll<HTMLElement>(".obsync-conflict-actions")];
+	return [...view.dom.querySelectorAll<HTMLElement>(".seamsync-conflict-actions")];
 }
 
 /** The text of a Reading view panel showing a block's two sides, labelled. */
@@ -123,7 +123,7 @@ describe("text Conflict blocks", { timeout: DEVICE_TEST_TIMEOUT_MS }, () => {
 		// The cursor between the blocks: a marker line it were on would be the editor's line, shown as typed.
 		view.dispatch({ selection: { anchor: text.indexOf(MIDDLE) } });
 
-		const markers = [...view.contentDOM.querySelectorAll<HTMLElement>(":scope > .obsync-conflict-marker")];
+		const markers = [...view.contentDOM.querySelectorAll<HTMLElement>(":scope > .seamsync-conflict-marker")];
 		expect(markers.map((marker) => marker.textContent)).toEqual(
 			text.split("\n").filter((line) => /^(<{7}|={7}|>{7})/.test(line)),
 		);
@@ -135,7 +135,7 @@ describe("text Conflict blocks", { timeout: DEVICE_TEST_TIMEOUT_MS }, () => {
 		const view = editorOn(laptop, text);
 		view.dispatch({ selection: { anchor: text.indexOf(MIDDLE) } });
 		const remoteMarker = text.split("\n").indexOf(">>>>>>> Remote");
-		const pressed = [...view.contentDOM.querySelectorAll<HTMLElement>(":scope > .obsync-conflict-marker")].find(
+		const pressed = [...view.contentDOM.querySelectorAll<HTMLElement>(":scope > .seamsync-conflict-marker")].find(
 			(marker) => marker.textContent === ">>>>>>> Remote",
 		);
 		if (pressed === undefined) throw new Error("no >>>>>>> block");
@@ -148,7 +148,7 @@ describe("text Conflict blocks", { timeout: DEVICE_TEST_TIMEOUT_MS }, () => {
 		expect(press.defaultPrevented).toBe(true);
 		expect([main.anchor, main.head]).toEqual([view.state.doc.line(remoteMarker + 1).from, view.state.doc.line(remoteMarker + 1).from]);
 		const line = [...view.contentDOM.querySelectorAll<HTMLElement>(":scope > .cm-line")].find((element) => element.textContent === ">>>>>>> Remote");
-		expect(line?.classList).toContain("obsync-conflict-marker");
+		expect(line?.classList).toContain("seamsync-conflict-marker");
 	});
 
 	it("are resolved by each button of a block's action row in the editor", async () => {
@@ -162,7 +162,7 @@ describe("text Conflict blocks", { timeout: DEVICE_TEST_TIMEOUT_MS }, () => {
 			const [first, ...others] = actionRows(view);
 			if (first === undefined) throw new Error("no action row");
 			expect(others).toHaveLength(1);
-			expect(first.classList).not.toContain("obsync-phone");
+			expect(first.classList).not.toContain("seamsync-phone");
 			buttonIn(first, label).click();
 			resolved[label] = view.state.doc.toString();
 			expect(actionRows(view)).toHaveLength(1);
@@ -181,14 +181,14 @@ describe("text Conflict blocks", { timeout: DEVICE_TEST_TIMEOUT_MS }, () => {
 		const view = editorOn(phone, text);
 		const [first] = actionRows(view);
 		if (first === undefined) throw new Error("no action row");
-		expect(first.classList).toContain("obsync-phone");
+		expect(first.classList).toContain("seamsync-phone");
 
 		buttonIn(first, strings.conflictEdit).click();
 		const [dialog, ...others] = phone.windowsOpened(strings.conflictEditTitle);
 		if (dialog === undefined) throw new Error("no Edit… dialog");
 		expect(others).toEqual([]);
-		expect(dialog.modalEl.classList).toContain("obsync-phone");
-		const sides = [...dialog.contentEl.querySelectorAll(".obsync-conflict-edit-side")].map((side) => side.textContent);
+		expect(dialog.modalEl.classList).toContain("seamsync-phone");
+		const sides = [...dialog.contentEl.querySelectorAll(".seamsync-conflict-edit-side")].map((side) => side.textContent);
 		expect(sides).toEqual(["Phone vaultfirst, mine\n", "Remotefirst, theirs\n"]);
 		const field = dialog.contentEl.querySelector("textarea");
 		if (field === null) throw new Error("no text field");

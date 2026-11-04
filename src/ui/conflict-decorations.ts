@@ -48,17 +48,17 @@ export interface ConflictRowOptions {
 }
 
 /** The line class of this device's side of a block nested in another block's side; the outer tint stays visible. */
-const NESTED_LOCAL_CLASS = "obsync-conflict-nested-local";
+const NESTED_LOCAL_CLASS = "seamsync-conflict-nested-local";
 
 /** The line class of the other device's side of a nested block; the outer tint stays visible. */
-const NESTED_REMOTE_CLASS = "obsync-conflict-nested-remote";
+const NESTED_REMOTE_CLASS = "seamsync-conflict-nested-remote";
 
 /**
  * The line class of the lines after a block, up to a blank line or one
  * starting a quote of the note's own, which Markdown reads as part of the
  * `>>>>>>>` quote.
  */
-const AFTER_CLASS = "obsync-conflict-after";
+const AFTER_CLASS = "seamsync-conflict-after";
 
 /** A line starting a quote of its own, as Markdown reads it: up to three spaces, then `>`. */
 const QUOTE_START = /^ {0,3}>/;
@@ -202,7 +202,7 @@ class ConflictActions extends WidgetType {
 		// Built by the editor's own window, which differs from the main one in a popout window.
 		// Obsidian gives every window its DOM helpers; TypeScript only knows them on the global scope.
 		const editorWindow = view.dom.win as typeof window;
-		const row = editorWindow.createDiv({ cls: isPhone ? "obsync-conflict-actions obsync-phone" : "obsync-conflict-actions" });
+		const row = editorWindow.createDiv({ cls: isPhone ? "seamsync-conflict-actions seamsync-phone" : "seamsync-conflict-actions" });
 		/**
 		 * Resolves this row's block by `action` if the note still holds it as
 		 * shown; returns whether it did.

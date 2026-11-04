@@ -77,7 +77,7 @@ export class StatusIndicator implements ActivityUi, ShownSyncSource {
 			// A status bar item is a plain div, so it is made a focusable
 			// button that Enter and Space activate, like a click.
 			this.element = plugin.addStatusBarItem();
-			this.element.addClass("mod-clickable", "obsync-status");
+			this.element.addClass("mod-clickable", "seamsync-status");
 			this.element.setAttribute("role", "button");
 			this.element.setAttribute("tabindex", "0");
 			this.dot = this.element.createSpan();
@@ -210,7 +210,7 @@ export class StatusIndicator implements ActivityUi, ShownSyncSource {
 			setTooltip(this.element, this.text());
 			return;
 		}
-		this.dot.className = `obsync-dot obsync-dot-${statusTone(status)}`;
+		this.dot.className = `seamsync-dot seamsync-dot-${statusTone(status)}`;
 		this.label.setText(this.text());
 	}
 

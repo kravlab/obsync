@@ -44,19 +44,19 @@ describe("the status entry point and the Sync window", { timeout: DEVICE_TEST_TI
 		const laptop = await devices.start("Laptop vault", { files: { "note.md": "hello" } });
 		const item = laptop.plugin.statusBarItems[0];
 		if (item === undefined) throw new Error("no status bar item");
-		const dot = item.querySelector(".obsync-dot");
+		const dot = item.querySelector(".seamsync-dot");
 
 		expect(laptop.status()).toContain(strings.statusNotConnected);
-		expect(dot?.className).toBe(`obsync-dot obsync-dot-${statusTone({ state: "notConnected" })}`);
+		expect(dot?.className).toBe(`seamsync-dot seamsync-dot-${statusTone({ state: "notConnected" })}`);
 		expect(laptop.plugin.ribbonIcons).toHaveLength(0);
 		await devices.connect(laptop, account);
 		await devices.startFirstSync(laptop);
-		expect(dot?.className).toBe(`obsync-dot obsync-dot-${statusTone({ state: "synced" })}`);
+		expect(dot?.className).toBe(`seamsync-dot seamsync-dot-${statusTone({ state: "synced" })}`);
 
 		item.click();
 		const clicked = lastSyncWindow(laptop);
 		expect(clicked.textContent).toContain(strings.statusSynced);
-		expect(clicked.querySelector(".obsync-sync-header button")?.textContent).toBe(strings.syncNow);
+		expect(clicked.querySelector(".seamsync-sync-header button")?.textContent).toBe(strings.syncNow);
 		// One Sync window is open at a time: Enter opens a new one in place of the first.
 		item.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
 		expect(syncWindows(laptop)).toHaveLength(1);
@@ -102,7 +102,7 @@ describe("the status entry point and the Sync window", { timeout: DEVICE_TEST_TI
 			strings.helpSkippedHeading,
 		]);
 		expect(help.textContent).toContain(strings.practiceOneDeviceFirst);
-		expect(help.textContent).toContain(".obsync");
+		expect(help.textContent).toContain(".seamsync");
 		buttonIn(help, strings.showOnboarding).click();
 		await vi.waitFor(() => expect(laptop.button(strings.onboardingDone)).toBeDefined(), PLUGIN_WAIT);
 		expect(syncWindows(laptop)).toHaveLength(0);
@@ -160,8 +160,8 @@ describe("the status entry point and the Sync window", { timeout: DEVICE_TEST_TI
 		await vi.waitFor(() => expect(tabLines(laptop)[0]).toContain(failed), PLUGIN_WAIT);
 		const failure = tabLines(laptop)[0] ?? "";
 		expect(failure).toContain("HTTP 400");
-		expect(laptop.plugin.statusBarItems[0]?.querySelector(".obsync-dot")?.className).toBe(
-			`obsync-dot obsync-dot-${statusTone({ state: "syncFailed", cause: "permanent" })}`,
+		expect(laptop.plugin.statusBarItems[0]?.querySelector(".seamsync-dot")?.className).toBe(
+			`seamsync-dot seamsync-dot-${statusTone({ state: "syncFailed", cause: "permanent" })}`,
 		);
 		buttonIn(lastSyncWindow(laptop), strings.copyBugReport).click();
 		await vi.waitFor(() => expect(laptop.notices()).toContain(strings.bugReportCopied), PLUGIN_WAIT);
@@ -192,6 +192,6 @@ describe("the status entry point and the Sync window", { timeout: DEVICE_TEST_TI
 			strings.firstSyncTitle,
 			strings.syncWindowTitle,
 		]);
-		for (const modal of modals) expect(modal.modalEl.classList, modal.titleEl.textContent).toContain("obsync-phone");
+		for (const modal of modals) expect(modal.modalEl.classList, modal.titleEl.textContent).toContain("seamsync-phone");
 	});
 });

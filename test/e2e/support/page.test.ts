@@ -15,19 +15,19 @@ function storage(): Pick<Storage, "getItem" | "setItem" | "removeItem"> {
 	return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => void items.set(key, value), removeItem: (key) => void items.delete(key) };
 }
 
-/** A page's globals once Obsidian has loaded in `locale`, with the plugin `obsync` loaded or not. */
+/** A page's globals once Obsidian has loaded in `locale`, with the plugin `seamsync` loaded or not. */
 function loadedPage(locale: string, pluginLoaded = true): Record<string, unknown> {
 	return {
 		localStorage: storage(),
 		location: { reload: vi.fn() },
 		moment: { locale: () => locale },
-		app: { workspace: { layoutReady: true }, plugins: { plugins: pluginLoaded ? { obsync: {} } : {} } },
+		app: { workspace: { layoutReady: true }, plugins: { plugins: pluginLoaded ? { seamsync: {} } : {} } },
 	};
 }
 
-/** Whether `page` counts as reloaded in Russian with the plugin `obsync` loaded. */
+/** Whether `page` counts as reloaded in Russian with the plugin `seamsync` loaded. */
 function reloadedInRussian(page: Record<string, unknown>): Promise<unknown> {
-	return runInPage(reloadedInLanguageProgram("ru", "obsync"), page);
+	return runInPage(reloadedInLanguageProgram("ru", "seamsync"), page);
 }
 
 describe("reloadInLanguageProgram", () => {
@@ -54,7 +54,7 @@ describe("reloadInLanguageProgram", () => {
 		const page = loadedPage("en");
 		await runInPage(reloadInLanguageProgram(null), page);
 		expect((page.localStorage as Storage).getItem("language")).toBeNull();
-		expect(await runInPage(reloadedInLanguageProgram(null, "obsync"), page)).toBe(false);
+		expect(await runInPage(reloadedInLanguageProgram(null, "seamsync"), page)).toBe(false);
 	});
 });
 
@@ -75,18 +75,18 @@ describe("reloadedInLanguageProgram", () => {
 	});
 
 	it("answers yes with no language, whatever the locale, once the plugin has loaded", async () => {
-		expect(await runInPage(reloadedInLanguageProgram(null, "obsync"), loadedPage("ru"))).toBe(true);
-		expect(await runInPage(reloadedInLanguageProgram(null, "obsync"), loadedPage("en"))).toBe(true);
+		expect(await runInPage(reloadedInLanguageProgram(null, "seamsync"), loadedPage("ru"))).toBe(true);
+		expect(await runInPage(reloadedInLanguageProgram(null, "seamsync"), loadedPage("en"))).toBe(true);
 	});
 
 	it("answers no with no language on the page still to reload, without the plugin, or while loading", async () => {
 		const reloading = loadedPage("en");
 		await runInPage(reloadInLanguageProgram("ru"), reloading);
-		expect(await runInPage(reloadedInLanguageProgram(null, "obsync"), reloading)).toBe(false);
-		expect(await runInPage(reloadedInLanguageProgram(null, "obsync"), loadedPage("en", false))).toBe(false);
+		expect(await runInPage(reloadedInLanguageProgram(null, "seamsync"), reloading)).toBe(false);
+		expect(await runInPage(reloadedInLanguageProgram(null, "seamsync"), loadedPage("en", false))).toBe(false);
 		const noApp = loadedPage("en");
 		delete noApp.app;
-		expect(await runInPage(reloadedInLanguageProgram(null, "obsync"), noApp)).toBe(false);
+		expect(await runInPage(reloadedInLanguageProgram(null, "seamsync"), noApp)).toBe(false);
 	});
 
 	it("looks for the plugin it is given", async () => {
@@ -151,7 +151,7 @@ describe("withSettings()", () => {
 		const { globals, events } = settingsWith(createDiv({ text: "the plugin's settings" }));
 		const shown = await runInPage(`${PAGE_HELPERS} return await withSettings(async (tab) => tab.textContent);`, globals);
 		expect(shown).toBe("the plugin's settings");
-		expect(events).toEqual(["opened", "tab obsync", "closed"]);
+		expect(events).toEqual(["opened", "tab seamsync", "closed"]);
 	});
 
 	it("closes the settings when what it runs fails", async () => {
@@ -297,10 +297,10 @@ describe("dropdown()", () => {
 
 /** A Sync window with a tab bar, `selected` the text of the tab marked selected, and an empty body. */
 function addSyncWindow(selected: string): HTMLElement {
-	const sync = document.body.createDiv({ cls: "modal obsync-sync-window" });
-	const tabs = sync.createDiv({ cls: "obsync-sync-tabs" });
-	for (const tab of ["Conflicts", "Activity", "Help"]) tabs.createEl("button", { cls: tab === selected ? "obsync-sync-tab obsync-sync-tab-selected" : "obsync-sync-tab", text: tab });
-	sync.createDiv({ cls: "obsync-sync-body" });
+	const sync = document.body.createDiv({ cls: "modal seamsync-sync-window" });
+	const tabs = sync.createDiv({ cls: "seamsync-sync-tabs" });
+	for (const tab of ["Conflicts", "Activity", "Help"]) tabs.createEl("button", { cls: tab === selected ? "seamsync-sync-tab seamsync-sync-tab-selected" : "seamsync-sync-tab", text: tab });
+	sync.createDiv({ cls: "seamsync-sync-body" });
 	return sync;
 }
 
@@ -341,28 +341,28 @@ describe("syncWindow()", () => {
 describe("openSyncWindow()", () => {
 	it("runs the Open sync window command when given none, and resolves with the window", async () => {
 		const { globals, ran } = commandsOpeningSyncWindow();
-		const opened = await runInPage(`${PAGE_HELPERS} return (await openSyncWindow()).classList.contains("obsync-sync-window");`, globals);
+		const opened = await runInPage(`${PAGE_HELPERS} return (await openSyncWindow()).classList.contains("seamsync-sync-window");`, globals);
 		expect(opened).toBe(true);
-		expect(ran).toEqual(["obsync:open-sync-window"]);
+		expect(ran).toEqual(["seamsync:open-sync-window"]);
 	});
 
 	it("runs the command it is given instead, and resolves with the window", async () => {
 		const { globals, ran } = commandsOpeningSyncWindow();
-		const opened = await runInPage(`${PAGE_HELPERS} return (await openSyncWindow("obsync:show-help")).classList.contains("obsync-sync-window");`, globals);
+		const opened = await runInPage(`${PAGE_HELPERS} return (await openSyncWindow("seamsync:show-help")).classList.contains("seamsync-sync-window");`, globals);
 		expect(opened).toBe(true);
-		expect(ran).toEqual(["obsync:show-help"]);
+		expect(ran).toEqual(["seamsync:show-help"]);
 	});
 });
 
 describe("selectedTab()", () => {
 	it("is the text of the selected tab", async () => {
 		addSyncWindow("Activity");
-		expect(await runInPage(`${PAGE_HELPERS} return selectedTab(activeDocument.querySelector(".obsync-sync-window"));`, {})).toBe("Activity");
+		expect(await runInPage(`${PAGE_HELPERS} return selectedTab(activeDocument.querySelector(".seamsync-sync-window"));`, {})).toBe("Activity");
 	});
 
 	it("is nothing when no tab is selected", async () => {
 		addSyncWindow("none");
-		expect(await runInPage(`${PAGE_HELPERS} return selectedTab(activeDocument.querySelector(".obsync-sync-window")) ?? null;`, {})).toBeNull();
+		expect(await runInPage(`${PAGE_HELPERS} return selectedTab(activeDocument.querySelector(".seamsync-sync-window")) ?? null;`, {})).toBeNull();
 	});
 });
 
@@ -370,7 +370,7 @@ describe("helpElements()", () => {
 	it("lists the body's headings, paragraphs, lists and list items in document order, a list with an empty text", async () => {
 		const sync = addSyncWindow("Help");
 		sync.createEl("p", { text: "Outside the body" });
-		const body = sync.querySelector<HTMLElement>(".obsync-sync-body")!;
+		const body = sync.querySelector<HTMLElement>(".seamsync-sync-body")!;
 		body.createDiv({ cls: "setting-item" }).createEl("button", { text: "Show again" });
 		body.createEl("h4", { text: "First" });
 		body.createEl("p", { text: "About first" });
@@ -379,7 +379,7 @@ describe("helpElements()", () => {
 		list.createEl("li", { text: "Two" });
 		body.createEl("h4", { text: "Second" });
 		body.createEl("p", { text: "About second" });
-		const shown = await runInPage(`${PAGE_HELPERS} return helpElements(activeDocument.querySelector(".obsync-sync-window"));`, {});
+		const shown = await runInPage(`${PAGE_HELPERS} return helpElements(activeDocument.querySelector(".seamsync-sync-window"));`, {});
 		expect(shown).toEqual([
 			{ tag: "h4", text: "First" },
 			{ tag: "p", text: "About first" },

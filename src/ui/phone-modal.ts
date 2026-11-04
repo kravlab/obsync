@@ -7,5 +7,5 @@ import { Platform, type Modal } from "obsidian";
  * as the restore list, only carries the class.
  */
 export function fitForPhone(modal: Modal): void {
-	if (Platform.isPhone) modal.modalEl.addClass("obsync-phone");
+	if (Platform.isPhone) modal.modalEl.addClass("seamsync-phone");
 }

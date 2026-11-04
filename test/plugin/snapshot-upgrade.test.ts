@@ -33,7 +33,7 @@ describe("a snapshot database from the build before First sync", { timeout: DEVI
 		expect(laptop.windowsOpened(strings.firstSyncTitle)).toEqual([]);
 		// The old snapshot was read: the note was known on both sides, so no Conflict copy.
 		expect(filesOn(laptop)).toEqual(["note.md"]);
-		const stored = laptop.app.loadLocalStorage("obsync-connection") as { connection?: { firstSyncDone?: unknown } } | null;
+		const stored = laptop.app.loadLocalStorage("seamsync-connection") as { connection?: { firstSyncDone?: unknown } } | null;
 		expect(stored?.connection?.firstSyncDone).toBe(true);
 	});
 });

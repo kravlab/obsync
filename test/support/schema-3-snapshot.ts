@@ -16,10 +16,10 @@ interface VaultStorage {
 }
 
 /** The localStorage key naming the snapshot database, the same in both builds. */
-const SNAPSHOT_DATABASE_KEY = "obsync-snapshot-database";
+const SNAPSHOT_DATABASE_KEY = "seamsync-snapshot-database";
 
 /** The localStorage key of the Connection, the same in both builds. */
-const CONNECTION_KEY = "obsync-connection";
+const CONNECTION_KEY = "seamsync-connection";
 
 /** The stores a schema 3 snapshot database holds. */
 const SCHEMA_3_STORES = ["entries", "bases", "feed"] as const;

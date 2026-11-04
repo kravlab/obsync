@@ -16,7 +16,7 @@ afterEach(() => {
 
 /** The desktop's status bar item, showing `text`. */
 function addStatusItem(text: string): HTMLElement {
-	return document.body.createDiv({ cls: "obsync-status", text });
+	return document.body.createDiv({ cls: "seamsync-status", text });
 }
 
 /** An element labelled `label`, such as the phone's ribbon icon. */
@@ -75,7 +75,7 @@ describe("watchStatus()", () => {
 		const seen = await inStatusPage(
 			`
 			const watch = watchStatus();
-			const item = activeDocument.querySelector(".obsync-status");
+			const item = activeDocument.querySelector(".seamsync-status");
 			item.textContent = ${JSON.stringify(strings.statusSyncing)};
 			await wait(0);
 			item.textContent = ${JSON.stringify(strings.statusSynced)};
@@ -94,7 +94,7 @@ describe("watchStatus()", () => {
 			`
 			const watch = watchStatus();
 			watch.stop();
-			activeDocument.querySelector(".obsync-status").textContent = ${JSON.stringify(strings.statusOffline)};
+			activeDocument.querySelector(".seamsync-status").textContent = ${JSON.stringify(strings.statusOffline)};
 			await wait(0);
 			return watch.seen;`,
 		);
@@ -117,7 +117,7 @@ describe("untilShown()", () => {
 		await expect(
 			inStatusPage(`
 				const watch = watchStatus();
-				activeDocument.querySelector(".obsync-status").textContent = ${JSON.stringify(strings.statusSyncing)};
+				activeDocument.querySelector(".seamsync-status").textContent = ${JSON.stringify(strings.statusSyncing)};
 				await wait(0);
 				await untilShown(watch, ${JSON.stringify(strings.statusSynced)}, 3000, "the sync");`),
 		).rejects.toThrow(`shown: ${JSON.stringify([strings.statusSynced, strings.statusSyncing])}`);
@@ -129,7 +129,7 @@ describe("untilShown()", () => {
 		const seen = await inStatusPage(
 			`
 			const watch = watchStatus();
-			const item = activeDocument.querySelector(".obsync-status");
+			const item = activeDocument.querySelector(".seamsync-status");
 			const waiting = untilShown(watch, ${JSON.stringify(strings.statusSynced)}, 1000000, "the sync");
 			item.textContent = ${JSON.stringify(strings.statusSyncing)};
 			await wait(0);
@@ -156,7 +156,7 @@ describe("completeSync()", () => {
 	it("runs Sync now twice, waiting for Synced after each", async () => {
 		const { globals, ran } = syncingDevice();
 		await inStatusPage(`await completeSync("the sync");`, globals);
-		expect(ran).toEqual(["obsync:sync-now", "obsync:sync-now"]);
+		expect(ran).toEqual(["seamsync:sync-now", "seamsync:sync-now"]);
 	});
 
 	it("fails naming the first Sync now when the first sync does not end, without asking again", async () => {
@@ -167,7 +167,7 @@ describe("completeSync()", () => {
 		await expect(inStatusPage(`await completeSync("the sync");`, globals)).rejects.toThrow(
 			`timed out after ${SYNC_TIMEOUT_MS} ms waiting for the sync (Sync now 1 of 2); shown: ${JSON.stringify([strings.statusSynced, strings.statusSyncing])}`,
 		);
-		expect(ran).toEqual(["obsync:sync-now"]);
+		expect(ran).toEqual(["seamsync:sync-now"]);
 	});
 
 	it("fails naming the second Sync now when only the first sync ends: a Synced seen before it does not count", async () => {
@@ -181,7 +181,7 @@ describe("completeSync()", () => {
 			}
 		});
 		await expect(inStatusPage(`await completeSync("the sync");`, globals)).rejects.toThrow(/waiting for the sync \(Sync now 2 of 2\); shown: /);
-		expect(ran).toEqual(["obsync:sync-now", "obsync:sync-now"]);
+		expect(ran).toEqual(["seamsync:sync-now", "seamsync:sync-now"]);
 	});
 });
 

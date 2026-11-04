@@ -65,7 +65,7 @@ describe("the device store over IndexedDB", () => {
 		opened.push(store);
 		await store.saveKnownSettings(DEFAULT_REMOTE_SETTINGS);
 		await store.saveSettingsChange({ base: DEFAULT_REMOTE_SETTINGS, wanted: DEFAULT_REMOTE_SETTINGS });
-		for (const key of ["obsync-known-settings", "obsync-settings-change"]) {
+		for (const key of ["seamsync-known-settings", "seamsync-settings-change"]) {
 			const stored = app.loadLocalStorage(key) as Record<string, unknown>;
 			app.saveLocalStorage(key, { ...stored, formatVersion: 2 });
 		}
@@ -99,7 +99,7 @@ describe("the device store over IndexedDB", () => {
 	it("reports a failed delete of an old snapshot database in the console", async () => {
 		const app = new FakeApp();
 		// A database named under another format version, which the next write replaces and deletes.
-		app.saveLocalStorage("obsync-snapshot-database", { formatVersion: 0, name: "obsync-snapshot-old" });
+		app.saveLocalStorage("seamsync-snapshot-database", { formatVersion: 0, name: "seamsync-snapshot-old" });
 		const store = new ObsidianDeviceStore(app as never);
 		opened.push(store);
 		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -115,7 +115,7 @@ describe("the device store over IndexedDB", () => {
 		await store.markSnapshotComplete();
 
 		await vi.waitFor(() =>
-			expect(consoleError).toHaveBeenCalledWith("obsync: deleting a snapshot database failed", failure),
+			expect(consoleError).toHaveBeenCalledWith("seamsync: deleting a snapshot database failed", failure),
 		);
 	});
 
@@ -124,7 +124,7 @@ describe("the device store over IndexedDB", () => {
 		const store = new ObsidianDeviceStore(app as never);
 		opened.push(store);
 		await store.markSnapshotComplete();
-		const { name } = app.loadLocalStorage("obsync-snapshot-database") as { name: string };
+		const { name } = app.loadLocalStorage("seamsync-snapshot-database") as { name: string };
 		// Another connection at the current schema version that never closes for a delete.
 		const other = await new Promise<IDBDatabase>((resolve, reject) => {
 			const request = indexedDB.open(name);
@@ -135,17 +135,17 @@ describe("the device store over IndexedDB", () => {
 
 		await store.clear();
 
-		expect(app.loadLocalStorage("obsync-snapshot-database")).toBeNull();
-		expect(consoleError).toHaveBeenCalledWith("obsync: deleting a snapshot database failed", expect.any(Error));
+		expect(app.loadLocalStorage("seamsync-snapshot-database")).toBeNull();
+		expect(consoleError).toHaveBeenCalledWith("seamsync: deleting a snapshot database failed", expect.any(Error));
 		other.close();
 	});
 
 	it("closes a connection that opens after its blocked upgrade was given up", async () => {
 		const app = new FakeApp();
-		app.saveLocalStorage("obsync-snapshot-database", { formatVersion: 1, name: "obsync-snapshot-blocked" });
+		app.saveLocalStorage("seamsync-snapshot-database", { formatVersion: 1, name: "seamsync-snapshot-blocked" });
 		// Another connection on schema version 1 that never closes for an upgrade.
 		const other = await new Promise<IDBDatabase>((resolve, reject) => {
-			const request = indexedDB.open("obsync-snapshot-blocked", 1);
+			const request = indexedDB.open("seamsync-snapshot-blocked", 1);
 			request.onupgradeneeded = () => request.result.createObjectStore("entries");
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error ?? new Error("open failed"));

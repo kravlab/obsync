@@ -14,7 +14,7 @@ export default defineConfig({
 	root: fileURLToPath(new URL("..", import.meta.url)),
 	// The build puts the Dropbox app key here (scripts/esbuild.config.mjs); tests talk to a fake Dropbox under this one.
 	define: {
-		OBSYNC_DROPBOX_APP_KEY: JSON.stringify("test-app-key"),
+		SEAMSYNC_DROPBOX_APP_KEY: JSON.stringify("test-app-key"),
 	},
 	resolve: {
 		alias: {

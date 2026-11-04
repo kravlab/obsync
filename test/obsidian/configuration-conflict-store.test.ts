@@ -51,7 +51,7 @@ class MemoryAdapter implements KeptFilesAdapter {
 	}
 }
 
-const FOLDER = ".vault-config/plugins/obsync/configuration-conflicts";
+const FOLDER = ".vault-config/plugins/seamsync/configuration-conflicts";
 
 /** A store over `adapter` whose ids count up from `id-1`. */
 function storeOn(adapter: MemoryAdapter): ObsidianConfigurationConflicts {

@@ -18,8 +18,8 @@ export const THROTTLED_WAIT_MS = 60_000;
 
 /** The plugin's Dropbox app key, as the build takes it: needed in the page to refresh the plugin's login. */
 export function dropboxAppKey(): string {
-	const key = process.env.OBSYNC_DROPBOX_APP_KEY;
-	if (!key) throw new Error("Set OBSYNC_DROPBOX_APP_KEY, in the environment or in .env");
+	const key = process.env.SEAMSYNC_DROPBOX_APP_KEY;
+	if (!key) throw new Error("Set SEAMSYNC_DROPBOX_APP_KEY, in the environment or in .env");
 	return key;
 }
 

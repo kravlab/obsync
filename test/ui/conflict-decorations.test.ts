@@ -47,32 +47,32 @@ describe("Conflict blocks in the editor", () => {
 		const state = stateOf("title\n<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\nend", decorations);
 		expect(drawn(state, decorations)).toEqual([
 			[],
-			["actions", "line: <<<<<<< Laptop [obsync-conflict-marker]"],
-			["obsync-conflict-local"],
-			["line: ======= [obsync-conflict-marker]"],
-			["obsync-conflict-remote"],
-			["line: >>>>>>> Remote [obsync-conflict-marker]"],
-			["obsync-conflict-after"],
+			["actions", "line: <<<<<<< Laptop [seamsync-conflict-marker]"],
+			["seamsync-conflict-local"],
+			["line: ======= [seamsync-conflict-marker]"],
+			["seamsync-conflict-remote"],
+			["line: >>>>>>> Remote [seamsync-conflict-marker]"],
+			["seamsync-conflict-after"],
 		]);
 	});
 
 	it("marks the lines after a block up to the first blank line, which Markdown reads as part of the >>>>>>> quote", () => {
 		const decorations = field();
 		const state = stateOf("<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\nafter\nmore\n\nnext", decorations);
-		expect(drawn(state, decorations).slice(5)).toEqual([["obsync-conflict-after"], ["obsync-conflict-after"], [], []]);
+		expect(drawn(state, decorations).slice(5)).toEqual([["seamsync-conflict-after"], ["seamsync-conflict-after"], [], []]);
 	});
 
 	it("marks no line from one starting a quote of its own on: the quote is the note's", () => {
 		const decorations = field();
 		const state = stateOf("<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\nafter\n> quoted\nlazy", decorations);
-		expect(drawn(state, decorations).slice(5)).toEqual([["obsync-conflict-after"], [], []]);
+		expect(drawn(state, decorations).slice(5)).toEqual([["seamsync-conflict-after"], [], []]);
 	});
 
 	it("gives a side's line in a block nested twice each class once", () => {
 		const decorations = field();
 		const note = ["<<<<<<< P", "<<<<<<< L", "<<<<<<< M", "x", "=======", "y", ">>>>>>> R", "=======", "z", ">>>>>>> R", "=======", "w", ">>>>>>> R"];
 		const state = stateOf(note.join("\n"), decorations);
-		expect([...(drawn(state, decorations)[3] ?? [])].sort()).toEqual(["obsync-conflict-local", "obsync-conflict-nested-local"]);
+		expect([...(drawn(state, decorations)[3] ?? [])].sort()).toEqual(["seamsync-conflict-local", "seamsync-conflict-nested-local"]);
 	});
 
 	it("shows a marker line the cursor or a selection is on as the editor's line, still marked, so it is edited as typed", () => {
@@ -80,16 +80,16 @@ describe("Conflict blocks in the editor", () => {
 		let state = stateOf("<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\nafter", decorations);
 		const end = state.doc.line(5);
 		state = state.update({ selection: { anchor: end.from + 3 } }).state;
-		expect(drawn(state, decorations).slice(3, 5)).toEqual([["obsync-conflict-remote"], ["obsync-conflict-marker"]]);
+		expect(drawn(state, decorations).slice(3, 5)).toEqual([["seamsync-conflict-remote"], ["seamsync-conflict-marker"]]);
 		// At the line's end too.
 		state = state.update({ selection: { anchor: end.to } }).state;
-		expect(drawn(state, decorations)[4]).toEqual(["obsync-conflict-marker"]);
+		expect(drawn(state, decorations)[4]).toEqual(["seamsync-conflict-marker"]);
 		// A selection from the side into the marker line.
 		state = state.update({ selection: { anchor: state.doc.line(4).from, head: end.from } }).state;
-		expect(drawn(state, decorations)[4]).toEqual(["obsync-conflict-marker"]);
+		expect(drawn(state, decorations)[4]).toEqual(["seamsync-conflict-marker"]);
 		// The cursor gone, the line is a block of its text again.
 		state = state.update({ selection: { anchor: state.doc.line(2).from } }).state;
-		expect(drawn(state, decorations)[4]).toEqual(["line: >>>>>>> Remote [obsync-conflict-marker]"]);
+		expect(drawn(state, decorations)[4]).toEqual(["line: >>>>>>> Remote [seamsync-conflict-marker]"]);
 	});
 
 
@@ -117,7 +117,7 @@ describe("Conflict blocks in the editor", () => {
 	it("marks no line after a block that ends the note", () => {
 		const decorations = field();
 		const state = stateOf("<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote", decorations);
-		expect(drawn(state, decorations)[4]).toEqual(["line: >>>>>>> Remote [obsync-conflict-marker]"]);
+		expect(drawn(state, decorations)[4]).toEqual(["line: >>>>>>> Remote [seamsync-conflict-marker]"]);
 	});
 
 	it("follows edits: a resolved block loses its decorations, a new one gains them", () => {
@@ -132,11 +132,11 @@ describe("Conflict blocks in the editor", () => {
 		// The cursor after the new block, on "mine".
 		state = state.update({ changes: { from: 0, insert: inserted }, selection: { anchor: inserted.length } }).state;
 		expect(drawn(state, decorations)).toEqual([
-			["actions", "line: <<<<<<< A [obsync-conflict-marker]"],
-			["line: ======= [obsync-conflict-marker]"],
-			["obsync-conflict-remote"],
-			["line: >>>>>>> B [obsync-conflict-marker]"],
-			["obsync-conflict-after"],
+			["actions", "line: <<<<<<< A [seamsync-conflict-marker]"],
+			["line: ======= [seamsync-conflict-marker]"],
+			["seamsync-conflict-remote"],
+			["line: >>>>>>> B [seamsync-conflict-marker]"],
+			["seamsync-conflict-after"],
 			[],
 		]);
 	});
@@ -157,15 +157,15 @@ describe("Conflict blocks in the editor", () => {
 		const state = stateOf(note, decorations);
 		const lines = drawn(state, decorations);
 		const sorted = lines.map((classes) => [...classes].sort());
-		expect(sorted[0]).toEqual(["actions", "line: <<<<<<< Phone [obsync-conflict-marker]"]);
+		expect(sorted[0]).toEqual(["actions", "line: <<<<<<< Phone [seamsync-conflict-marker]"]);
 		// The nested block's markers keep the outer side's tint.
-		expect(sorted[1]).toEqual(["actions", "line: <<<<<<< Laptop [obsync-conflict-local obsync-conflict-marker]"]);
+		expect(sorted[1]).toEqual(["actions", "line: <<<<<<< Laptop [seamsync-conflict-local seamsync-conflict-marker]"]);
 		// The outer block's tint stays under the nested block's own.
-		expect(sorted[2]).toEqual(["obsync-conflict-local", "obsync-conflict-nested-local"]);
-		expect(sorted[4]).toEqual(["obsync-conflict-local", "obsync-conflict-nested-remote"]);
-		expect(sorted[5]).toEqual(["line: >>>>>>> Remote [obsync-conflict-local obsync-conflict-marker]"]);
+		expect(sorted[2]).toEqual(["seamsync-conflict-local", "seamsync-conflict-nested-local"]);
+		expect(sorted[4]).toEqual(["seamsync-conflict-local", "seamsync-conflict-nested-remote"]);
+		expect(sorted[5]).toEqual(["line: >>>>>>> Remote [seamsync-conflict-local seamsync-conflict-marker]"]);
 		// The nested block's >>>>>>> quote runs on to the outer block's last lines; a marker line, shown as a block, is no quote.
-		expect(sorted[6]).toEqual(["line: ======= [obsync-conflict-marker]"]);
-		expect(sorted[7]).toEqual(["obsync-conflict-after", "obsync-conflict-remote"]);
+		expect(sorted[6]).toEqual(["line: ======= [seamsync-conflict-marker]"]);
+		expect(sorted[7]).toEqual(["seamsync-conflict-after", "seamsync-conflict-remote"]);
 	});
 });

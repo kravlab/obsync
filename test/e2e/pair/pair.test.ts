@@ -247,14 +247,14 @@ describe("check 7: a note open in the desktop's editor, changed on the phone, is
 				const editor = leaf.view.editor;
 				editor.focus();
 				editor.setCursor(editor.offsetToPos(${CURSOR_OFFSET}));
-				window.obsyncE2eEditorView = leaf.view;`);
+				window.seamsyncE2eEditorView = leaf.view;`);
 			await phone().eval(`
 				const file = app.vault.getAbstractFileByPath(${JSON.stringify(DESKTOP_NOTE.path)});
 				await app.vault.modify(file, ${JSON.stringify(original + PHONE_ADDITION)});
-				app.commands.executeCommandById("obsync:sync-now");`);
+				app.commands.executeCommandById("seamsync:sync-now");`);
 			const shown = (await desktop().eval(
 				`
-				const view = window.obsyncE2eEditorView;
+				const view = window.seamsyncE2eEditorView;
 				${syncUntil("the phone's change in the editor", `view.editor.getValue() === ${JSON.stringify(original + PHONE_ADDITION)}`)}
 				return {
 					sameView: app.workspace.getActiveViewOfType(view.constructor) === view,
@@ -285,16 +285,16 @@ describe("check 6: a change made on the desktop reaches the phone when it comes 
 			// Not on the phone yet: only the trigger below can bring it.
 			expect(await phoneHas(awayNote)).toBe(false);
 			await phone().eval(`
-				window.obsyncE2eHidden = false;
+				window.seamsyncE2eHidden = false;
 				document.addEventListener("visibilitychange", () => {
-					if (document.visibilityState === "hidden") window.obsyncE2eHidden = true;
+					if (document.visibilityState === "hidden") window.seamsyncE2eHidden = true;
 				});`);
 			await phone().goHome();
 			await new Promise((resolve) => setTimeout(resolve, BACKGROUND_MS));
 			await phone().showObsidian();
 			const back = (await phone().eval(`
 				await until(() => app.vault.getAbstractFileByPath(${JSON.stringify(awayNote)}), ${TRIGGER_LIMIT_MS}, "the desktop's change after the phone came back");
-				return { hidden: window.obsyncE2eHidden };`)) as { hidden: boolean };
+				return { hidden: window.seamsyncE2eHidden };`)) as { hidden: boolean };
 			expect(back.hidden).toBe(true);
 
 			await changeOnDesktop(offlineNote);
@@ -426,7 +426,7 @@ describe("check 20: shared settings and devices", () => {
 					const watch = watchStatus();
 					try {
 						// Sync now asks again.
-						app.commands.executeCommandById("obsync:sync-now");
+						app.commands.executeCommandById("seamsync:sync-now");
 						const modal = await until(${collisionWindow}, ${SYNC_TIMEOUT_MS}, "the collision window after Sync now");
 						const rows = [...modal.querySelectorAll(".setting-item")].filter((row) => dropdowns(row).length > 0).map((row) => ({
 							name: row.querySelector(".setting-item-name")?.textContent,
@@ -496,7 +496,7 @@ describe("check 20: shared settings and devices", () => {
 				${dropboxAccessProgram()}
 				${DEVICE_NAMES_HELPER}
 				await askDropbox(async () => {
-					app.commands.executeCommandById("obsync:sync-now");
+					app.commands.executeCommandById("seamsync:sync-now");
 					const found = await deviceNames(access.token);
 					return { status: found.status, done: found.names?.includes(${JSON.stringify(PHONE_NAME)}) === true };
 				}, ${SYNC_TIMEOUT_MS}, "the phone's record under its new name");`,
@@ -648,7 +648,7 @@ function connectedAndFirstSync(strings: Strings): string {
 		const firstSync = {
 			paragraphs: [...firstSyncWindow.querySelectorAll(".modal-content > p")].map((p) => p.textContent),
 			lists: Object.fromEntries(
-				[...firstSyncWindow.querySelectorAll(".obsync-first-sync-list > strong")].map((heading) => [
+				[...firstSyncWindow.querySelectorAll(".seamsync-first-sync-list > strong")].map((heading) => [
 					heading.textContent,
 					[...heading.nextElementSibling.querySelectorAll("li")].map((item) => item.textContent).sort(),
 				]),
@@ -669,7 +669,7 @@ function syncUntil(what: string, done: string): string {
 	return `
 		const syncEnd = Date.now() + ${SYNC_TIMEOUT_MS};
 		for (;;) {
-			app.commands.executeCommandById("obsync:sync-now");
+			app.commands.executeCommandById("seamsync:sync-now");
 			const askEnd = Date.now() + ${ASK_EVERY_MS};
 			while (!(${done}) && Date.now() < askEnd) await wait(100);
 			if (${done}) break;
@@ -687,7 +687,7 @@ function syncUntil(what: string, done: string): string {
 async function changeOnDesktop(path: string): Promise<void> {
 	await desktop().eval(`
 		await app.vault.create(${JSON.stringify(path)}, "Made on the desktop.\\n");
-		app.commands.executeCommandById("obsync:sync-now");`);
+		app.commands.executeCommandById("seamsync:sync-now");`);
 	await phone().eval(
 		`
 		${dropboxAccessProgram()}

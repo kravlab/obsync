@@ -290,7 +290,7 @@ export const ru: Strings = {
 	openHelp: "Открыть справку",
 	showHelp: "Показать справку",
 	tabHelp: "Справка",
-	bugReportTitle: "Отчёт об ошибке Obsync",
+	bugReportTitle: "Отчёт об ошибке Seamsync",
 	bugReportPluginVersion: "Версия плагина: {version}",
 	bugReportObsidianVersion: "Версия Obsidian: {version}",
 	bugReportPlatform: "Платформа: {platform}",

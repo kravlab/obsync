@@ -1,8 +1,8 @@
-# Obsync
+# Seamsync
 
 Sync a vault across devices through a cloud storage service.
 
-Obsync is an Obsidian plugin that keeps one person's vault the same on all
+Seamsync is an Obsidian plugin that keeps one person's vault the same on all
 of their devices, desktop and mobile. This release syncs through Dropbox.
 
 ## Features
@@ -13,9 +13,9 @@ of their devices, desktop and mobile. This release syncs through Dropbox.
   `files.metadata.read`, `files.content.read`, `files.content.write` and
   `account_info.read` scopes and nothing else.
 - **A plain mirror.** The Remote holds the vault's files at the same paths,
-  readable in Dropbox itself. The plugin's own data lives in one `.obsync`
+  readable in Dropbox itself. The plugin's own data lives in one `.seamsync`
   folder there; do not modify it.
-- **Automatic sync.** Obsync syncs when the vault opens, after an edit once
+- **Automatic sync.** Seamsync syncs when the vault opens, after an edit once
   the post-edit pause has passed, on a polling interval while Obsidian is
   open, when the app becomes visible and when the network comes back.
   Offline, it retries quietly with backoff.
@@ -46,17 +46,17 @@ the configuration folder categories you turn on.
 
 ## Installation
 
-Obsync is not in the Obsidian community plugin list. To install it, build
+Seamsync is not in the Obsidian community plugin list. To install it, build
 it from source (see [Development](#development)) and copy
 `dist/main.js`, `dist/manifest.json` and `dist/styles.css` into
-`<vault>/.obsidian/plugins/obsync/`, then enable **Obsync** in
+`<vault>/.obsidian/plugins/seamsync/`, then enable **Seamsync** in
 **Settings → Community plugins**.
 
 It needs Obsidian 1.11.4 or later.
 
 ## Usage
 
-1. Open **Settings → Obsync** and select **Connect**.
+1. Open **Settings → Seamsync** and select **Connect**.
 2. Select **Open Dropbox**, allow access, copy the code Dropbox shows and
    paste it into the **Code** field.
 3. Choose an existing folder or create a new one, and name this device.
@@ -142,7 +142,7 @@ lefthook install
 A dev container is provided in [.devcontainer/](.devcontainer/).
 
 The build bundles a Dropbox app key, which is never committed. Set
-`OBSYNC_DROPBOX_APP_KEY` in the environment or in a git-ignored `.env`
+`SEAMSYNC_DROPBOX_APP_KEY` in the environment or in a git-ignored `.env`
 file; the build stops with an error without it. The app must have App
 Folder access.
 

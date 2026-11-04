@@ -50,7 +50,7 @@ export interface LanguagePage extends ObsidianPage {
 export function reloadInLanguageProgram(language: string | null): string {
 	const store = language === null ? `localStorage.removeItem("language");` : `localStorage.setItem("language", ${JSON.stringify(language)});`;
 	return `
-		window.obsyncReloading = true;
+		window.seamsyncReloading = true;
 		${store}
 		setTimeout(() => location.reload(), 100);`;
 }
@@ -65,7 +65,7 @@ export function reloadInLanguageProgram(language: string | null): string {
  */
 export function reloadedInLanguageProgram(language: string | null, pluginId: string): string {
 	const conditions = [
-		"window.obsyncReloading !== true",
+		"window.seamsyncReloading !== true",
 		"window.app?.workspace?.layoutReady === true",
 		`app.plugins.plugins[${JSON.stringify(pluginId)}] !== undefined`,
 		...(language === null ? [] : [`window.moment?.locale() === ${JSON.stringify(language)}`]),
@@ -107,7 +107,7 @@ export async function untilAnswered(
  * - `button(text, root = activeDocument)` waits for a button with that text
  *   in an open window (or in `root`);
  * - `syncWindow()` waits for the open Sync window and resolves with it;
- * - `openSyncWindow(command = "obsync:open-sync-window")` runs that command
+ * - `openSyncWindow(command = "seamsync:open-sync-window")` runs that command
  *   (the plugin's Open sync window, unless given another that opens the
  *   window, such as Show help) and resolves with the window;
  * - `selectedTab(sync)` is the text of the Sync window's selected tab;
@@ -150,18 +150,18 @@ export const PAGE_HELPERS = `
 		10000,
 		"the " + text + " button",
 	);
-	const syncWindow = () => until(() => activeDocument.querySelector(".modal.obsync-sync-window"), 10000, "the Sync window");
-	const openSyncWindow = (command = "obsync:open-sync-window") => {
+	const syncWindow = () => until(() => activeDocument.querySelector(".modal.seamsync-sync-window"), 10000, "the Sync window");
+	const openSyncWindow = (command = "seamsync:open-sync-window") => {
 		app.commands.executeCommandById(command);
 		return syncWindow();
 	};
-	const selectedTab = (sync) => sync.querySelector(".obsync-sync-tab-selected")?.textContent;
-	const helpElements = (sync) => [...sync.querySelector(".obsync-sync-body").querySelectorAll("h4, p, ul, li")].map((element) => {
+	const selectedTab = (sync) => sync.querySelector(".seamsync-sync-tab-selected")?.textContent;
+	const helpElements = (sync) => [...sync.querySelector(".seamsync-sync-body").querySelectorAll("h4, p, ul, li")].map((element) => {
 		const tag = element.tagName.toLowerCase();
 		return { tag, text: tag === "ul" ? "" : element.textContent };
 	});
 	const onboardingWindow = (doneText) => until(
-		() => [...activeDocument.querySelectorAll(".modal")].find((m) => !m.classList.contains("obsync-sync-window") && [...m.querySelectorAll("button")].some((b) => b.textContent === doneText)),
+		() => [...activeDocument.querySelectorAll(".modal")].find((m) => !m.classList.contains("seamsync-sync-window") && [...m.querySelectorAll("button")].some((b) => b.textContent === doneText)),
 		10000,
 		"the onboarding",
 	);
@@ -179,8 +179,8 @@ export const PAGE_HELPERS = `
 	const withSettings = async (use) => {
 		app.setting.open();
 		try {
-			app.setting.openTabById("obsync");
-			return await use(await until(() => app.setting.activeTab?.id === "obsync" && app.setting.activeTab.containerEl, 10000, "the plugin's settings tab"));
+			app.setting.openTabById("seamsync");
+			return await use(await until(() => app.setting.activeTab?.id === "seamsync" && app.setting.activeTab.containerEl, 10000, "the plugin's settings tab"));
 		} finally {
 			app.setting.close();
 		}
@@ -234,7 +234,7 @@ export function expectedOnboarding(strings: Strings): OnboardingFound {
 	return { title: strings.onboardingTitle, intro: strings.onboardingIntro, items: practices(strings) };
 }
 
-/** A window's or row's buttons, as `buttons(root)` lists them, and whether it carries `obsync-phone`. */
+/** A window's or row's buttons, as `buttons(root)` lists them, and whether it carries `seamsync-phone`. */
 export interface ButtonsFound {
 	readonly phone: boolean;
 	readonly buttons: readonly { readonly text: string; readonly height: number }[];
@@ -268,7 +268,7 @@ export function describePhoneButtons(title: string, page: () => ObsidianPage): v
 					const syncButtons = buttons(sync);
 					(await button(${JSON.stringify(strings.connect)}, sync)).click();
 					const connect = await until(() => [...activeDocument.querySelectorAll(".modal")].find((m) => m !== sync && m.querySelector("input")), 10000, "the connect window");
-					const result = { sync: { phone: sync.classList.contains("obsync-phone"), buttons: syncButtons }, connect: { phone: connect.classList.contains("obsync-phone"), buttons: buttons(connect) } };
+					const result = { sync: { phone: sync.classList.contains("seamsync-phone"), buttons: syncButtons }, connect: { phone: connect.classList.contains("seamsync-phone"), buttons: buttons(connect) } };
 					return result;
 				} finally {
 					await closeModals();
@@ -286,11 +286,11 @@ export function describePhoneButtons(title: string, page: () => ObsidianPage): v
 					const file = await app.vault.create("phone-conflict.md", ${JSON.stringify(note)});
 					const leaf = app.workspace.getLeaf(true);
 					await leaf.setViewState({ type: "markdown", state: { file: file.path, mode: "source", source: false } });
-					const row = await until(() => leaf.view.contentEl.querySelector(".obsync-conflict-actions"), 10000, "the action row");
+					const row = await until(() => leaf.view.contentEl.querySelector(".seamsync-conflict-actions"), 10000, "the action row");
 					const rowButtons = buttons(row);
 					(await button(${JSON.stringify(strings.conflictEdit)}, row)).click();
-					const dialog = await until(() => activeDocument.querySelector(".modal.obsync-conflict-edit"), 10000, "the Edit dialog");
-					const result = { row: { phone: row.classList.contains("obsync-phone"), buttons: rowButtons }, dialog: { phone: dialog.classList.contains("obsync-phone"), buttons: buttons(dialog) } };
+					const dialog = await until(() => activeDocument.querySelector(".modal.seamsync-conflict-edit"), 10000, "the Edit dialog");
+					const result = { row: { phone: row.classList.contains("seamsync-phone"), buttons: rowButtons }, dialog: { phone: dialog.classList.contains("seamsync-phone"), buttons: buttons(dialog) } };
 					leaf.detach();
 					await app.vault.delete(file);
 					return result;
@@ -306,11 +306,11 @@ export function describePhoneButtons(title: string, page: () => ObsidianPage): v
 			const found = (await page().eval(`
 				${PAGE_HELPERS}
 				try {
-					const sync = await openSyncWindow("obsync:show-help");
-					const syncFound = { phone: sync.classList.contains("obsync-phone"), buttons: buttons(sync) };
+					const sync = await openSyncWindow("seamsync:show-help");
+					const syncFound = { phone: sync.classList.contains("seamsync-phone"), buttons: buttons(sync) };
 					(await button(${JSON.stringify(strings.showOnboarding)}, sync)).click();
 					const onboarding = await onboardingWindow(${JSON.stringify(strings.onboardingDone)});
-					const onboardingFound = { phone: onboarding.classList.contains("obsync-phone"), buttons: buttons(onboarding) };
+					const onboardingFound = { phone: onboarding.classList.contains("seamsync-phone"), buttons: buttons(onboarding) };
 					(await button(${JSON.stringify(strings.onboardingDone)}, onboarding)).click();
 					return { sync: syncFound, onboarding: onboardingFound };
 				} finally {
@@ -384,7 +384,7 @@ export function describeOnboardingHelp(title: string, page: () => LanguagePage, 
 						const sync = await openSyncWindow(${JSON.stringify(showHelpCommand())});
 						return {
 							tab: selectedTab(sync),
-							hasButton: [...sync.querySelector(".obsync-sync-body").querySelectorAll("button")].some((b) => b.textContent === ${JSON.stringify(strings.showOnboarding)}),
+							hasButton: [...sync.querySelector(".seamsync-sync-body").querySelectorAll("button")].some((b) => b.textContent === ${JSON.stringify(strings.showOnboarding)}),
 							elements: helpElements(sync),
 						};`)) as { tab: string; hasButton: boolean; elements: HelpElement[] };
 					expect(shown.tab).toBe(strings.tabHelp);

@@ -8,7 +8,7 @@ import {
 import type { PathCodec } from "../../src/engine/name-policy";
 
 /** A device whose configuration folder is not Obsidian's usual name, with this plugin installed in it. */
-const layout: ConfigurationLayout = { configDir: ".vault-config", pluginDir: ".vault-config/plugins/obsync", pluginId: "obsync" };
+const layout: ConfigurationLayout = { configDir: ".vault-config", pluginDir: ".vault-config/plugins/seamsync", pluginId: "seamsync" };
 
 /** The categories of the file at `path`, relative to the configuration folder. */
 function fileCategories(path: string): readonly string[] | null {
@@ -67,18 +67,18 @@ describe("configurationCategoriesOf", () => {
 	});
 
 	it("never syncs this plugin's own folder or anything in it", () => {
-		expect(folderCategories("plugins/obsync")).toEqual([]);
-		expect(fileCategories("plugins/obsync/data.json")).toEqual([]);
-		expect(fileCategories("plugins/obsync/configuration-conflicts/1/app.json")).toEqual([]);
-		expect(fileCategories("plugins/obsync-extra/main.js")).toEqual(["plugins"]);
+		expect(folderCategories("plugins/seamsync")).toEqual([]);
+		expect(fileCategories("plugins/seamsync/data.json")).toEqual([]);
+		expect(fileCategories("plugins/seamsync/configuration-conflicts/1/app.json")).toEqual([]);
+		expect(fileCategories("plugins/seamsync-extra/main.js")).toEqual(["plugins"]);
 	});
 
 	it("never syncs this plugin under its id either, when this device installed it in a folder of another name", () => {
-		const renamed: ConfigurationLayout = { ...layout, pluginDir: ".vault-config/plugins/obsync-dev" };
-		for (const path of ["plugins/obsync-dev/data.json", "plugins/obsync/data.json", "plugins/obsync/configuration-conflicts/a"]) {
+		const renamed: ConfigurationLayout = { ...layout, pluginDir: ".vault-config/plugins/seamsync-dev" };
+		for (const path of ["plugins/seamsync-dev/data.json", "plugins/seamsync/data.json", "plugins/seamsync/configuration-conflicts/a"]) {
 			expect(configurationCategoriesOf(`${layout.configDir}/${path}`, "file", renamed), path).toEqual([]);
 		}
-		expect(configurationCategoriesOf(`${layout.configDir}/plugins/obsync`, "folder", renamed)).toEqual([]);
+		expect(configurationCategoriesOf(`${layout.configDir}/plugins/seamsync`, "folder", renamed)).toEqual([]);
 		expect(configurationCategoriesOf(`${layout.configDir}/plugins/calendar/data.json`, "file", renamed)).toEqual(["plugins"]);
 	});
 
@@ -111,7 +111,7 @@ describe("withConfigurationFolder", () => {
 	it("leaves every other path as the inner codec has it", () => {
 		const codec = withConfigurationFolder(asIs, layout.configDir, false);
 		expect(codec.toRemote("notes/app.json")).toBe("notes/app.json");
-		expect(codec.toVault(".obsync/settings.json")).toBe(".obsync/settings.json");
+		expect(codec.toVault(".seamsync/settings.json")).toBe(".seamsync/settings.json");
 		expect(codec.toVault(".vault-config-old/app.json")).toBe(".vault-config-old/app.json");
 	});
 

@@ -1,65 +1,65 @@
 /* Styles for the plugin's own elements; every selector is scoped to an
-   obsync- class so themes and other plugins are untouched. */
+   seamsync- class so themes and other plugins are untouched. */
 
 /* A message at the top of the connect window, such as a refused code. */
-.obsync-message:not(:empty) {
+.seamsync-message:not(:empty) {
 	color: var(--text-error);
 }
 
 /* Under a failure's message: what the service answered, quieter, and
    wrapped anywhere so a long answer stays inside a phone's screen. With
    nothing to tell it takes no room, margins included. */
-.obsync-message-detail:not(:empty) {
+.seamsync-message-detail:not(:empty) {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 	overflow-wrap: anywhere;
 }
 
-.obsync-message-detail:empty {
+.seamsync-message-detail:empty {
 	display: none;
 }
 
 /* A failure's text can be selected and copied by hand, long press on a
    phone included, even where the clipboard button is refused. */
-.obsync-message,
-.obsync-message-detail {
+.seamsync-message,
+.seamsync-message-detail {
 	-webkit-user-select: text;
 	user-select: text;
 }
 
 /* Conflict blocks in the editor: markers stay visible but quiet, each
    side gets a light tint of its own, and a row of actions sits above. */
-.obsync-conflict-marker {
+.seamsync-conflict-marker {
 	color: var(--text-muted);
 }
 
-.obsync-conflict-local {
+.seamsync-conflict-local {
 	background-color: var(--background-modifier-hover);
 }
 
-.obsync-conflict-remote {
+.seamsync-conflict-remote {
 	background-color: var(--background-secondary);
 }
 
 /* A block nested in a side keeps the outer tint and marks its own sides
    with a bar at the start of the line. */
-.obsync-conflict-nested-local {
+.seamsync-conflict-nested-local {
 	box-shadow: inset 3px 0 0 var(--interactive-accent);
 }
 
-.obsync-conflict-nested-remote {
+.seamsync-conflict-nested-remote {
 	box-shadow: inset 3px 0 0 var(--text-muted);
 }
 
 /* Marker and side lines show the note's text as it is: Markdown read
    across the markers, such as a line above ======= becoming a heading,
    is undone on these lines and everything in them. */
-.obsync-conflict-marker,
-.obsync-conflict-marker *,
-.obsync-conflict-local,
-.obsync-conflict-local *,
-.obsync-conflict-remote,
-.obsync-conflict-remote * {
+.seamsync-conflict-marker,
+.seamsync-conflict-marker *,
+.seamsync-conflict-local,
+.seamsync-conflict-local *,
+.seamsync-conflict-remote,
+.seamsync-conflict-remote * {
 	font-size: var(--font-text-size);
 	font-weight: var(--font-normal);
 	line-height: var(--line-height-normal);
@@ -70,8 +70,8 @@
 /* A heading's line, such as the one above =======, is spaced out from the
    one above it (Obsidian's `.cm-s-obsidian .cm-line.HyperMD-header`
    padding-top); not on a block's sides. */
-.cm-s-obsidian .cm-line.obsync-conflict-local,
-.cm-s-obsidian .cm-line.obsync-conflict-remote {
+.cm-s-obsidian .cm-line.seamsync-conflict-local,
+.cm-s-obsidian .cm-line.seamsync-conflict-remote {
 	padding-top: 0;
 }
 
@@ -80,20 +80,20 @@
    (`.markdown-source-view.mod-cm6.is-live-preview .HyperMD-quote`), bar
    (its `:before`) and colour (`.cm-s-obsidian span.cm-quote`) are undone
    there. A quote of the note's own keeps them. */
-.markdown-source-view.mod-cm6.is-live-preview .cm-line.obsync-conflict-after.HyperMD-quote-lazy {
+.markdown-source-view.mod-cm6.is-live-preview .cm-line.seamsync-conflict-after.HyperMD-quote-lazy {
 	font-style: normal;
 	background-color: transparent;
 }
 
-.markdown-source-view.mod-cm6.is-live-preview .cm-line.obsync-conflict-after.HyperMD-quote-lazy::before {
+.markdown-source-view.mod-cm6.is-live-preview .cm-line.seamsync-conflict-after.HyperMD-quote-lazy::before {
 	display: none;
 }
 
-.cm-s-obsidian .cm-line.obsync-conflict-after.HyperMD-quote-lazy span.cm-quote {
+.cm-s-obsidian .cm-line.seamsync-conflict-after.HyperMD-quote-lazy span.cm-quote {
 	color: inherit;
 }
 
-.obsync-conflict-actions {
+.seamsync-conflict-actions {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--size-4-2);
@@ -102,76 +102,76 @@
 }
 
 /* On a phone the actions are buttons big enough to tap. */
-.obsync-conflict-actions.obsync-phone button {
+.seamsync-conflict-actions.seamsync-phone button {
 	min-height: 44px;
 	flex: 1 1 40%;
 }
 
 /* The Edit… dialog: both sides above the field that combines them. */
-.obsync-conflict-edit-sides {
+.seamsync-conflict-edit-sides {
 	display: grid;
 	gap: var(--size-4-2);
 }
 
-.obsync-conflict-edit-side {
+.seamsync-conflict-edit-side {
 	padding: var(--size-4-2);
 	border-radius: var(--radius-m);
 }
 
-.obsync-conflict-edit-side pre {
+.seamsync-conflict-edit-side pre {
 	margin: 0;
 	white-space: pre-wrap;
 }
 
-.obsync-conflict-edit-text {
+.seamsync-conflict-edit-text {
 	width: 100%;
 	min-height: 10em;
 }
 
 /* A Conflict block in reading view: both sides, no buttons. */
-.obsync-conflict-panel {
+.seamsync-conflict-panel {
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	padding: var(--size-4-2) var(--size-4-4);
 	margin: var(--size-4-2) 0;
 }
 
-.obsync-conflict-panel-title {
+.seamsync-conflict-panel-title {
 	font-weight: var(--font-semibold);
 }
 
-.obsync-conflict-panel-hint {
+.seamsync-conflict-panel-hint {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 }
 
-.obsync-conflict-panel-side {
+.seamsync-conflict-panel-side {
 	margin-top: var(--size-4-2);
 	padding: 0 var(--size-4-2);
 	border-radius: var(--radius-m);
 }
 
-.obsync-conflict-panel-label {
+.seamsync-conflict-panel-label {
 	color: var(--text-accent);
 	font-size: var(--font-ui-small);
 }
 
 /* The Deletion guard prompt's review list and the First sync preview's
    list: every path, scrolled within the window however many there are. */
-.obsync-guard-list,
-.obsync-first-sync-list {
+.seamsync-guard-list,
+.seamsync-first-sync-list {
 	max-height: 40vh;
 	overflow-y: auto;
 }
 
 /* Every modal of the plugin on a phone: buttons big enough to tap. */
-.modal.obsync-phone button {
+.modal.seamsync-phone button {
 	min-height: 44px;
 }
 
 /* The status dot, in the status bar item and the Sync window: its colour
    tells the state at a glance (status-look.ts). */
-.obsync-dot {
+.seamsync-dot {
 	display: inline-block;
 	width: 8px;
 	height: 8px;
@@ -180,35 +180,35 @@
 	background-color: var(--text-faint);
 }
 
-.obsync-dot-ok {
+.seamsync-dot-ok {
 	background-color: var(--color-green);
 }
 
-.obsync-dot-busy {
+.seamsync-dot-busy {
 	background-color: var(--interactive-accent);
 }
 
-.obsync-dot-attention {
+.seamsync-dot-attention {
 	background-color: var(--color-orange);
 }
 
-.obsync-dot-error {
+.seamsync-dot-error {
 	background-color: var(--color-red);
 }
 
 /* The Sync window: the status with its button, the tab row, then the tab. */
-.obsync-sync-header {
+.seamsync-sync-header {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
 	gap: var(--size-4-2);
 }
 
-.obsync-sync-header button {
+.seamsync-sync-header button {
 	margin-inline-start: auto;
 }
 
-.obsync-sync-tabs {
+.seamsync-sync-tabs {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--size-4-1);
@@ -217,13 +217,13 @@
 	padding-bottom: var(--size-4-2);
 }
 
-.obsync-sync-tab-selected {
+.seamsync-sync-tab-selected {
 	color: var(--text-on-accent);
 	background-color: var(--interactive-accent);
 }
 
 /* A file in the Conflicts tab: a whole-width button that opens it. */
-.obsync-sync-item {
+.seamsync-sync-item {
 	display: block;
 	width: 100%;
 	height: auto;
@@ -234,7 +234,7 @@
 }
 
 /* A line of the Sync window (Skipped, Activity) can be selected for copying, on iOS too. */
-.obsync-sync-line {
+.seamsync-sync-line {
 	padding: var(--size-4-1) 0;
 	font-size: var(--font-ui-small);
 	-webkit-user-select: text;

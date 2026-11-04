@@ -125,7 +125,7 @@ export function remoteText(account: FakeDropboxAccount, folder: string, path: st
 
 /** The Sync windows open on `device`, oldest first: one, or none, since a new one takes the place of the one open. */
 export function syncWindows(device: PluginDevice): HTMLElement[] {
-	return [...device.root.querySelectorAll<HTMLElement>(".obsync-sync-window")];
+	return [...device.root.querySelectorAll<HTMLElement>(".seamsync-sync-window")];
 }
 
 /** The Sync window `device` opened last; fails when none is open. */
@@ -143,7 +143,7 @@ export function selectedTab(device: PluginDevice): string {
 
 /** The texts of the lines and items the shown tab of the Sync window `device` opened last lists. */
 export function tabLines(device: PluginDevice): string[] {
-	return [...lastSyncWindow(device).querySelectorAll(".obsync-sync-body .obsync-sync-line, .obsync-sync-body .obsync-sync-item")].map(
+	return [...lastSyncWindow(device).querySelectorAll(".seamsync-sync-body .seamsync-sync-line, .seamsync-sync-body .seamsync-sync-item")].map(
 		(line) => line.textContent,
 	);
 }
@@ -302,7 +302,7 @@ export class PluginDevices {
 		vi.resetModules();
 		const obsidian = await import("../fakes/obsidian");
 		const { FakeApp } = await import("../fakes/obsidian-app");
-		const { default: ObsyncPlugin } = await import("../../src/main");
+		const { default: SeamsyncPlugin } = await import("../../src/main");
 		if (options.phone === true) Object.assign(obsidian.Platform, { isPhone: true, isMobile: true, isDesktop: false });
 		let sent = 0;
 		obsidian.answerRequestsWith(
@@ -318,7 +318,7 @@ export class PluginDevices {
 		const app = new FakeApp(vaultName);
 		if (before !== undefined) app.persistFrom(before);
 		for (const [path, content] of Object.entries(options.files ?? {})) app.vault.seed(path, content);
-		const loaded = new ObsyncPlugin(app as never, pluginManifest(app) as never);
+		const loaded = new SeamsyncPlugin(app as never, pluginManifest(app) as never);
 		const plugin = loaded as unknown as ObsidianFake.Plugin;
 		const device: PluginDevice = {
 			obsidian,

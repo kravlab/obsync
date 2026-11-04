@@ -2,7 +2,7 @@ import type { App } from "obsidian";
 import { DEFAULT_REQUEST_LIMIT, requestLimitOf, type RequestLimit } from "../engine/request-limit";
 
 /** The localStorage key of this vault's Per-request limit. */
-const REQUEST_LIMIT_KEY = "obsync-request-limit";
+const REQUEST_LIMIT_KEY = "seamsync-request-limit";
 
 /** The format version of the stored limit. */
 const REQUEST_LIMIT_FORMAT_VERSION = 1;

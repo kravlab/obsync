@@ -8,7 +8,7 @@ import { bytes } from "../support/bytes";
 import { forgetNotices, remoteText, syncNow } from "../support/sync";
 
 /** The Secret store id of a test device's login secret. */
-const SECRET_ID = "obsync-fake-service";
+const SECRET_ID = "seamsync-fake-service";
 
 /** Logs `device` in again through `service`, as the account `account` approves it. */
 async function logInAgain(service: FakeService, device: TestDevice, account: FakeAccount): Promise<AuthorizationOutcome> {

@@ -43,12 +43,12 @@ describe("nameOf", () => {
 
 describe("isWithin", () => {
 	it("holds for the folder itself and for paths inside it", () => {
-		expect(isWithin(".obsync", ".obsync")).toBe(true);
-		expect(isWithin(".obsync/devices/a.json", ".obsync")).toBe(true);
+		expect(isWithin(".seamsync", ".seamsync")).toBe(true);
+		expect(isWithin(".seamsync/devices/a.json", ".seamsync")).toBe(true);
 	});
 
 	it("does not hold for a sibling that only shares the prefix", () => {
-		expect(isWithin(".obsync-notes/a.md", ".obsync")).toBe(false);
+		expect(isWithin(".seamsync-notes/a.md", ".seamsync")).toBe(false);
 	});
 });
 

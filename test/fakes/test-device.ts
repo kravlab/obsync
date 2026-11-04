@@ -360,12 +360,12 @@ export interface TestDeviceOptions {
  * FakeProvider, so faults a test injects reach the engine. Several devices
  * built on one FakeRemote sync the same Remote. The device has no
  * Connection; `connectTestDevice` gives it one. This plugin's folder is
- * `plugins/obsync` in the configuration folder, as Obsidian installs it.
+ * `plugins/seamsync` in the configuration folder, as Obsidian installs it.
  */
 export function createTestDevice(remote: FakeRemote, options: TestDeviceOptions = {}): TestDevice {
 	const clock = new ManualClock();
 	const vault = new FakeVault({ clock, ...(options.configDir === undefined ? {} : { configDir: options.configDir }) });
-	const pluginId = "obsync";
+	const pluginId = "seamsync";
 	const pluginDir = `${vault.configDir}/plugins/${pluginId}`;
 	const deviceStore = new InMemoryDeviceStore();
 	const secretStore = new InMemorySecretStore();

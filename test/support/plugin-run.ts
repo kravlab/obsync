@@ -25,7 +25,7 @@ export const PLUGIN_WAIT = { timeout: 5_000 } as const;
 
 /** The manifest Obsidian gives the plugin in `app`'s vault: its id, version and folder. */
 export function pluginManifest(app: { vault: { configDir: string } }): { id: string; version: string; dir: string } {
-	return { id: "obsync", version: "0.1.0", dir: `${app.vault.configDir}/plugins/obsync` };
+	return { id: "seamsync", version: "0.1.0", dir: `${app.vault.configDir}/plugins/seamsync` };
 }
 
 /**
@@ -156,7 +156,7 @@ export async function connectThroughSettings(run: ConnectRun, choice: ConnectCho
 	else rowButton(run.root, choice.useFolder, strings.useFolder).click();
 	// A failure the window shows is the reason given when connecting does not finish.
 	const shownFailure = (): string =>
-		[...run.root.querySelectorAll(".obsync-message, .obsync-message-detail")].map((line) => line.textContent).join(" ");
+		[...run.root.querySelectorAll(".seamsync-message, .seamsync-message-detail")].map((line) => line.textContent).join(" ");
 	await vi.waitFor(() => expect(run.notices(), shownFailure()).toContain(strings.noticeConnected), PLUGIN_WAIT);
 	if (choice.leaveOnboardingOpen === true) return;
 	await vi.waitFor(() => buttonIn(run.root, strings.onboardingDone), PLUGIN_WAIT);

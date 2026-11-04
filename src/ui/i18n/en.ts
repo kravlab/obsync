@@ -485,7 +485,7 @@ export const en = {
 	/** The Sync window's Help tab. */
 	tabHelp: "Help",
 	/** The bug report's lines, always taken from this English table; `{version}`, `{platform}`, `{status}` are filled in. */
-	bugReportTitle: "Obsync bug report",
+	bugReportTitle: "Seamsync bug report",
 	bugReportPluginVersion: "Plugin version: {version}",
 	bugReportObsidianVersion: "Obsidian version: {version}",
 	bugReportPlatform: "Platform: {platform}",

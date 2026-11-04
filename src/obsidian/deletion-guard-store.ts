@@ -2,7 +2,7 @@ import type { App } from "obsidian";
 import { DEFAULT_DELETION_GUARD, deletionGuardOf, type DeletionGuardSettings } from "../engine/deletion-guard";
 
 /** The localStorage key of this vault's Deletion guard thresholds. */
-const DELETION_GUARD_KEY = "obsync-deletion-guard";
+const DELETION_GUARD_KEY = "seamsync-deletion-guard";
 
 /** The format version of the stored thresholds. */
 const DELETION_GUARD_FORMAT_VERSION = 1;

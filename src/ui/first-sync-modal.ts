@@ -40,7 +40,7 @@ export class FirstSyncModal extends PromptModal<NonNullable<FirstSyncAnswer>> {
 			[text.differing, text.differingFiles],
 		] as const;
 		for (const [heading] of sections) contentEl.createEl("p", { text: heading });
-		const list = contentEl.createDiv({ cls: "obsync-first-sync-list" });
+		const list = contentEl.createDiv({ cls: "seamsync-first-sync-list" });
 		list.hide();
 		for (const [heading, items] of sections) {
 			if (items.length === 0) continue;

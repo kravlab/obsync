@@ -63,8 +63,8 @@ describe("check 3: Copy error puts the connect window's error on the clipboard",
 					try {
 						${openConnectWindowProgram(strings)}
 						${enterCodeProgram("a-code-never-sent", strings)}
-						const message = await until(() => [...activeDocument.querySelectorAll(".obsync-message")].find((m) => m.textContent), 30000, "the error message");
-						const detail = message.parentElement.querySelector(".obsync-message-detail");
+						const message = await until(() => [...activeDocument.querySelectorAll(".seamsync-message")].find((m) => m.textContent), 30000, "the error message");
+						const detail = message.parentElement.querySelector(".seamsync-message-detail");
 						// Emptied first, so a copy left from before cannot pass.
 						await navigator.clipboard.writeText("");
 						(await button(${JSON.stringify(strings.copyError)})).click();
@@ -94,7 +94,7 @@ describe("check 17: a long note merges within the time limit on the phone", () =
 			entryPoints: [fileURLToPath(new URL("../../../src/engine/text-merge.ts", import.meta.url))],
 			bundle: true,
 			format: "iife",
-			globalName: "obsyncMerge",
+			globalName: "seamsyncMerge",
 			platform: "browser",
 			write: false,
 		});
@@ -104,7 +104,7 @@ describe("check 17: a long note merges within the time limit on the phone", () =
 			const bytes = (lines) => new TextEncoder().encode(lines.join("")).buffer;
 			const timed = (local, remote) => {
 				const started = performance.now();
-				const result = obsyncMerge.mergeText({ base: bytes(note), local: bytes(local), remote: bytes(remote) }, { local: "Phone", remote: "Remote" });
+				const result = seamsyncMerge.mergeText({ base: bytes(note), local: bytes(local), remote: bytes(remote) }, { local: "Phone", remote: "Remote" });
 				const ms = performance.now() - started;
 				const lines = new TextDecoder().decode(result.data).split("\\n");
 				return { ms, conflicted: result.conflicted, lines: lines.length, at: (index) => lines[index] };
@@ -165,7 +165,7 @@ describe("check 14 (partial: no Deletion guard window): on a phone, every button
 				`
 				${PAGE_HELPERS}
 				const firstSync = await until(() => [...activeDocument.querySelectorAll(".modal")].find((m) => m.querySelector(".modal-title")?.textContent === ${JSON.stringify(strings.firstSyncTitle)}), 60000, "the First sync window");
-				const result = { phone: firstSync.classList.contains("obsync-phone"), buttons: buttons(firstSync) };
+				const result = { phone: firstSync.classList.contains("seamsync-phone"), buttons: buttons(firstSync) };
 				(await button(${JSON.stringify(strings.firstSyncStart)}, firstSync)).click();
 				await until(() => activeDocument.querySelector("[aria-label=" + JSON.stringify(${JSON.stringify(strings.statusSynced)}) + "]"), 60000, "the Synced status");
 				return result;`,
@@ -194,7 +194,7 @@ describe("check 16: a 50 MB attachment goes up and comes back intact", () => {
 				}
 				const sent = await sha256(data.buffer);
 				await app.vault.createBinary(${JSON.stringify(LARGE_FILE)}, data.buffer);
-				app.commands.executeCommandById("obsync:sync-now");
+				app.commands.executeCommandById("seamsync:sync-now");
 				const access = await dropboxAccess(pluginSecret());
 				if (!access.token) throw new Error("no access token: HTTP " + access.status);
 				const synced = () => activeDocument.querySelector("[aria-label=" + JSON.stringify(${JSON.stringify(strings.statusSynced)}) + "]") !== null;

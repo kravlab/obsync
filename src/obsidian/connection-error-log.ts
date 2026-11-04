@@ -5,7 +5,7 @@ import type { VaultPath } from "../engine/local-vault";
 export type ConnectionErrorLogAdapter = Pick<DataAdapter, "exists" | "read" | "write">;
 
 /** The log's file name in the plugin's own folder. */
-const LOG_FILE = "obsync.log";
+const LOG_FILE = "seamsync.log";
 
 /** How many lines the file keeps, newest last, like the Activity log. */
 const LOG_LIMIT = 100;
@@ -53,7 +53,7 @@ export class ObsidianConnectionErrorLog {
 			const kept = (await this.adapter.exists(this.path)) ? linesOf(await this.adapter.read(this.path)) : [];
 			await this.adapter.write(this.path, `${[...kept, line].slice(-LOG_LIMIT).join("\n")}\n`);
 		} catch (error) {
-			console.error("obsync: writing the connection error log failed", error);
+			console.error("seamsync: writing the connection error log failed", error);
 		}
 	}
 }

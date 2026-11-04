@@ -8,7 +8,7 @@ import { ObsidianRequestLimitStore } from "../../src/obsidian/request-limit-stor
 import { ObsidianScheduleStore } from "../../src/obsidian/schedule-store";
 import { fill } from "../../src/ui/i18n/fill";
 import { selectStrings } from "../../src/ui/i18n/strings";
-import { ObsyncSettingTab } from "../../src/ui/settings-tab";
+import { SeamsyncSettingTab } from "../../src/ui/settings-tab";
 import { Notice, Plugin } from "../fakes/obsidian";
 import { FakeApp } from "../fakes/obsidian-app";
 
@@ -28,7 +28,7 @@ async function connectedTab(
 	overrides: Partial<ConnectionService> = {},
 	changeSettings: (base: RemoteSettings, wanted: RemoteSettings) => Promise<void> = () => Promise.resolve(),
 	openHelp: () => void = () => undefined,
-): Promise<ObsyncSettingTab> {
+): Promise<SeamsyncSettingTab> {
 	const app = new FakeApp();
 	const service: ConnectionService = {
 		showStatus: () => Promise.resolve(),
@@ -41,9 +41,9 @@ async function connectedTab(
 		sharedSettings: () => Promise.resolve(DEFAULT_REMOTE_SETTINGS),
 		...overrides,
 	};
-	const tab = new ObsyncSettingTab(
+	const tab = new SeamsyncSettingTab(
 		app as never,
-		new Plugin(app, { id: "obsync", version: "0.1.0" }) as never,
+		new Plugin(app, { id: "seamsync", version: "0.1.0" }) as never,
 		service,
 		strings,
 		() => undefined,
@@ -84,7 +84,7 @@ describe("the settings tab's Disconnect", () => {
 		press(strings.disconnect);
 
 		await vi.waitFor(() => expect(Notice.shown).toEqual([strings.noticeDisconnectFailed]));
-		expect(consoleError).toHaveBeenCalledWith("obsync: disconnecting failed", bug);
+		expect(consoleError).toHaveBeenCalledWith("seamsync: disconnecting failed", bug);
 	});
 });
 

@@ -83,7 +83,7 @@ describe("the Deletion guard window", { timeout: DEVICE_TEST_TIMEOUT_MS }, () =>
 			fill(strings.guardToRemote, { count: "6" }),
 			strings.guardCloseHint,
 		]);
-		const list = guard.contentEl.querySelector<HTMLElement>(".obsync-guard-list");
+		const list = guard.contentEl.querySelector<HTMLElement>(".seamsync-guard-list");
 		expect(list?.isShown()).toBe(false);
 		buttonIn(guard.contentEl, strings.guardReview).click();
 		expect(list?.isShown()).toBe(true);
@@ -101,7 +101,7 @@ describe("the Deletion guard window", { timeout: DEVICE_TEST_TIMEOUT_MS }, () =>
 		const { account, device } = await deletedMany({ phone: true });
 		const guard = lastGuard(device);
 
-		expect(guard.modalEl.classList).toContain("obsync-phone");
+		expect(guard.modalEl.classList).toContain("seamsync-phone");
 		buttonIn(guard.contentEl, strings.guardRestore).click();
 
 		await vi.waitFor(() => expect(filesOn(device)).toEqual(Object.keys(NOTES).sort()), PLUGIN_WAIT);

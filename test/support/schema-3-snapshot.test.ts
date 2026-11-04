@@ -32,8 +32,8 @@ async function currentBuild(name: string): Promise<FakeApp> {
 	await new Promise<void>((resolve) => (transaction.oncomplete = () => resolve()));
 	database.close();
 	const app = new FakeApp();
-	app.saveLocalStorage("obsync-snapshot-database", { formatVersion: 1, name });
-	app.saveLocalStorage("obsync-connection", {
+	app.saveLocalStorage("seamsync-snapshot-database", { formatVersion: 1, name });
+	app.saveLocalStorage("seamsync-connection", {
 		formatVersion: 1,
 		connection: { accountId: "a1", remoteRoot: "/My vault", device: { id: "d1", name: "Laptop" }, firstSyncDone: true, reconnectNeeded: true },
 	});
@@ -67,7 +67,7 @@ describe("the state the build before First sync left, made from the current buil
 
 		await downgradeToSchema3(app);
 
-		expect(app.loadLocalStorage("obsync-connection")).toEqual({
+		expect(app.loadLocalStorage("seamsync-connection")).toEqual({
 			formatVersion: 1,
 			connection: { accountId: "a1", remoteRoot: "/My vault", device: { id: "d1", name: "Laptop" } },
 		});
@@ -86,7 +86,7 @@ describe("the state the build before First sync left, made from the current buil
 
 	it("fails for a database that is not a snapshot database, or none named", async () => {
 		const app = new FakeApp();
-		app.saveLocalStorage("obsync-snapshot-database", { formatVersion: 1, name: "schema-3-missing" });
+		app.saveLocalStorage("seamsync-snapshot-database", { formatVersion: 1, name: "schema-3-missing" });
 
 		await expect(downgradeToSchema3(app)).rejects.toThrow(/not a snapshot database: it has no entries, bases, feed/);
 		await expect(downgradeToSchema3(new FakeApp())).rejects.toThrow(/no snapshot database named/);

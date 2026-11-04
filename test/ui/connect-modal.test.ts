@@ -76,8 +76,8 @@ function submitCode(modal: ConnectModal): void {
 /** The message, detail line and copy button `modal` shows at the top. */
 function shown(modal: ConnectModal): { message: string; detail: string; copy: boolean } {
 	return {
-		message: modal.contentEl.querySelector(".obsync-message")?.textContent ?? "",
-		detail: modal.contentEl.querySelector(".obsync-message-detail")?.textContent ?? "",
+		message: modal.contentEl.querySelector(".seamsync-message")?.textContent ?? "",
+		detail: modal.contentEl.querySelector(".seamsync-message-detail")?.textContent ?? "",
 		copy: button(modal, strings.copyError) !== undefined,
 	};
 }
@@ -156,7 +156,7 @@ describe("the connect window's failures", () => {
 		await vi.waitFor(() =>
 			expect(shown(modal)).toEqual({ message: strings.connectUnexpected, detail: "Details: TypeError: boom", copy: true }),
 		);
-		expect(consoleError).toHaveBeenCalledWith("obsync: connecting failed unexpectedly", unexpected);
+		expect(consoleError).toHaveBeenCalledWith("seamsync: connecting failed unexpectedly", unexpected);
 	});
 
 	it.each([

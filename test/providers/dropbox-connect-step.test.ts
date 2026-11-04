@@ -102,7 +102,7 @@ describe("Dropbox setup requests", () => {
 	it("sends every RPC call as JSON, a route without an argument with null", async () => {
 		const setup = setUp();
 		const vault = await access(setup);
-		await vault.listRoots(".obsync");
+		await vault.listRoots(".seamsync");
 		await vault.revoke();
 
 		const rpcCalls = setup.dropbox.requests.filter((request) => request.url.startsWith("https://api.dropboxapi.com/2/"));
@@ -151,7 +151,7 @@ describe("Dropbox setup requests", () => {
 		for (const name of ["A", "B", "C"]) setup.account.putFolder(`/${name}`);
 		setup.account.putFile("/loose.md", bytes("not a folder"), "rev1");
 		setup.dropbox.listPageSize = 1;
-		const roots = await (await access(setup)).listRoots(".obsync");
+		const roots = await (await access(setup)).listRoots(".seamsync");
 		expect(roots.map((root) => root.name)).toEqual(["A", "B", "C"]);
 	});
 
@@ -159,9 +159,9 @@ describe("Dropbox setup requests", () => {
 		const setup = setUp();
 		setup.account.putFolder("/My Vault");
 		const vault = await access(setup);
-		const [root] = await vault.listRoots(".obsync");
-		await vault.openRoot(root?.root ?? "").createFolder(".obsync");
-		expect(setup.account.get("/my vault/.obsync")?.kind).toBe("folder");
+		const [root] = await vault.listRoots(".seamsync");
+		await vault.openRoot(root?.root ?? "").createFolder(".seamsync");
+		expect(setup.account.get("/my vault/.seamsync")?.kind).toBe("folder");
 	});
 });
 
@@ -169,10 +169,10 @@ describe("Dropbox access tokens", () => {
 	it("refreshes an access token past its expires_in before using it, with no refused request", async () => {
 		const setup = setUp();
 		const vault = await access(setup);
-		await vault.listRoots(".obsync");
+		await vault.listRoots(".seamsync");
 		setup.clock.advance(ACCESS_TOKEN_SECONDS * 1000);
 
-		await vault.listRoots(".obsync");
+		await vault.listRoots(".seamsync");
 
 		expect(requestsTo(setup.dropbox, "files/list_folder")).toBe(2);
 		expect(requestsTo(setup.dropbox, "oauth2/token")).toBe(3);
@@ -181,10 +181,10 @@ describe("Dropbox access tokens", () => {
 	it("refreshes an access token a minute before its expiry", async () => {
 		const setup = setUp();
 		const vault = await access(setup);
-		await vault.listRoots(".obsync");
+		await vault.listRoots(".seamsync");
 		setup.clock.advance(ACCESS_TOKEN_SECONDS * 1000 - 60_000);
 
-		await vault.listRoots(".obsync");
+		await vault.listRoots(".seamsync");
 
 		expect(requestsTo(setup.dropbox, "oauth2/token")).toBe(3);
 	});
@@ -192,10 +192,10 @@ describe("Dropbox access tokens", () => {
 	it("keeps the access token while it is far from expiry", async () => {
 		const setup = setUp();
 		const vault = await access(setup);
-		await vault.listRoots(".obsync");
+		await vault.listRoots(".seamsync");
 		setup.clock.advance(ACCESS_TOKEN_SECONDS * 500);
 
-		await vault.listRoots(".obsync");
+		await vault.listRoots(".seamsync");
 
 		expect(requestsTo(setup.dropbox, "oauth2/token")).toBe(2);
 	});
@@ -208,7 +208,7 @@ describe("Dropbox failures", () => {
 		setup.dropbox.interceptions.push(
 			json(429, { error_summary: "too_many_requests/", error: { reason: { ".tag": "too_many_requests" }, retry_after: 7 } }),
 		);
-		const error = await rejection(vault.listRoots(".obsync"));
+		const error = await rejection(vault.listRoots(".seamsync"));
 		expect(error).toBeInstanceOf(ProviderError);
 		expect((error as ProviderError).failure).toEqual({ category: "throttled", retryAfterMs: 7000 });
 	});
@@ -217,7 +217,7 @@ describe("Dropbox failures", () => {
 		const setup = setUp();
 		const vault = await access(setup);
 		setup.dropbox.interceptions.push({ ...status(429, "slow down"), headers: { "Retry-After": "3" } });
-		const error = await rejection(vault.listRoots(".obsync"));
+		const error = await rejection(vault.listRoots(".seamsync"));
 		expect((error as ProviderError).failure).toEqual({ category: "throttled", retryAfterMs: 3000 });
 	});
 
@@ -225,7 +225,7 @@ describe("Dropbox failures", () => {
 		const setup = setUp();
 		const vault = await access(setup);
 		setup.dropbox.interceptions.push(status(503, "unavailable"));
-		await expectFailure(vault.listRoots(".obsync"), "transient");
+		await expectFailure(vault.listRoots(".seamsync"), "transient");
 	});
 
 	it("maps no response at all to transient", async () => {
@@ -273,13 +273,13 @@ describe("Dropbox failure details", () => {
 		const attempt = await setup.connectStep.startAuthorization();
 		const { secret } = await attempt.complete(setup.dropbox.approve(attempt.authorizeUrl, setup.account));
 		const accountAccess = setup.connectStep.access(secret);
-		await accountAccess.listRoots(".obsync");
+		await accountAccess.listRoots(".seamsync");
 		const lastRequest = setup.dropbox.requests[setup.dropbox.requests.length - 1];
 		const accessToken = /^Bearer (.+)$/.exec(lastRequest?.headers?.Authorization ?? "")?.[1] ?? "";
 		expect(accessToken).not.toBe("");
 		setup.dropbox.interceptions.push(status(403, "app is disabled"));
 
-		const error = await rejection(accountAccess.listRoots(".obsync"));
+		const error = await rejection(accountAccess.listRoots(".seamsync"));
 
 		const detail = failureDetail(error);
 		expect(detail).toBe("HTTP 403: app is disabled");
@@ -293,7 +293,7 @@ describe("Dropbox failure details", () => {
 		const accountAccess = setup.connectStep.access(secret);
 		setup.dropbox.interceptions.push(routeError("other/", { ".tag": "other" }));
 
-		const error = await rejection(accountAccess.listRoots(".obsync"));
+		const error = await rejection(accountAccess.listRoots(".seamsync"));
 
 		const detail = failureDetail(error);
 		expect(detail).toContain('{".tag":"other"}');
@@ -321,7 +321,7 @@ describe("Dropbox failure details", () => {
 		setup.dropbox.expireAccessTokens();
 		setup.dropbox.interceptions.push(status(400, "Error in call to API function"));
 
-		const error = await rejection(accountAccess.listRoots(".obsync"));
+		const error = await rejection(accountAccess.listRoots(".seamsync"));
 
 		const detail = failureDetail(error);
 		expect(detail).toBe("HTTP 400: Error in call to API function");

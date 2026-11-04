@@ -205,12 +205,12 @@ describe("the app key the build takes", () => {
 	afterEach(() => vi.unstubAllEnvs());
 
 	it("is read from the environment", () => {
-		vi.stubEnv("OBSYNC_DROPBOX_APP_KEY", "the-key");
+		vi.stubEnv("SEAMSYNC_DROPBOX_APP_KEY", "the-key");
 		expect(dropboxAppKey()).toBe("the-key");
 	});
 
 	it("is refused when the environment holds none", () => {
-		vi.stubEnv("OBSYNC_DROPBOX_APP_KEY", "");
-		expect(() => dropboxAppKey()).toThrow("Set OBSYNC_DROPBOX_APP_KEY, in the environment or in .env");
+		vi.stubEnv("SEAMSYNC_DROPBOX_APP_KEY", "");
+		expect(() => dropboxAppKey()).toThrow("Set SEAMSYNC_DROPBOX_APP_KEY, in the environment or in .env");
 	});
 });

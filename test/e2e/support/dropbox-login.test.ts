@@ -169,7 +169,7 @@ describe("the connect window, driven in the page", () => {
 		let connect = vi.fn();
 		const commands = {
 			executeCommandById: (id: string) => {
-				if (id === "obsync:open-sync-window") connect = buttonIn(modal("obsync-sync-window"), strings.connect);
+				if (id === "seamsync:open-sync-window") connect = buttonIn(modal("seamsync-sync-window"), strings.connect);
 			},
 		};
 		await runInPage(`${PAGE_HELPERS}${openConnectWindowProgram(strings)}`, { app: { commands } });
@@ -230,7 +230,7 @@ function deviceWith({ secret, token = { status: 200, json: { access_token: "acce
 		const row = element("div", "setting-item mod-action");
 		row.append(element("div", "setting-item-name", strings.disconnect));
 		row.addEventListener("click", () => {
-			events.push(`Disconnect pressed, flag ${String(globals.obsyncE2eDisconnectPressed)}`);
+			events.push(`Disconnect pressed, flag ${String(globals.seamsyncE2eDisconnectPressed)}`);
 			document.body.append(element("div", "notice", disconnect));
 		});
 		tab.append(row);
@@ -240,7 +240,7 @@ function deviceWith({ secret, token = { status: 200, json: { access_token: "acce
 		setting: {
 			open: () => events.push("settings opened"),
 			openTabById: (id: string) => events.push(`tab ${id}`),
-			activeTab: { id: "obsync", containerEl: tab },
+			activeTab: { id: "seamsync", containerEl: tab },
 			close: () => events.push("settings closed"),
 		},
 	};
@@ -252,7 +252,7 @@ function deviceWith({ secret, token = { status: 200, json: { access_token: "acce
 		return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
 	};
 	const device = {
-		pluginId: "obsync",
+		pluginId: "seamsync",
 		strings: () => Promise.resolve(strings),
 		eval: (body: string) => {
 			bodies.push(body);
@@ -266,7 +266,7 @@ function deviceWith({ secret, token = { status: 200, json: { access_token: "acce
 describe("leaving Dropbox after a run", () => {
 	const notFound = { status: 409, json: { error_summary: "path_lookup/not_found/..", error: { ".tag": "path_lookup", path_lookup: { ".tag": "not_found" } } } };
 
-	beforeEach(() => vi.stubEnv("OBSYNC_DROPBOX_APP_KEY", "the-key"));
+	beforeEach(() => vi.stubEnv("SEAMSYNC_DROPBOX_APP_KEY", "the-key"));
 	afterEach(() => vi.unstubAllEnvs());
 
 	it("sends nothing and presses nothing when the plugin has no login", async () => {
@@ -277,7 +277,7 @@ describe("leaving Dropbox after a run", () => {
 
 	it("sends nothing and presses nothing once Disconnect was pressed in the page", async () => {
 		const { device, events, globals } = deviceWith({ secret: "refresh", disconnect: strings.noticeDisconnected });
-		globals.obsyncE2eDisconnectPressed = true;
+		globals.seamsyncE2eDisconnectPressed = true;
 		await leaveDropbox(device, "e2e-run", { deleteFolder: true });
 		expect(events).toEqual([]);
 	});
@@ -289,7 +289,7 @@ describe("leaving Dropbox after a run", () => {
 			"oauth2/token",
 			`2/files/delete_v2 ${JSON.stringify({ path: "/e2e-run" })}`,
 			"settings opened",
-			"tab obsync",
+			"tab seamsync",
 			"Disconnect pressed, flag true",
 			"settings closed",
 		]);
@@ -298,7 +298,7 @@ describe("leaving Dropbox after a run", () => {
 	it("only presses Disconnect when the folder is not its to delete, with no app key in the page", async () => {
 		const { device, events, bodies } = deviceWith({ secret: "refresh", disconnect: strings.noticeDisconnected });
 		await leaveDropbox(device, "e2e-run", { deleteFolder: false });
-		expect(events).toEqual(["settings opened", "tab obsync", "Disconnect pressed, flag true", "settings closed"]);
+		expect(events).toEqual(["settings opened", "tab seamsync", "Disconnect pressed, flag true", "settings closed"]);
 		expect(bodies.join("\n")).not.toContain("the-key");
 	});
 
@@ -353,7 +353,7 @@ describe("whether a device still has a login to leave", () => {
 	it("is no without one, or once Disconnect was pressed", async () => {
 		expect(await hasLogin(deviceWith({ secret: null }).device)).toBe(false);
 		const pressed = deviceWith({ secret: "refresh" });
-		pressed.globals.obsyncE2eDisconnectPressed = true;
+		pressed.globals.seamsyncE2eDisconnectPressed = true;
 		expect(await hasLogin(pressed.device)).toBe(false);
 	});
 });
@@ -362,6 +362,6 @@ describe("Disconnect, pressed in the page", () => {
 	it("leaves the notice it ended with, and closes the settings", async () => {
 		const { device, events } = deviceWith({ secret: "refresh", disconnect: strings.noticeDisconnectFailed });
 		expect(await device.eval(`${PAGE_HELPERS}\n${disconnectProgram(strings)}\nreturn notice;`)).toBe(strings.noticeDisconnectFailed);
-		expect(events).toEqual(["settings opened", "tab obsync", "Disconnect pressed, flag true", "settings closed"]);
+		expect(events).toEqual(["settings opened", "tab seamsync", "Disconnect pressed, flag true", "settings closed"]);
 	});
 });

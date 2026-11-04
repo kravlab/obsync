@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
-import ObsyncPlugin from "../src/main";
+import SeamsyncPlugin from "../src/main";
 import type { HttpRequest } from "../src/providers/dropbox/http";
 import { selectStrings } from "../src/ui/i18n/strings";
 import { FakeDropbox, json, type FakeDropboxAccount } from "./fakes/fake-dropbox";
@@ -51,7 +51,7 @@ function answerWith(dropbox: FakeDropbox): void {
 
 /** Starts the plugin in `app` and makes the layout ready; returns it as the fake Plugin it runs on. */
 async function startPlugin(app: FakeApp): Promise<FakePlugin> {
-	const plugin = new ObsyncPlugin(app as never, pluginManifest(app) as never);
+	const plugin = new SeamsyncPlugin(app as never, pluginManifest(app) as never);
 	await plugin.onload();
 	app.workspace.makeLayoutReady();
 	const fake = plugin as unknown as FakePlugin;
@@ -107,7 +107,7 @@ async function startedWithNote() {
 describe("the plugin unloaded before Obsidian's layout is ready", () => {
 	it("starts no engine and listens for nothing once the layout gets ready", async () => {
 		const app = new FakeApp("My vault");
-		const plugin = new ObsyncPlugin(app as never, pluginManifest(app) as never);
+		const plugin = new SeamsyncPlugin(app as never, pluginManifest(app) as never);
 		await plugin.onload();
 		(plugin as unknown as FakePlugin).unload();
 		const documentListeners = vi.spyOn(document, "addEventListener");
@@ -127,7 +127,7 @@ describe("the plugin unloaded before Obsidian's layout is ready", () => {
 
 	it("draws no settings tab once unloaded while onload was waiting", async () => {
 		const app = new FakeApp("My vault");
-		const plugin = new ObsyncPlugin(app as never, pluginManifest(app) as never);
+		const plugin = new SeamsyncPlugin(app as never, pluginManifest(app) as never);
 
 		const loading = plugin.onload();
 		(plugin as unknown as FakePlugin).unload();

@@ -119,11 +119,11 @@ describe("connecting and disconnecting in the running plugin", { timeout: DEVICE
 		expect(dropbox.requests.length).toBe(requestsBefore);
 	});
 
-	it("appends a failed connect's line to obsync.log in the plugin's folder", async () => {
+	it("appends a failed connect's line to seamsync.log in the plugin's folder", async () => {
 		const { devices } = newDevices();
 		const laptop = await devices.start("Laptop vault");
 		// Spelled out as the spec names it, not taken from the manifest the test loads the plugin with.
-		const log = `${laptop.app.vault.configDir}/plugins/obsync/obsync.log`;
+		const log = `${laptop.app.vault.configDir}/plugins/seamsync/seamsync.log`;
 		const failure = fill(strings.activityConnectFailed, { cause: strings.connectFailureCodeRejected });
 
 		openConnectWindow(laptop.root, laptop.plugin);

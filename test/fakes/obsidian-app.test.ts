@@ -345,9 +345,9 @@ describe("the fake app's storage", () => {
 	it("keeps secrets by id", () => {
 		const app = new FakeApp();
 
-		app.secretStorage.setSecret("obsync-dropbox", "token");
+		app.secretStorage.setSecret("seamsync-dropbox", "token");
 
-		expect(app.secretStorage.getSecret("obsync-dropbox")).toBe("token");
+		expect(app.secretStorage.getSecret("seamsync-dropbox")).toBe("token");
 		expect(app.secretStorage.getSecret("other")).toBeNull();
 	});
 

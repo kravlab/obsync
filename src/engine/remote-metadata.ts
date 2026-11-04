@@ -15,7 +15,7 @@ import { isFailure, type Provider, type RemoteContent, type RemotePath } from ".
 import { decodeUtf8 } from "./utf8";
 
 /** The Metadata folder's name at the Remote root. */
-export const METADATA_FOLDER: RemotePath = ".obsync";
+export const METADATA_FOLDER: RemotePath = ".seamsync";
 
 /** Where the shared Remote settings live. */
 export const SETTINGS_PATH: RemotePath = `${METADATA_FOLDER}/settings.json`;

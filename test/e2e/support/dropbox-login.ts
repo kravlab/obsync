@@ -13,7 +13,7 @@ export const LOGIN_TIMEOUT_MS = 120_000;
 const LOOK_PAUSE_MS = 1500;
 
 /** The page flag set right before Disconnect is pressed (see `disconnectProgram`). */
-const DISCONNECT_PRESSED = "obsyncE2eDisconnectPressed";
+const DISCONNECT_PRESSED = "seamsyncE2eDisconnectPressed";
 
 /** A browser whose page runs an eval body (see `evalProgram`), as the phone's does. */
 export interface Browser {
@@ -37,7 +37,7 @@ export const LOOK_PROGRAM = `
 	return {
 		address: location.href,
 		authorizePage: location.hostname === "www.dropbox.com" && location.pathname === "/oauth2/authorize",
-		primary: shown !== null && shown.dataset.obsyncE2ePressed !== shown.textContent,
+		primary: shown !== null && shown.dataset.seamsyncE2ePressed !== shown.textContent,
 	};`;
 
 /**
@@ -49,8 +49,8 @@ export const LOOK_PROGRAM = `
  */
 export const PRESS_PROGRAM = `
 	const toPress = document.querySelector("button.dig-Button--primary");
-	if (toPress !== null && toPress.dataset.obsyncE2ePressed !== toPress.textContent) {
-		toPress.dataset.obsyncE2ePressed = toPress.textContent;
+	if (toPress !== null && toPress.dataset.seamsyncE2ePressed !== toPress.textContent) {
+		toPress.dataset.seamsyncE2ePressed = toPress.textContent;
 		toPress.click();
 	}`;
 

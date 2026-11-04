@@ -3,6 +3,6 @@ import { providerSecretId } from "../../src/engine/ports";
 
 describe("providerSecretId", () => {
 	it("prefixes the provider id with the plugin id", () => {
-		expect(providerSecretId("dropbox")).toBe("obsync-dropbox");
+		expect(providerSecretId("dropbox")).toBe("seamsync-dropbox");
 	});
 });

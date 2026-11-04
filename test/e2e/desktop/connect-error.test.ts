@@ -20,8 +20,8 @@ describe("check 3: the connect window's error", () => {
 			input.value = "a-code-never-sent";
 			input.dispatchEvent(new Event("input"));
 			(await button(${JSON.stringify(strings.continue)})).click();
-			const message = await until(() => [...activeDocument.querySelectorAll(".obsync-message")].find((m) => m.textContent), 30000, "the error message");
-			const detail = message.parentElement.querySelector(".obsync-message-detail");
+			const message = await until(() => [...activeDocument.querySelectorAll(".seamsync-message")].find((m) => m.textContent), 30000, "the error message");
+			const detail = message.parentElement.querySelector(".seamsync-message-detail");
 			return {
 				message: message.textContent,
 				detail: detail.textContent,

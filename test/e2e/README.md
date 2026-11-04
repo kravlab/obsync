@@ -40,7 +40,7 @@ process groups.
   downloads the release of Obsidian that `obsidian` in `package.json`'s
   `devDependencies` names, from `obsidianmd/obsidian-releases`, and checks
   it against the sha256 the release states.
-- `OBSYNC_DROPBOX_APP_KEY`, the plugin's Dropbox app key, in the
+- `SEAMSYNC_DROPBOX_APP_KEY`, the plugin's Dropbox app key, in the
   environment or in `.env` at the repository root: `pnpm build` needs it,
   and the Android and pair runs use it to reach Dropbox with the plugin's
   login.
@@ -110,23 +110,23 @@ The SHA-1 is the one Google's repository manifest
 ### 3. Virtual device
 
 The device lives in `.e2e/android/avd/`, which the run passes to the
-emulator as `ANDROID_AVD_HOME`. Pick a name, e.g. `obsync-e2e`, and write
+emulator as `ANDROID_AVD_HOME`. Pick a name, e.g. `seamsync-e2e`, and write
 two files, with `<repo>` standing for the repository's absolute path.
 
-`.e2e/android/avd/obsync-e2e.ini`:
+`.e2e/android/avd/seamsync-e2e.ini`:
 
 ```ini
 avd.ini.encoding=UTF-8
-path=<repo>/.e2e/android/avd/obsync-e2e.avd
+path=<repo>/.e2e/android/avd/seamsync-e2e.avd
 target=android-37.0
 ```
 
-`.e2e/android/avd/obsync-e2e.avd/config.ini`:
+`.e2e/android/avd/seamsync-e2e.avd/config.ini`:
 
 ```ini
 avd.ini.encoding=UTF-8
-AvdId=obsync-e2e
-avd.ini.displayname=obsync-e2e
+AvdId=seamsync-e2e
+avd.ini.displayname=seamsync-e2e
 abi.type=x86_64
 hw.cpu.arch=x86_64
 tag.id=default
@@ -146,7 +146,7 @@ PlayStore.enabled=false
 ```
 
 The device takes 2 GB of RAM and 4 cores while it runs. Name it to the
-run by `OBSYNC_E2E_AVD=obsync-e2e`, in the environment or in `.env`.
+run by `SEAMSYNC_E2E_AVD=seamsync-e2e`, in the environment or in `.env`.
 
 ### 4. Dropbox test account
 
@@ -158,7 +158,7 @@ once, starting the device as the run does:
 
 ```sh
 ANDROID_AVD_HOME="$PWD/.e2e/android/avd" "$ANDROID_SDK_ROOT/emulator/emulator" \
-  -avd obsync-e2e -sysdir .e2e/android/sys-img/x86_64 -port 5584 -no-audio -no-snapshot
+  -avd seamsync-e2e -sysdir .e2e/android/sys-img/x86_64 -port 5584 -no-audio -no-snapshot
 ```
 
 When it has booted, open Dropbox in its browser and log in:

@@ -56,7 +56,7 @@ describe("the sha256 of a file", () => {
 	});
 
 	it("is the hex digest of its bytes", async () => {
-		dir = await mkdtemp(join(tmpdir(), "obsync-sha-"));
+		dir = await mkdtemp(join(tmpdir(), "seamsync-sha-"));
 		const file = join(dir, "abc");
 		await writeFile(file, "abc");
 		expect(await sha256Of(file)).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
@@ -84,7 +84,7 @@ describe("the APK a run installs", () => {
 	}
 
 	it("is downloaded the first time, with the sha256 the release states kept beside it", async () => {
-		dir = await mkdtemp(join(tmpdir(), "obsync-apk-"));
+		dir = await mkdtemp(join(tmpdir(), "seamsync-apk-"));
 		const asked = github(SHA_NEW, "new");
 		const apk = await ensureApk(dir, "1.2.3");
 		expect(apk).toBe(join(dir, apkName("1.2.3")));
@@ -94,7 +94,7 @@ describe("the APK a run installs", () => {
 	});
 
 	it("is the one already there, with no request, while its bytes still have the sha256 kept beside it", async () => {
-		dir = await mkdtemp(join(tmpdir(), "obsync-apk-"));
+		dir = await mkdtemp(join(tmpdir(), "seamsync-apk-"));
 		const apk = join(dir, apkName("1.2.3"));
 		await writeFile(apk, "abc");
 		await writeFile(`${apk}.sha256`, SHA_ABC);
@@ -105,7 +105,7 @@ describe("the APK a run installs", () => {
 	});
 
 	it("is downloaded again when the one there no longer has the sha256 kept beside it, or none is kept", async () => {
-		dir = await mkdtemp(join(tmpdir(), "obsync-apk-"));
+		dir = await mkdtemp(join(tmpdir(), "seamsync-apk-"));
 		const apk = join(dir, apkName("1.2.3"));
 		await writeFile(apk, "abc, damaged");
 		await writeFile(`${apk}.sha256`, SHA_ABC);
@@ -121,7 +121,7 @@ describe("the APK a run installs", () => {
 	});
 
 	it("is refused when the download's sha256 is not the one the release states, and nothing is kept", async () => {
-		dir = await mkdtemp(join(tmpdir(), "obsync-apk-"));
+		dir = await mkdtemp(join(tmpdir(), "seamsync-apk-"));
 		github(SHA_ABC, "new");
 		await expect(ensureApk(dir, "1.2.3")).rejects.toThrow(`sha256 ${SHA_NEW}, the release states ${SHA_ABC}`);
 		expect(existsSync(join(dir, apkName("1.2.3")))).toBe(false);
