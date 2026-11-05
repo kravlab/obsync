@@ -1,6 +1,7 @@
 # Automating the manual checks
 
-Status: draft 2026-10-24
+Status: approved 2026-10-24; implemented in da6a4b3 and 137d094, except
+check 14 for the First sync and Deletion guard windows (#6)
 
 ## Problem
 

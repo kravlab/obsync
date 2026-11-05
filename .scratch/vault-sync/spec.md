@@ -1,6 +1,7 @@
 # Vault sync plugin: first release
 
-Status: ready-for-agent
+Status: implemented through `.scratch/vault-sync-impl/` (tickets 01-16);
+open: the inactive-device threshold (#8)
 
 Decisions behind this spec live on the vault-sync wayfinder map and its tickets, in ADRs 0001–0004, and in the project glossary, whose vocabulary this spec uses throughout.
 

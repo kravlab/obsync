@@ -1,6 +1,6 @@
 # Fixes from the full code review
 
-Status: draft 2026-10-24
+Status: approved 2026-10-24; implemented in dbfd750
 
 ## Problem
 
