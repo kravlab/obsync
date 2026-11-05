@@ -1,6 +1,6 @@
 # No test notices the engine taking its own renames for the user's
 
-Status: needs-triage
+Status: moved
 
 ## Problem
 
@@ -29,3 +29,5 @@ a test that shows it (with `fake-vault.ts` telling the events inside a
 folder as Obsidian does); if not, whether the guard is needed.
 
 ## Comments
+
+- 2026-11-04: moved to GitHub issue #4.

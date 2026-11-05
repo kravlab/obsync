@@ -420,7 +420,7 @@ From the map's First provider choice and First provider auth design tickets, ADR
   - the merge library;
   - how remote changes are written into an open editor without moving the cursor.
 - **Release checklist:**
-  - Obsidian community plugin rules: only `main.js`, `manifest.json` and `styles.css` are installed; no telemetry; the README discloses network use and the Dropbox account requirement; prefer `requestUrl`.
+  - Obsidian community plugin rules: only `main.js`, `manifest.json` and `styles.css` are installed; no telemetry; the README discloses network use and the Dropbox account requirement (not done yet: #12); prefer `requestUrl`.
   - Dropbox production review: once 50 users link the app, approval must come within two weeks or new links freeze.
   - The Dropbox app name may not contain "Dropbox", cannot change after production status, and names the user's `Apps/` folder.
 - **Testing strategy:** the seams above, plus manual multi-device checks.
@@ -429,7 +429,7 @@ From the map's First provider choice and First provider auth design tickets, ADR
   - how Obsidian reacts to configuration files changing on disk while it runs;
   - whether the ribbon icon can change at runtime;
   - the `delete_v2` `parent_rev` mismatch error;
-  - what happens to a Connection when the user renames or deletes the App Folder;
-  - whether a password change revokes refresh tokens;
-  - whether the `Apps` folder name is localised.
+  - what happens to a Connection when the user renames or deletes the App Folder (not verified yet: #9);
+  - whether a password change revokes refresh tokens (not verified yet: #10);
+  - whether the `Apps` folder name is localised (not verified yet: #11).
 - **Installing on iOS for testing.** Hidden folders are not reachable there. Templater JavaScript execution commands work on iOS and were used to install the probe plugin.

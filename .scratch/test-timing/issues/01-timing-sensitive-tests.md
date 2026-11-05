@@ -1,6 +1,6 @@
 # Timing-sensitive tests fail under CPU load
 
-Status: needs-triage
+Status: moved
 
 ## Problem
 
@@ -34,3 +34,4 @@ setups (2026-10-25). The spread follows the load from other processes.
 ## Comments
 
 - 2026-10-28: two tests of `test/e2e/support/obsidian-release.test.ts` ("the sha256 of a file is the hex digest of its bytes" and "the APK a run installs is downloaded the first time, with the sha256 the release states kept beside it") failed once in a full `pnpm test` run, during the checks of ticket 16 (onboarding and help), which did not touch that file. They passed run alone and in the next two full runs. Their failure messages were not kept, so the cause is not known; another case of a test failing only under the load of a full run.
+- 2026-11-04: moved to GitHub issue #5.

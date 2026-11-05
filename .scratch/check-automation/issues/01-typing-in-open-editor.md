@@ -1,6 +1,6 @@
 # Typing in an open editor is not covered by a test
 
-Status: needs-triage
+Status: moved
 
 ## Problem
 
@@ -38,3 +38,5 @@ Whether `editor-change` fires synchronously inside Obsidian's
 assumes it. The desktop run (step 13) can observe it.
 
 ## Comments
+
+- 2026-11-04: moved to GitHub issue #1.

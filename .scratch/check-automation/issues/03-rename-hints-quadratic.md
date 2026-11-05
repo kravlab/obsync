@@ -1,6 +1,6 @@
 # Finding a folder's renames takes time quadratic in its files
 
-Status: needs-triage
+Status: moved
 
 ## Problem
 
@@ -25,3 +25,5 @@ the hints in one pass (for example, dropping hints that a folder's own
 hint already covers).
 
 ## Comments
+
+- 2026-11-04: moved to GitHub issue #2.

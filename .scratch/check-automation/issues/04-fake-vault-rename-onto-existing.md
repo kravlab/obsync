@@ -1,6 +1,6 @@
 # The fake Obsidian vault renames onto an existing path, or into itself
 
-Status: needs-triage
+Status: moved
 
 ## Problem
 
@@ -27,3 +27,5 @@ desktop run (`test/e2e/desktop/`) can record it, offline, as it recorded
 a folder's rename events; the fake then does the same.
 
 ## Comments
+
+- 2026-11-04: moved to GitHub issue #3.
