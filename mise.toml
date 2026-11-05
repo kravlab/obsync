@@ -2,13 +2,13 @@
 
 [tools]
 "github:kravlab/hostrunner" = "latest"
-gitleaks = "8.30.1"  # scans for secrets, in commits and in the history
-lefthook = "2.1.14"  # runs the git hooks (lefthook.yml)
-node = "24.21.0"  # runs the build, lint and tests
-pnpm = "12.13.0"  # installs package.json's devDependencies
-shellcheck = "0.11.0"  # lints the shell scripts
-shfmt = "3.14.1"  # formats the shell scripts
-typos = "1.51.1"  # spell-checks the sources and docs
+gitleaks = "latest"  # scans for secrets, in commits and in the history
+lefthook = "latest"  # runs the git hooks (lefthook.yml)
+node = "latest"  # runs the build, lint and tests
+pnpm = "latest"  # installs package.json's devDependencies
+shellcheck = "latest"  # lints the shell scripts
+shfmt = "latest"  # formats the shell scripts
+typos = "latest"  # spell-checks the sources and docs
 
 # Development tasks; each runs the package.json script of the same name, so
 # `mise run <task>` and `pnpm run <script>` do the same thing.
