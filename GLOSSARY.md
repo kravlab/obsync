@@ -40,6 +40,10 @@ _Avoid_: Feature, flag
 One device's authorised link to an account at a provider and to the Remote chosen there; it exists only on that device.
 _Avoid_: Login, session, account link
 
+**Login code**:
+The one-time code a provider shows in the browser after the user allows access, which the user pastes into the plugin to create a Connection.
+_Avoid_: Key, token, app key (that identifies the plugin's app at the provider)
+
 **Metadata folder**:
 The single plugin-owned folder at the root of a Remote; the only place on a Remote that holds anything other than vault files.
 _Avoid_: Control folder, config folder, `.obsidian` (that is the vault's own configuration)
