@@ -1,0 +1,6 @@
+# Commits that only reformat code, skipped by `git blame` when
+# blame.ignoreRevsFile names this file (GitHub reads it by itself).
+# One full commit hash per line.
+
+# style: format the sources with Prettier
+95cd68e81df6db922cc623eb00b385b90c4325ac
