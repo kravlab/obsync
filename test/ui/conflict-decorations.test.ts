@@ -36,7 +36,10 @@ function drawn(state: EditorState, decorations: StateField<DecorationSet>): stri
 		const spec = decoration.spec as { class?: string; block?: boolean; widget?: { text?: string; classes?: readonly string[] } };
 		if (spec.widget === undefined) byLine[line]?.push(spec.class ?? "?");
 		else if (to === from) byLine[line]?.push("actions");
-		else byLine[line]?.push(`${spec.block === true ? "line" : "inline"}: ${spec.widget.text ?? "?"} [${[...(spec.widget.classes ?? [])].sort().join(" ")}]`);
+		else
+			byLine[line]?.push(
+				`${spec.block === true ? "line" : "inline"}: ${spec.widget.text ?? "?"} [${[...(spec.widget.classes ?? [])].sort().join(" ")}]`,
+			);
 	});
 	return byLine;
 }
@@ -70,7 +73,21 @@ describe("Conflict blocks in the editor", () => {
 
 	it("gives a side's line in a block nested twice each class once", () => {
 		const decorations = field();
-		const note = ["<<<<<<< P", "<<<<<<< L", "<<<<<<< M", "x", "=======", "y", ">>>>>>> R", "=======", "z", ">>>>>>> R", "=======", "w", ">>>>>>> R"];
+		const note = [
+			"<<<<<<< P",
+			"<<<<<<< L",
+			"<<<<<<< M",
+			"x",
+			"=======",
+			"y",
+			">>>>>>> R",
+			"=======",
+			"z",
+			">>>>>>> R",
+			"=======",
+			"w",
+			">>>>>>> R",
+		];
 		const state = stateOf(note.join("\n"), decorations);
 		expect([...(drawn(state, decorations)[3] ?? [])].sort()).toEqual(["seamsync-conflict-local", "seamsync-conflict-nested-local"]);
 	});
@@ -91,7 +108,6 @@ describe("Conflict blocks in the editor", () => {
 		state = state.update({ selection: { anchor: state.doc.line(2).from } }).state;
 		expect(drawn(state, decorations)[4]).toEqual(["line: >>>>>>> Remote [seamsync-conflict-marker]"]);
 	});
-
 
 	it("redraws a marker line whose text or classes changed, and only then", () => {
 		const decorations = field();

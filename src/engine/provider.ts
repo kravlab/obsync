@@ -56,9 +56,7 @@ export type RemoteEntry = RemoteFile | RemoteFolder;
  * checked atomically there (never emulated by reading first). Only allowed
  * when the provider reports `conditionalWrite`; folders have no revision.
  */
-export type Precondition =
-	| { readonly kind: "revision"; readonly revision: string }
-	| { readonly kind: "absent" };
+export type Precondition = { readonly kind: "revision"; readonly revision: string } | { readonly kind: "absent" };
 
 /** The result of a full listing. */
 export interface Listing {

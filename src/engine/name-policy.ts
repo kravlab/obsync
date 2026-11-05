@@ -82,8 +82,7 @@ export function pathCodec(rules: NameRules, policy: NamePolicy): PathCodec {
 		if (last >= 0 && atEnd.has(characters[last] ?? "")) return null;
 		const encoded: string[] = [];
 		for (const [index, character] of characters.entries()) {
-			const forbidden =
-				rules.forbiddenCharacters.includes(character) || (index === last && rules.forbiddenAtEnd.includes(character));
+			const forbidden = rules.forbiddenCharacters.includes(character) || (index === last && rules.forbiddenAtEnd.includes(character));
 			const substitute = forbidden ? substituteOf(character) : character;
 			if (substitute === null) return null;
 			encoded.push(substitute);

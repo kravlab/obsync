@@ -20,9 +20,7 @@ export function failureDetail(error: unknown): string {
 	const text =
 		error instanceof ProviderError ? error.message : error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 	const characters = Array.from(text.replace(/\s+/g, " ").trim());
-	return characters.length > FAILURE_DETAIL_LIMIT
-		? `${characters.slice(0, FAILURE_DETAIL_LIMIT - 1).join("")}…`
-		: characters.join("");
+	return characters.length > FAILURE_DETAIL_LIMIT ? `${characters.slice(0, FAILURE_DETAIL_LIMIT - 1).join("")}…` : characters.join("");
 }
 
 /**

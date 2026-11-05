@@ -45,7 +45,9 @@ describe("shownStatus()", () => {
 	it("is the label of the element that carries one of the statuses on a phone, with counts or not", async () => {
 		addLabelled("Settings");
 		addLabelled(fill(strings.statusWithCount, { status: strings.statusOffline, count: "3" }));
-		expect(await inStatusPage("return shownStatus();")).toBe(fill(strings.statusWithCount, { status: strings.statusOffline, count: "3" }));
+		expect(await inStatusPage("return shownStatus();")).toBe(
+			fill(strings.statusWithCount, { status: strings.statusOffline, count: "3" }),
+		);
 	});
 
 	it("is null when neither the item nor a labelled element shows a status", async () => {
@@ -57,14 +59,18 @@ describe("shownStatus()", () => {
 describe("statusIs()", () => {
 	it("is true for the status alone, or with counts after it", async () => {
 		const withCount = fill(strings.statusWithCount, { status: strings.statusSynced, count: "2" });
-		const shown = await inStatusPage(`return [statusIs(${JSON.stringify(strings.statusSynced)}, ${JSON.stringify(strings.statusSynced)}), statusIs(${JSON.stringify(withCount)}, ${JSON.stringify(strings.statusSynced)})];`);
+		const shown = await inStatusPage(
+			`return [statusIs(${JSON.stringify(strings.statusSynced)}, ${JSON.stringify(strings.statusSynced)}), statusIs(${JSON.stringify(withCount)}, ${JSON.stringify(strings.statusSynced)})];`,
+		);
 		expect(shown).toEqual([true, true]);
 	});
 
 	it("is false for another status, text that only starts with the label, and what is no text", async () => {
 		const synced = JSON.stringify(strings.statusSynced);
 		const other = JSON.stringify(fill(strings.statusWithCount, { status: strings.statusSyncing, count: "2" }));
-		const shown = await inStatusPage(`return [statusIs(${JSON.stringify(strings.statusOffline)}, ${synced}), statusIs(${other}, ${synced}), statusIs(${JSON.stringify(`${strings.statusSynced} up`)}, ${synced}), statusIs(null, ${synced})];`);
+		const shown = await inStatusPage(
+			`return [statusIs(${JSON.stringify(strings.statusOffline)}, ${synced}), statusIs(${other}, ${synced}), statusIs(${JSON.stringify(`${strings.statusSynced} up`)}, ${synced}), statusIs(null, ${synced})];`,
+		);
 		expect(shown).toEqual([false, false, false, false]);
 	});
 });
@@ -180,7 +186,9 @@ describe("completeSync()", () => {
 				}, 0);
 			}
 		});
-		await expect(inStatusPage(`await completeSync("the sync");`, globals)).rejects.toThrow(/waiting for the sync \(Sync now 2 of 2\); shown: /);
+		await expect(inStatusPage(`await completeSync("the sync");`, globals)).rejects.toThrow(
+			/waiting for the sync \(Sync now 2 of 2\); shown: /,
+		);
 		expect(ran).toEqual(["seamsync:sync-now", "seamsync:sync-now"]);
 	});
 });
@@ -291,7 +299,10 @@ describe("deviceNames()", () => {
 		readonly path: string;
 		readonly bytes: Uint8Array;
 	}
-	const record = (path: string, deviceName: string): DeviceRecord => ({ path, bytes: new TextEncoder().encode(JSON.stringify({ deviceName })) });
+	const record = (path: string, deviceName: string): DeviceRecord => ({
+		path,
+		bytes: new TextEncoder().encode(JSON.stringify({ deviceName })),
+	});
 
 	/** The path a download request asks for. */
 	const askedPath = (request: Request): string => (JSON.parse(request.headers?.["Dropbox-API-Arg"] ?? "{}") as { path: string }).path;
@@ -320,7 +331,10 @@ describe("deviceNames()", () => {
 	const listed = (records: readonly DeviceRecord[], extra: object = {}): Answer => ({
 		status: 200,
 		json: {
-			entries: [{ ".tag": "folder", path_lower: `${DEVICES_PATH}/old`, name: "old" }, ...records.map(({ path, bytes }) => ({ ".tag": "file", path_lower: path, size: bytes.length }))],
+			entries: [
+				{ ".tag": "folder", path_lower: `${DEVICES_PATH}/old`, name: "old" },
+				...records.map(({ path, bytes }) => ({ ".tag": "file", path_lower: path, size: bytes.length })),
+			],
 			has_more: false,
 			...extra,
 		},

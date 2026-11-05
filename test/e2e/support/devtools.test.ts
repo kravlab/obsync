@@ -85,7 +85,11 @@ describe("a page open over DevTools", () => {
 		const value = page.evaluate("1 + 1", 1000);
 		expect(socket.url).toBe("ws://page");
 		expect(socket.sent).toEqual([
-			{ id: 1, method: "Runtime.evaluate", params: { expression: "1 + 1", awaitPromise: true, returnByValue: true, userGesture: true } },
+			{
+				id: 1,
+				method: "Runtime.evaluate",
+				params: { expression: "1 + 1", awaitPromise: true, returnByValue: true, userGesture: true },
+			},
 		]);
 		socket.answer({ id: 1, result: { result: { value: 2 } } });
 		expect(await value).toBe(2);
@@ -189,7 +193,10 @@ describe("the value of a Runtime.evaluate answer", () => {
 	});
 
 	it("throws the exception the expression raised, by its description", () => {
-		const raised = { id: 1, result: { result: {}, exceptionDetails: { text: "Uncaught", exception: { description: "SyntaxError: bad" } } } };
+		const raised = {
+			id: 1,
+			result: { result: {}, exceptionDetails: { text: "Uncaught", exception: { description: "SyntaxError: bad" } } },
+		};
 		expect(() => evaluationValue(raised)).toThrow(/in the page: SyntaxError: bad/);
 	});
 
@@ -198,7 +205,9 @@ describe("the value of a Runtime.evaluate answer", () => {
 	});
 
 	it("throws the protocol's error", () => {
-		expect(() => evaluationValue({ id: 1, error: { code: -32000, message: "Cannot find context" } })).toThrow(/DevTools: Cannot find context/);
+		expect(() => evaluationValue({ id: 1, error: { code: -32000, message: "Cannot find context" } })).toThrow(
+			/DevTools: Cannot find context/,
+		);
 	});
 
 	it("refuses what is no answer", () => {

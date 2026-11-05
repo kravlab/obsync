@@ -9,9 +9,7 @@ const MORNING = new Date(2026, 2, 5, 9, 7).getTime();
 
 describe("conflictCopyPath", () => {
 	it("names the copy after the device and the local time, before the extension, in the same folder", () => {
-		expect(conflictCopyPath("photos/Photo.png", "Phone", AFTERNOON)).toBe(
-			"photos/Photo (conflict Phone 2026-10-20 1430).png",
-		);
+		expect(conflictCopyPath("photos/Photo.png", "Phone", AFTERNOON)).toBe("photos/Photo (conflict Phone 2026-10-20 1430).png");
 	});
 
 	it("pads month, day, hour and minute to two digits", () => {
@@ -19,9 +17,7 @@ describe("conflictCopyPath", () => {
 	});
 
 	it("splits at the last dot of the file's own name, not at a dot in a folder", () => {
-		expect(conflictCopyPath("v1.2/archive.tar.gz", "Phone", AFTERNOON)).toBe(
-			"v1.2/archive.tar (conflict Phone 2026-10-20 1430).gz",
-		);
+		expect(conflictCopyPath("v1.2/archive.tar.gz", "Phone", AFTERNOON)).toBe("v1.2/archive.tar (conflict Phone 2026-10-20 1430).gz");
 	});
 
 	it("adds no extension to a name without one", () => {
@@ -122,6 +118,6 @@ describe("isConflictCopy", () => {
 	});
 
 	it("recognises every name conflictCopyPath gives", () => {
-		expect(isConflictCopy(conflictCopyPath("v1.2/archive.tar.gz", 'a/b:c', MORNING, 4))).toBe(true);
+		expect(isConflictCopy(conflictCopyPath("v1.2/archive.tar.gz", "a/b:c", MORNING, 4))).toBe(true);
 	});
 });

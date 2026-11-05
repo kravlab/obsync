@@ -5,13 +5,7 @@ import { parseMaxDeletedFiles, parseMaxDeletedPercent } from "../engine/deletion
 import type { DeviceIdentity } from "../engine/ports";
 import type { DeviceRecord, RemoteSettings } from "../engine/remote-metadata";
 import { parseRequestLimit } from "../engine/request-limit";
-import {
-	parseIgnoreList,
-	parseSizeCeiling,
-	parseTextExtensions,
-	sameSettings,
-	sizeCeilingMebibytes,
-} from "../engine/settings-change";
+import { parseIgnoreList, parseSizeCeiling, parseTextExtensions, sameSettings, sizeCeilingMebibytes } from "../engine/settings-change";
 import { parseEditPause, parsePollInterval } from "../engine/sync-schedule";
 import type { ObsidianConfigurationCategoriesStore } from "../obsidian/configuration-categories-store";
 import type { ObsidianDeletionGuardStore } from "../obsidian/deletion-guard-store";
@@ -310,9 +304,7 @@ export class SeamsyncSettingTab extends PluginSettingTab {
 				description: strings.settingsTextExtensionsDescription,
 				render: (row) => {
 					row.addText((text) =>
-						text
-							.setValue(draft.textExtensions.join(", "))
-							.onChange((typed) => edit({ textExtensions: parseTextExtensions(typed) })),
+						text.setValue(draft.textExtensions.join(", ")).onChange((typed) => edit({ textExtensions: parseTextExtensions(typed) })),
 					);
 				},
 			},
@@ -381,7 +373,8 @@ export class SeamsyncSettingTab extends PluginSettingTab {
 		const showButton = (row: Setting): void => {
 			row.addButton((button) => button.setButtonText(strings.showDevices).onClick(() => this.loadOthers()));
 		};
-		if (others === undefined) return [{ name: strings.showDevices, description: strings.settingsDeviceDescription, render: showButton }];
+		if (others === undefined)
+			return [{ name: strings.showDevices, description: strings.settingsDeviceDescription, render: showButton }];
 		if (others === null) return [{ name: strings.settingsDevicesUnavailable, description: "", render: showButton }];
 		if (others.length === 0) return [{ name: strings.settingsNoOtherDevices, description: "", render: () => undefined }];
 		return others.map((record) => ({
@@ -570,9 +563,7 @@ export class SeamsyncSettingTab extends PluginSettingTab {
 	 */
 	private async disconnect(): Promise<void> {
 		const outcome = await this.service.disconnect();
-		new Notice(
-			outcome.kind === "revokeFailed" ? this.strings.noticeDisconnectedRevokeFailed : this.strings.noticeDisconnected,
-		);
+		new Notice(outcome.kind === "revokeFailed" ? this.strings.noticeDisconnectedRevokeFailed : this.strings.noticeDisconnected);
 		await this.reload();
 	}
 }

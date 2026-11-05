@@ -84,7 +84,9 @@ export async function authorize(
 			const code = authorizationCode(page.address);
 			if (code) return code;
 			if (!page.authorizePage) {
-				throw new Error(`Dropbox showed ${new URL(page.address).pathname}, not its authorize page: log the test account in once in the emulator's browser`);
+				throw new Error(
+					`Dropbox showed ${new URL(page.address).pathname}, not its authorize page: log the test account in once in the emulator's browser`,
+				);
 			}
 			if (page.primary) await browser.browserEval(PRESS_PROGRAM).catch(() => undefined);
 		}
@@ -127,13 +129,18 @@ export function newFolderProgram(name: string, strings: Strings): string {
 
 /** Whether `device`'s plugin still holds a login that Disconnect was not pressed for: read in the page, nothing sent. */
 export async function hasLogin(device: ObsidianPage): Promise<boolean> {
-	return (await device.eval(`
+	return (
+		(await device.eval(`
 		${PLUGIN_SECRET_HELPER}
-		return !window.${DISCONNECT_PRESSED} && pluginSecret() !== null;`)) === true;
+		return !window.${DISCONNECT_PRESSED} && pluginSecret() !== null;`)) === true
+	);
 }
 
 /** What the page answered of the folder's deletion: Dropbox's answer, its refusal of the login, or a failed request. */
-type Deleted = { readonly status: number; readonly json?: { readonly error_summary?: string; readonly error?: unknown } } | { readonly refused: number } | { readonly failed: string };
+type Deleted =
+	| { readonly status: number; readonly json?: { readonly error_summary?: string; readonly error?: unknown } }
+	| { readonly refused: number }
+	| { readonly failed: string };
 
 /**
  * What a run leaves on Dropbox goes, through `device`'s own login if it
@@ -144,7 +151,11 @@ type Deleted = { readonly status: number; readonly json?: { readonly error_summa
  * pressed in the page, nor without a login. A body that deletes nothing
  * holds no app key.
  */
-export async function leaveDropbox(device: ObsidianPage, runFolder: string, { deleteFolder }: { readonly deleteFolder: boolean }): Promise<void> {
+export async function leaveDropbox(
+	device: ObsidianPage,
+	runFolder: string,
+	{ deleteFolder }: { readonly deleteFolder: boolean },
+): Promise<void> {
 	const strings = await device.strings();
 	const deletion = deleteFolder
 		? `
@@ -166,7 +177,10 @@ export async function leaveDropbox(device: ObsidianPage, runFolder: string, { de
 		${disconnectProgram(strings)}
 		return { deleted, notice };`)) as null | { deleted: Deleted | null; notice: string };
 	if (left === null) return;
-	const failures = [left.deleted === null ? null : deletionFailure(left.deleted), left.notice === strings.noticeDisconnected ? null : `disconnecting after the run: ${left.notice}`];
+	const failures = [
+		left.deleted === null ? null : deletionFailure(left.deleted),
+		left.notice === strings.noticeDisconnected ? null : `disconnecting after the run: ${left.notice}`,
+	];
 	const reported = failures.filter((failure) => failure !== null);
 	if (reported.length > 0) throw new Error(reported.join("; "));
 }

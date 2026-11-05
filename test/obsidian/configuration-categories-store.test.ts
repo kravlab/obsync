@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIGURATION_CATEGORIES } from "../../src/engine/configuration";
-import {
-	storableConfigurationCategories,
-	storedConfigurationCategories,
-} from "../../src/obsidian/configuration-categories-store";
+import { storableConfigurationCategories, storedConfigurationCategories } from "../../src/obsidian/configuration-categories-store";
 
 describe("stored configuration categories", () => {
 	it("reads a missing record as every category off", () => {

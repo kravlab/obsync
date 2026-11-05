@@ -165,9 +165,7 @@ describe("order of work", () => {
 		const before = remote.cursor();
 		/** The vault paths written to the Remote since `before`, in the order they were written; the Metadata folder aside. */
 		const written = (): string[] =>
-			(remote.changesSince(before)?.changes ?? [])
-				.map((change) => change.path)
-				.filter((path) => !isWithin(path, METADATA_FOLDER));
+			(remote.changesSince(before)?.changes ?? []).map((change) => change.path).filter((path) => !isWithin(path, METADATA_FOLDER));
 		let writtenWhenDownloading: string[] = [];
 		laptop.vault.beforeNextWrite("incoming.md", () => {
 			writtenWhenDownloading = written();
@@ -184,65 +182,66 @@ describe("order of work", () => {
 });
 
 describe("interruption safety across every step", () => {
-	it("completes the work on the next sync after crashing before or after any step: provider calls, vault writes and Device store saves", async () => {
-		for (const when of ["before", "after"] as const) {
-			let reachedCompletion = false;
-			for (let step = 1; step <= 200 && !reachedCompletion; step += 1) {
-				const remote = new FakeRemote({ changeFeed: true });
-				const laptop = connectTestDevice(remote, "Laptop");
-				const phone = connectTestDevice(remote, "Phone");
+	it(
+		"completes the work on the next sync after crashing before or after any step: provider calls, vault writes and Device store saves",
+		async () => {
+			for (const when of ["before", "after"] as const) {
+				let reachedCompletion = false;
+				for (let step = 1; step <= 200 && !reachedCompletion; step += 1) {
+					const remote = new FakeRemote({ changeFeed: true });
+					const laptop = connectTestDevice(remote, "Laptop");
+					const phone = connectTestDevice(remote, "Phone");
 
-				await laptop.vault.write("shared.md", bytes("line 1\nline 2"));
-				await syncNow(laptop);
-				await syncNow(phone);
+					await laptop.vault.write("shared.md", bytes("line 1\nline 2"));
+					await syncNow(laptop);
+					await syncNow(phone);
 
-				// Remote has a change to shared.md and a new file in a folder.
-				await laptop.vault.write("shared.md", bytes("line 1\nline 2\nfrom laptop"));
-				await laptop.vault.createFolder("remote-dir");
-				await laptop.vault.write("remote-dir/doc.md", bytes("remote doc"));
-				await syncNow(laptop);
+					// Remote has a change to shared.md and a new file in a folder.
+					await laptop.vault.write("shared.md", bytes("line 1\nline 2\nfrom laptop"));
+					await laptop.vault.createFolder("remote-dir");
+					await laptop.vault.write("remote-dir/doc.md", bytes("remote doc"));
+					await syncNow(laptop);
 
-				// Phone has a concurrent edit to shared.md, a new folder + note, and a binary file.
-				await phone.vault.write("shared.md", bytes("from phone\nline 1\nline 2"));
-				await phone.vault.createFolder("local-dir");
-				await phone.vault.write("local-dir/note.md", bytes("local note"));
-				await phone.vault.write("image.png", bytes("png-bytes"));
+					// Phone has a concurrent edit to shared.md, a new folder + note, and a binary file.
+					await phone.vault.write("shared.md", bytes("from phone\nline 1\nline 2"));
+					await phone.vault.createFolder("local-dir");
+					await phone.vault.write("local-dir/note.md", bytes("local note"));
+					await phone.vault.write("image.png", bytes("png-bytes"));
 
-				if (when === "before") phone.crash.crashBefore(step);
-				else phone.crash.crashAfter(step);
+					if (when === "before") phone.crash.crashBefore(step);
+					else phone.crash.crashAfter(step);
 
-				const outcome = await syncNow(phone).then(
-					() => "completed" as const,
-					(error: unknown) => error,
-				);
-				if (outcome === "completed") {
-					// Past the last step: every step before it crashed once.
-					reachedCompletion = true;
-					continue;
+					const outcome = await syncNow(phone).then(
+						() => "completed" as const,
+						(error: unknown) => error,
+					);
+					if (outcome === "completed") {
+						// Past the last step: every step before it crashed once.
+						reachedCompletion = true;
+						continue;
+					}
+					expect(outcome).toBeInstanceOf(SimulatedCrash);
+
+					// Next sync on a fresh engine over the same device stores finishes everything.
+					await syncNow(phone);
+					await syncNow(laptop);
+
+					expect(await vaultText(phone, "shared.md")).toBe("from phone\nline 1\nline 2\nfrom laptop");
+					expect(await vaultText(laptop, "shared.md")).toBe("from phone\nline 1\nline 2\nfrom laptop");
+					expect(await vaultText(phone, "remote-dir/doc.md")).toBe("remote doc");
+					expect(await vaultText(laptop, "local-dir/note.md")).toBe("local note");
+					expect(remoteText(remote, "image.png")).toBe("png-bytes");
+					expect(
+						mirror(remote)
+							.map((entry) => entry.path)
+							.sort(),
+					).toEqual(["image.png", "local-dir", "local-dir/note.md", "remote-dir", "remote-dir/doc.md", "shared.md"]);
 				}
-				expect(outcome).toBeInstanceOf(SimulatedCrash);
-
-				// Next sync on a fresh engine over the same device stores finishes everything.
-				await syncNow(phone);
-				await syncNow(laptop);
-
-				expect(await vaultText(phone, "shared.md")).toBe("from phone\nline 1\nline 2\nfrom laptop");
-				expect(await vaultText(laptop, "shared.md")).toBe("from phone\nline 1\nline 2\nfrom laptop");
-				expect(await vaultText(phone, "remote-dir/doc.md")).toBe("remote doc");
-				expect(await vaultText(laptop, "local-dir/note.md")).toBe("local note");
-				expect(remoteText(remote, "image.png")).toBe("png-bytes");
-				expect(mirror(remote).map((entry) => entry.path).sort()).toEqual([
-					"image.png",
-					"local-dir",
-					"local-dir/note.md",
-					"remote-dir",
-					"remote-dir/doc.md",
-					"shared.md",
-				]);
+				expect(reachedCompletion, `a sync crashing ${when} step 200 never completed`).toBe(true);
 			}
-			expect(reachedCompletion, `a sync crashing ${when} step 200 never completed`).toBe(true);
-		}
-	}, EXHAUSTIVE_TEST_TIMEOUT_MS);
+		},
+		EXHAUSTIVE_TEST_TIMEOUT_MS,
+	);
 });
 
 describe("an edit size and mtime cannot see", () => {
@@ -280,7 +279,12 @@ describe("the change feed against a full listing", () => {
 		await syncNow(laptop);
 
 		const fed = laptop.deviceStore.remoteFeed?.entries.map((entry) => entry.path).sort();
-		expect(fed).toEqual(remote.list().map((entry) => entry.path).sort());
+		expect(fed).toEqual(
+			remote
+				.list()
+				.map((entry) => entry.path)
+				.sort(),
+		);
 	});
 });
 

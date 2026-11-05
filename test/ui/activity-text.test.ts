@@ -34,7 +34,11 @@ describe("activityLine", () => {
 		["nameNotRepresentable", "Dropbox cannot store a file name", "Dropbox не может сохранить имя файла"],
 		["permanent", "Dropbox refused a request", "Dropbox отклонил запрос"],
 		["unsupportedProvider", "This provider cannot be synced", "С этим провайдером синхронизация невозможна"],
-		["unreadableSettings", "The shared settings in Dropbox are missing or unreadable", "Общих настроек в Dropbox нет или их не прочитать"],
+		[
+			"unreadableSettings",
+			"The shared settings in Dropbox are missing or unreadable",
+			"Общих настроек в Dropbox нет или их не прочитать",
+		],
 		["bug", "The plugin hit an error", "В плагине произошла ошибка"],
 	] as const)("tells why a sync failed with %s, in English and Russian", (cause: SyncFailureCause, english, russian) => {
 		const event = { at: AFTERNOON, kind: "status", status: { state: "syncFailed", cause } } as const;
@@ -72,17 +76,11 @@ describe("activityLine", () => {
 	it("tells a failure while connecting without parentheses when it has no detail", () => {
 		const event = { at: AFTERNOON, kind: "connectFailed", cause: "transient" } as const;
 
-		expect(activityLine(event, selectStrings("en"))).toBe(
-			"2026-10-20 14:30 Connecting failed. Dropbox could not be reached.",
-		);
+		expect(activityLine(event, selectStrings("en"))).toBe("2026-10-20 14:30 Connecting failed. Dropbox could not be reached.");
 	});
 
 	it.each([
-		[
-			"codeRejected",
-			"Connecting failed. Dropbox did not accept the code.",
-			"Не удалось подключиться. Dropbox не принял код.",
-		],
+		["codeRejected", "Connecting failed. Dropbox did not accept the code.", "Не удалось подключиться. Dropbox не принял код."],
 		[
 			"otherAccount",
 			"Connecting failed. This device is connected to a different Dropbox account.",
@@ -93,11 +91,7 @@ describe("activityLine", () => {
 			"Connecting failed. A folder with this name already exists.",
 			"Не удалось подключиться. Папка с таким именем уже есть.",
 		],
-		[
-			"invalidName",
-			'Connecting failed. The folder name contains "/".',
-			"Не удалось подключиться. В имени папки есть «/».",
-		],
+		["invalidName", 'Connecting failed. The folder name contains "/".', "Не удалось подключиться. В имени папки есть «/»."],
 		[
 			"unsupportedProvider",
 			"Connecting failed. This provider cannot be synced.",

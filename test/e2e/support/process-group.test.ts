@@ -31,7 +31,10 @@ function isRunning(pid: number): boolean {
  * ends as `end` says: by `signal` sent from here, or by exiting. Answers
  * whether the sleep is still alive afterwards, and how the process ended.
  */
-async function sleepAfter(end: { signal: Signal } | "exit", untie = false): Promise<{ alive: boolean; code: number | null; signal: string | null }> {
+async function sleepAfter(
+	end: { signal: Signal } | "exit",
+	untie = false,
+): Promise<{ alive: boolean; code: number | null; signal: string | null }> {
 	const program = `
 		import { spawn } from "node:child_process";
 		import { endGroupWithProcess } from ${JSON.stringify(MODULE)};
@@ -44,7 +47,9 @@ async function sleepAfter(end: { signal: Signal } | "exit", untie = false): Prom
 		setInterval(() => {}, 1000);`;
 	const node = spawn(process.execPath, ["--input-type=module", "-e", program], { stdio: ["ignore", "pipe", "inherit"] });
 	const pid = await new Promise<number>((resolve) => node.stdout.once("data", (data: Buffer) => resolve(Number(String(data).trim()))));
-	const ended = new Promise<{ code: number | null; signal: string | null }>((resolve) => node.once("exit", (code, signal) => resolve({ code, signal })));
+	const ended = new Promise<{ code: number | null; signal: string | null }>((resolve) =>
+		node.once("exit", (code, signal) => resolve({ code, signal })),
+	);
 	if (end !== "exit") node.kill(end.signal);
 	// A process that does not end by itself is killed here, so the test fails instead of hanging.
 	const stuck = setTimeout(() => node.kill("SIGKILL"), ENDING_LIMIT_MS);

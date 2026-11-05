@@ -31,7 +31,9 @@ describe("the local port adb forward chose", () => {
 
 describe("the version of an installed app", () => {
 	it("is the versionName dumpsys states", () => {
-		expect(installedVersion("Packages:\n  Package [md.obsidian]\n    versionCode=1 minSdk=24\n    versionName=1.14.4\n")).toBe("1.14.4");
+		expect(installedVersion("Packages:\n  Package [md.obsidian]\n    versionCode=1 minSdk=24\n    versionName=1.14.4\n")).toBe(
+			"1.14.4",
+		);
 	});
 
 	it("is absent for an app not installed", () => {

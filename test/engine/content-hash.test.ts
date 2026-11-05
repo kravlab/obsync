@@ -10,9 +10,7 @@ describe("contentHash", () => {
 	});
 
 	it("hashes an empty file", async () => {
-		expect(await contentHash(new ArrayBuffer(0))).toBe(
-			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		);
+		expect(await contentHash(new ArrayBuffer(0))).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 	});
 
 	it("differs for bytes that differ only in line endings", async () => {

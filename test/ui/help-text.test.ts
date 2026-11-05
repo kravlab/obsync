@@ -8,7 +8,12 @@ const en = selectStrings("en");
 
 describe("practices", () => {
 	it("are the four that avoid most conflicts, in order", () => {
-		expect(practices(en)).toEqual([en.practiceOneDeviceFirst, en.practiceEmptyOrCurrent, en.practiceWaitForSynced, en.practiceSyncAfterOffline]);
+		expect(practices(en)).toEqual([
+			en.practiceOneDeviceFirst,
+			en.practiceEmptyOrCurrent,
+			en.practiceWaitForSynced,
+			en.practiceSyncAfterOffline,
+		]);
 	});
 });
 

@@ -17,7 +17,7 @@ function crc32(bytes: Uint8Array): number {
 function chunks(png: Uint8Array): { type: string; data: Buffer; crcRight: boolean }[] {
 	const bytes = Buffer.from(png);
 	const found = [];
-	for (let at = 8; at < bytes.length; ) {
+	for (let at = 8; at < bytes.length;) {
 		const length = bytes.readUInt32BE(at);
 		const type = bytes.toString("latin1", at + 4, at + 8);
 		const data = bytes.subarray(at + 8, at + 8 + length);

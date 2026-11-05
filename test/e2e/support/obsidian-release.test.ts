@@ -77,7 +77,8 @@ describe("the APK a run installs", () => {
 		const asked: string[] = [];
 		vi.stubGlobal("fetch", (url: string) => {
 			asked.push(url);
-			if (url.includes("/releases/tags/")) return Promise.resolve(Response.json({ assets: [{ name: apkName("1.2.3"), digest: `sha256:${digest}` }] }));
+			if (url.includes("/releases/tags/"))
+				return Promise.resolve(Response.json({ assets: [{ name: apkName("1.2.3"), digest: `sha256:${digest}` }] }));
 			return Promise.resolve(new Response(bytes));
 		});
 		return asked;

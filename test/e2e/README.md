@@ -3,11 +3,11 @@
 The checks that need a real Obsidian run by three commands of their own,
 apart from `pnpm test`:
 
-| Command | What it drives | Dropbox |
-|---|---|---|
-| `pnpm test:e2e:desktop` | a desktop Obsidian with no network | not used |
-| `pnpm test:e2e:android` | Obsidian on an Android emulator | the test account, one login per run |
-| `pnpm test:e2e:pair` | both, syncing through one Remote folder | the test account, two logins per run |
+| Command                 | What it drives                          | Dropbox                              |
+| ----------------------- | --------------------------------------- | ------------------------------------ |
+| `pnpm test:e2e:desktop` | a desktop Obsidian with no network      | not used                             |
+| `pnpm test:e2e:android` | Obsidian on an Android emulator         | the test account, one login per run  |
+| `pnpm test:e2e:pair`    | both, syncing through one Remote folder | the test account, two logins per run |
 
 Each command builds the plugin first (`pnpm build`) and ends by printing
 which of the manual checks it covered. What the runs keep, the Obsidian

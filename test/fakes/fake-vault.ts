@@ -4,9 +4,7 @@ import { ManualClock } from "./manual-clock";
 import { parentOf } from "../../src/engine/paths";
 
 /** An entry as the fake vault stores it. */
-type StoredVaultEntry =
-	| { readonly kind: "file"; readonly data: ArrayBuffer; readonly mtime: number }
-	| { readonly kind: "folder" };
+type StoredVaultEntry = { readonly kind: "file"; readonly data: ArrayBuffer; readonly mtime: number } | { readonly kind: "folder" };
 
 /** How a FakeVault is set up. */
 export interface FakeVaultOptions {
@@ -47,9 +45,7 @@ export class FakeVault implements LocalVault {
 	}
 
 	list(): Promise<readonly VaultEntry[]> {
-		const entries = [...this.entries.keys()]
-			.filter((path) => this.isListed(path))
-			.map((path) => this.toEntry(path));
+		const entries = [...this.entries.keys()].filter((path) => this.isListed(path)).map((path) => this.toEntry(path));
 		return Promise.resolve(entries.filter((entry) => entry !== null));
 	}
 

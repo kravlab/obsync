@@ -40,8 +40,7 @@ export function shownSides(block: ConflictBlock, strings: Strings): readonly [Sh
 		},
 		{
 			label: block.remoteLabel === "" ? strings.conflictSecondVersion : block.remoteLabel,
-			keepLabel:
-				block.remoteLabel === "" ? strings.conflictKeepSecond : fill(strings.conflictKeep, { label: block.remoteLabel }),
+			keepLabel: block.remoteLabel === "" ? strings.conflictKeepSecond : fill(strings.conflictKeep, { label: block.remoteLabel }),
 			text: block.remote,
 			cls: REMOTE_CLASS,
 		},

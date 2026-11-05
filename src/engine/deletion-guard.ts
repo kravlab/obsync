@@ -89,16 +89,13 @@ export function guardReason(counts: DeletionCounts, settings: DeletionGuardSetti
 	if (syncedFiles === 0) return null;
 	if (vaultFiles === 0) return "missingVault";
 	if (remoteFiles === 0) return "emptyRemote";
-	const tooMany = (deleted: number): boolean =>
-		deleted > settings.maxFiles || deleted * 100 > settings.maxPercent * syncedFiles;
+	const tooMany = (deleted: number): boolean => deleted > settings.maxFiles || deleted * 100 > settings.maxPercent * syncedFiles;
 	return tooMany(toRemote) || tooMany(toVault) ? "threshold" : null;
 }
 
 /** The thresholds `maxFiles` and `maxPercent`, or null when the settings do not take either. */
 export function deletionGuardOf(maxFiles: number, maxPercent: number): DeletionGuardSettings | null {
-	return isWholeNumberIn(maxFiles, 1, MAX_FILES_LIMIT) && isWholeNumberIn(maxPercent, 1, 100)
-		? { maxFiles, maxPercent }
-		: null;
+	return isWholeNumberIn(maxFiles, 1, MAX_FILES_LIMIT) && isWholeNumberIn(maxPercent, 1, 100) ? { maxFiles, maxPercent } : null;
 }
 
 /** The file count N the user typed, or null when the setting does not take it. */

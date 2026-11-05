@@ -160,10 +160,7 @@ describe("Dropbox upload session retries", () => {
 
 	it("retries a finish refused with too_many_write_operations", async () => {
 		const { dropbox, provider, waits } = await setUp();
-		dropbox.interceptions.push(
-			null,
-			routeError("too_many_write_operations/", { ".tag": "too_many_write_operations" }),
-		);
+		dropbox.interceptions.push(null, routeError("too_many_write_operations/", { ".tag": "too_many_write_operations" }));
 		await provider.write("scan.pdf", patterned(LIMIT + 500));
 		expect(waits).toEqual([1000]);
 		expect(isPatterned(await readBytes(provider, "scan.pdf"), LIMIT + 500)).toBe(true);
@@ -280,7 +277,10 @@ describe("Dropbox per-request limit setting", () => {
 		limit = 2 * LIMIT;
 		const after = await connector.open(connection, dropbox.issueRefreshToken(account));
 		const uploadRoutes = (from: number) =>
-			dropbox.requests.slice(from).map(routeOf).filter((route) => route.startsWith("files/upload"));
+			dropbox.requests
+				.slice(from)
+				.map(routeOf)
+				.filter((route) => route.startsWith("files/upload"));
 
 		let sent = dropbox.requests.length;
 		await after.write("a.pdf", patterned(LIMIT + 500));
@@ -290,4 +290,3 @@ describe("Dropbox per-request limit setting", () => {
 		expect(uploadRoutes(sent)).toEqual(["files/upload_session/start", "files/upload_session/finish"]);
 	});
 });
-

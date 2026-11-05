@@ -182,11 +182,7 @@ function transferFailure(route: string, error: Tagged): ProviderError {
  * revision's size, whole or in a part, are `permanent`: a cut-off body is
  * never taken for the file.
  */
-export async function downloadFile(
-	client: DropboxClient,
-	path: string,
-	{ limit }: TransferRules,
-): Promise<RemoteContent> {
+export async function downloadFile(client: DropboxClient, path: string, { limit }: TransferRules): Promise<RemoteContent> {
 	const found = await client.rpc("files/get_metadata", { path });
 	if (!found.ok) throw lookupFailure("get_metadata", found.error);
 	const metadata = found.value as Metadata;

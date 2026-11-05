@@ -171,9 +171,7 @@ describe("the connect window's failures", () => {
 	it("shows a folder the provider cannot sync with the copy button", async () => {
 		const modal = await chooseFolder({ useFolder: () => Promise.resolve({ kind: "unsupportedProvider" }) });
 
-		await vi.waitFor(() =>
-			expect(shown(modal)).toEqual({ message: strings.providerUnsupported, detail: "", copy: true }),
-		);
+		await vi.waitFor(() => expect(shown(modal)).toEqual({ message: strings.providerUnsupported, detail: "", copy: true }));
 	});
 
 	it("shows another device's First sync with the copy button", async () => {

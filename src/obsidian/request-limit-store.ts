@@ -43,9 +43,7 @@ export class ObsidianRequestLimitStore {
 export function storedRequestLimit(stored: unknown): RequestLimit {
 	const record = stored as Partial<StoredRequestLimit> | null;
 	const limit =
-		typeof record === "object" &&
-		record?.formatVersion === REQUEST_LIMIT_FORMAT_VERSION &&
-		typeof record.mebibytes === "number"
+		typeof record === "object" && record?.formatVersion === REQUEST_LIMIT_FORMAT_VERSION && typeof record.mebibytes === "number"
 			? requestLimitOf(record.mebibytes)
 			: null;
 	return limit ?? DEFAULT_REQUEST_LIMIT;

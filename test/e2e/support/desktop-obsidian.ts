@@ -155,7 +155,9 @@ export class DesktopObsidian implements LanguagePage {
 			const failed = error as { code?: unknown; signal?: unknown; stdout?: string; stderr?: string };
 			const said = `${failed.stdout ?? ""}${failed.stderr ?? ""}`.trim();
 			const firstLine = body.trim().split("\n")[0];
-			throw new Error(`Obsidian CLI failed (exit ${String(failed.code)}, signal ${String(failed.signal)}) running "${firstLine}": ${said}`);
+			throw new Error(
+				`Obsidian CLI failed (exit ${String(failed.code)}, signal ${String(failed.signal)}) running "${firstLine}": ${said}`,
+			);
 		}
 		return parseEvalAnswer(stdout);
 	}

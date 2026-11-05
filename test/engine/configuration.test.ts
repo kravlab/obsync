@@ -75,7 +75,11 @@ describe("configurationCategoriesOf", () => {
 
 	it("never syncs this plugin under its id either, when this device installed it in a folder of another name", () => {
 		const renamed: ConfigurationLayout = { ...layout, pluginDir: ".vault-config/plugins/seamsync-dev" };
-		for (const path of ["plugins/seamsync-dev/data.json", "plugins/seamsync/data.json", "plugins/seamsync/configuration-conflicts/a"]) {
+		for (const path of [
+			"plugins/seamsync-dev/data.json",
+			"plugins/seamsync/data.json",
+			"plugins/seamsync/configuration-conflicts/a",
+		]) {
 			expect(configurationCategoriesOf(`${layout.configDir}/${path}`, "file", renamed), path).toEqual([]);
 		}
 		expect(configurationCategoriesOf(`${layout.configDir}/plugins/seamsync`, "folder", renamed)).toEqual([]);

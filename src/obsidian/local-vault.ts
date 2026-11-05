@@ -57,9 +57,7 @@ export class ObsidianLocalVault implements LocalVault {
 		if (!this.isConfiguration(path)) return toEntry(this.app.vault.getAbstractFileByPath(path));
 		const stat = await this.app.vault.adapter.stat(path);
 		if (stat === null) return null;
-		return stat.type === "file"
-			? { kind: "file", path, size: stat.size, mtime: stat.mtime }
-			: { kind: "folder", path };
+		return stat.type === "file" ? { kind: "file", path, size: stat.size, mtime: stat.mtime } : { kind: "folder", path };
 	}
 
 	async read(path: VaultPath): Promise<ArrayBuffer> {

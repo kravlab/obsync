@@ -19,10 +19,7 @@ describe("FakeProvider", () => {
 		const phone = remote.openProvider();
 		const { revision } = await laptop.write("note.md", bytes("one"));
 		await phone.write("note.md", bytes("from phone"));
-		await expectFailure(
-			laptop.write("note.md", bytes("from laptop"), { kind: "revision", revision }),
-			"preconditionFailed",
-		);
+		await expectFailure(laptop.write("note.md", bytes("from laptop"), { kind: "revision", revision }), "preconditionFailed");
 		expect(await readText(phone, "note.md")).toBe("from phone");
 	});
 

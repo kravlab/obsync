@@ -138,7 +138,10 @@ describe("check 8: a conflict block in the editor and in Reading view", () => {
 				const again = await until(() => (marker()?.classList.contains("cm-line") === false ? marker() : null), 10000, "the marker line shown plain again");
 				return { selections, typedIsMarker: typed.classList.contains("seamsync-conflict-marker"), againIsMarker: again.classList.contains("seamsync-conflict-marker") };
 			};
-			return { text: await click("text"), beside: await click("beside") };`)) as Record<"text" | "beside", { selections: { anchor: { line: number; ch: number }; head: unknown }[] }>;
+			return { text: await click("text"), beside: await click("beside") };`)) as Record<
+			"text" | "beside",
+			{ selections: { anchor: { line: number; ch: number }; head: unknown }[] }
+		>;
 		const line = NOTE.split("\n").indexOf(">>>>>>> Remote");
 		const length = ">>>>>>> Remote".length;
 		// One cursor, no selection, on the marker line each time.
@@ -155,7 +158,7 @@ describe("check 8: a conflict block in the editor and in Reading view", () => {
 	});
 
 	it("Live Preview: a quote of the note's own right after the block keeps its bar", async () => {
-		const bars = (await obsidian().eval(`
+		const bars = await obsidian().eval(`
 			${opened("own-quote.md", NOTE.replace("after\n", "> own quote\nafter\n"))}
 			await show("source");
 			leaf.view.editor.setCursor({ line: 0, ch: 0 });
@@ -163,7 +166,7 @@ describe("check 8: a conflict block in the editor and in Reading view", () => {
 				const found = [...leaf.view.contentEl.querySelectorAll(".cm-content > .cm-line")].filter((line) => line.textContent.includes("own quote") || line.textContent === "after");
 				return found.length === 2 ? found : null;
 			}, 10000, "the quote's lines");
-			return lines.map((line) => getComputedStyle(line, "::before").display !== "none");`));
+			return lines.map((line) => getComputedStyle(line, "::before").display !== "none");`);
 		// "after" is a lazy line of the note's quote, not of the block's.
 		expect(bars).toEqual([true, true]);
 	});

@@ -40,7 +40,11 @@ describe("the code on Dropbox's authorize page", () => {
 });
 
 describe("the authorize page, as the browser shows it", () => {
-	const authorizePage = { href: "https://www.dropbox.com/oauth2/authorize?client_id=k", hostname: "www.dropbox.com", pathname: "/oauth2/authorize" };
+	const authorizePage = {
+		href: "https://www.dropbox.com/oauth2/authorize?client_id=k",
+		hostname: "www.dropbox.com",
+		pathname: "/oauth2/authorize",
+	};
 	const primary = (label: string) => {
 		const button = element("button", "dig-Button--primary", label);
 		const clicks = vi.fn();
@@ -51,9 +55,17 @@ describe("the authorize page, as the browser shows it", () => {
 
 	it("is looked at for its address, whether it is the authorize page, and a primary button not pressed yet", async () => {
 		primary("Continue");
-		expect(await runInPage(LOOK_PROGRAM, { location: authorizePage })).toEqual({ address: authorizePage.href, authorizePage: true, primary: true });
-		expect(await runInPage(LOOK_PROGRAM, { location: { ...authorizePage, pathname: "/login" } })).toMatchObject({ authorizePage: false });
-		expect(await runInPage(LOOK_PROGRAM, { location: { ...authorizePage, hostname: "dropbox.example.com" } })).toMatchObject({ authorizePage: false });
+		expect(await runInPage(LOOK_PROGRAM, { location: authorizePage })).toEqual({
+			address: authorizePage.href,
+			authorizePage: true,
+			primary: true,
+		});
+		expect(await runInPage(LOOK_PROGRAM, { location: { ...authorizePage, pathname: "/login" } })).toMatchObject({
+			authorizePage: false,
+		});
+		expect(await runInPage(LOOK_PROGRAM, { location: { ...authorizePage, hostname: "dropbox.example.com" } })).toMatchObject({
+			authorizePage: false,
+		});
 	});
 
 	it("has its primary button pressed once, however often the press is asked while the page stays", async () => {
@@ -131,17 +143,28 @@ describe("logging in on Dropbox's authorize page", () => {
 	});
 
 	it("asks again while the browser is starting or the page navigating", async () => {
-		const device = browser([{ address: "https://www.dropbox.com/oauth2/authorize_success?auth_code=c", authorizePage: false, primary: false }], 3);
+		const device = browser(
+			[{ address: "https://www.dropbox.com/oauth2/authorize_success?auth_code=c", authorizePage: false, primary: false }],
+			3,
+		);
 		expect(await authorize(device, { timeoutMs: 1000, pauseMs: 1 })).toBe("c");
 	});
 
 	it("waits on a blank page, as the browser shows before Dropbox's", async () => {
 		const device = browser([{ address: "about:blank", authorizePage: false, primary: false }]);
-		await expect(authorize(device, { timeoutMs: 50, pauseMs: 1 })).rejects.toThrow("Dropbox's authorize page showed no code within 50 ms");
+		await expect(authorize(device, { timeoutMs: 50, pauseMs: 1 })).rejects.toThrow(
+			"Dropbox's authorize page showed no code within 50 ms",
+		);
 	});
 
 	it("presses nothing on another page, such as Dropbox's login, and names its path only", async () => {
-		const device = browser([{ address: "https://www.dropbox.com/login?cont=https%3A%2F%2Fwww.dropbox.com%2Foauth2%2Fauthorize%3Fclient_id%3Dthe-key", authorizePage: false, primary: true }]);
+		const device = browser([
+			{
+				address: "https://www.dropbox.com/login?cont=https%3A%2F%2Fwww.dropbox.com%2Foauth2%2Fauthorize%3Fclient_id%3Dthe-key",
+				authorizePage: false,
+				primary: true,
+			},
+		]);
 		const failure = authorize(device, { timeoutMs: 1000, pauseMs: 1 });
 		await expect(failure).rejects.toThrow("Dropbox showed /login, not its authorize page");
 		await expect(failure).rejects.not.toThrow(/the-key/);
@@ -216,7 +239,12 @@ type Answer = { readonly status: number; readonly json?: unknown } | Error;
  * opened and closed, and Disconnect pressed with the page flag as it then
  * was.
  */
-function deviceWith({ secret, token = { status: 200, json: { access_token: "access" } }, deleted = { status: 200, json: {} }, disconnect }: {
+function deviceWith({
+	secret,
+	token = { status: 200, json: { access_token: "access" } },
+	deleted = { status: 200, json: {} },
+	disconnect,
+}: {
 	readonly secret: string | null;
 	readonly token?: Answer;
 	readonly deleted?: Answer;
@@ -264,7 +292,10 @@ function deviceWith({ secret, token = { status: 200, json: { access_token: "acce
 }
 
 describe("leaving Dropbox after a run", () => {
-	const notFound = { status: 409, json: { error_summary: "path_lookup/not_found/..", error: { ".tag": "path_lookup", path_lookup: { ".tag": "not_found" } } } };
+	const notFound = {
+		status: 409,
+		json: { error_summary: "path_lookup/not_found/..", error: { ".tag": "path_lookup", path_lookup: { ".tag": "not_found" } } },
+	};
 
 	beforeEach(() => vi.stubEnv("SEAMSYNC_DROPBOX_APP_KEY", "the-key"));
 	afterEach(() => vi.unstubAllEnvs());
@@ -308,7 +339,10 @@ describe("leaving Dropbox after a run", () => {
 	});
 
 	it("fails on another 409, naming Dropbox's summary, and still disconnects", async () => {
-		const busy = { status: 409, json: { error_summary: "too_many_write_operations/..", error: { ".tag": "too_many_write_operations" } } };
+		const busy = {
+			status: 409,
+			json: { error_summary: "too_many_write_operations/..", error: { ".tag": "too_many_write_operations" } },
+		};
 		const { device, events } = deviceWith({ secret: "refresh", deleted: busy, disconnect: strings.noticeDisconnected });
 		await expect(leaveDropbox(device, "e2e-run", { deleteFolder: true })).rejects.toThrow(
 			"deleting the run's Remote folder: HTTP 409 too_many_write_operations/..",
@@ -317,7 +351,11 @@ describe("leaving Dropbox after a run", () => {
 	});
 
 	it("fails when Dropbox refused the plugin's login, sending no delete, and still disconnects", async () => {
-		const { device, events } = deviceWith({ secret: "refresh", token: { status: 400, json: { error: "invalid_grant" } }, disconnect: strings.noticeDisconnected });
+		const { device, events } = deviceWith({
+			secret: "refresh",
+			token: { status: 400, json: { error: "invalid_grant" } },
+			disconnect: strings.noticeDisconnected,
+		});
 		await expect(leaveDropbox(device, "e2e-run", { deleteFolder: true })).rejects.toThrow(
 			"deleting the run's Remote folder: Dropbox refused the plugin's login, HTTP 400",
 		);
@@ -327,7 +365,9 @@ describe("leaving Dropbox after a run", () => {
 
 	it("fails when a request failed, and still disconnects", async () => {
 		const { device, events } = deviceWith({ secret: "refresh", token: new Error("offline"), disconnect: strings.noticeDisconnected });
-		await expect(leaveDropbox(device, "e2e-run", { deleteFolder: true })).rejects.toThrow("deleting the run's Remote folder: Error: offline");
+		await expect(leaveDropbox(device, "e2e-run", { deleteFolder: true })).rejects.toThrow(
+			"deleting the run's Remote folder: Error: offline",
+		);
 		expect(events).toContain("Disconnect pressed, flag true");
 	});
 

@@ -148,10 +148,7 @@ describe("FakeProvider Capability toggles", () => {
 			const provider = new FakeRemote({ fileMove: true }).openProvider();
 			await provider.write("old.md", bytes("mine"));
 			await provider.write("new.md", bytes("theirs"));
-			await expectFailure(
-				reported<FileMove>(provider.capabilities.fileMove).moveFile("old.md", "new.md"),
-				"preconditionFailed",
-			);
+			await expectFailure(reported<FileMove>(provider.capabilities.fileMove).moveFile("old.md", "new.md"), "preconditionFailed");
 			expect(await readText(provider, "new.md")).toBe("theirs");
 			expect(await readText(provider, "old.md")).toBe("mine");
 		});
@@ -185,10 +182,7 @@ describe("FakeProvider Capability toggles", () => {
 			const provider = new FakeRemote({ folderMove: true }).openProvider();
 			await provider.createFolder("old");
 			await provider.createFolder("new");
-			await expectFailure(
-				reported<FolderMove>(provider.capabilities.folderMove).moveFolder("old", "new"),
-				"preconditionFailed",
-			);
+			await expectFailure(reported<FolderMove>(provider.capabilities.folderMove).moveFolder("old", "new"), "preconditionFailed");
 			expect((await provider.list()).entries).toHaveLength(2);
 		});
 	});

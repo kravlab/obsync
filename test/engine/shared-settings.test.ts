@@ -261,7 +261,11 @@ describe("a renamed device", () => {
 		phone.provider.beforeNext("write", () => {
 			const connection = phone.deviceStore.connection;
 			if (connection !== null) {
-				phone.deviceStore.connection = { ...connection, device: { ...connection.device, name: "Old phone" }, deviceRecordOutdated: true };
+				phone.deviceStore.connection = {
+					...connection,
+					device: { ...connection.device, name: "Old phone" },
+					deviceRecordOutdated: true,
+				};
 			}
 			return Promise.resolve();
 		});

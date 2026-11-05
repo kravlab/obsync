@@ -657,4 +657,3 @@ describe("this device's Connection", () => {
 function fail(): never {
 	throw new Error("unexpected state");
 }
-

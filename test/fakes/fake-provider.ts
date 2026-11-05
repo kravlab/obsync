@@ -19,15 +19,7 @@ import { parentOf } from "../../src/engine/paths";
 import { BLOCK_SHA256, serverHasher } from "../../src/engine/server-hash";
 
 /** The operations a FakeProvider counts and can inject faults into. */
-export type FakeOperation =
-	| "list"
-	| "read"
-	| "write"
-	| "delete"
-	| "createFolder"
-	| "changes"
-	| "moveFile"
-	| "moveFolder";
+export type FakeOperation = "list" | "read" | "write" | "delete" | "createFolder" | "changes" | "moveFile" | "moveFolder";
 
 export { SimulatedCrash } from "./crash-points";
 
@@ -71,12 +63,8 @@ export class FakeProvider implements Provider {
 		this.maxFileSize = remote.maxFileSize;
 		this.capabilities = {
 			conditionalWrite: service.conditionalWrite ?? true,
-			changeFeed: service.changeFeed
-				? { changes: (cursor) => this.run("changes", () => this.changes(cursor)) }
-				: undefined,
-			fileMove: service.fileMove
-				? { moveFile: (from, to) => this.run("moveFile", () => this.moveFile(from, to)) }
-				: undefined,
+			changeFeed: service.changeFeed ? { changes: (cursor) => this.run("changes", () => this.changes(cursor)) } : undefined,
+			fileMove: service.fileMove ? { moveFile: (from, to) => this.run("moveFile", () => this.moveFile(from, to)) } : undefined,
 			folderMove: service.folderMove
 				? { moveFolder: (from, to) => this.run("moveFolder", () => this.moveFolder(from, to)) }
 				: undefined,

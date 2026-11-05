@@ -187,7 +187,11 @@ describe("syncing changed files", () => {
 		expect(await phone.vault.stat("Notes")).toBeNull();
 		expect(await vaultText(phone, "notes/a.md")).toBe("laptop's");
 		expect(await vaultText(laptop, "Notes/b.md")).toBe("phone's");
-		expect(mirror(remote).map((entry) => entry.path).sort()).toEqual(["Notes", "Notes/a.md", "Notes/b.md"]);
+		expect(
+			mirror(remote)
+				.map((entry) => entry.path)
+				.sort(),
+		).toEqual(["Notes", "Notes/a.md", "Notes/b.md"]);
 		expect([...phone.deviceStore.snapshot.keys()].sort()).toEqual(["notes", "notes/a.md", "notes/b.md"]);
 	});
 
@@ -321,9 +325,7 @@ describe("concurrent changes and interruptions", () => {
 
 		await syncNow(phone);
 
-		expect(await vaultText(phone, "note.md")).toBe(
-			"<<<<<<< Phone\ntyped meanwhile\n=======\nv2 from laptop\n>>>>>>> Remote\n",
-		);
+		expect(await vaultText(phone, "note.md")).toBe("<<<<<<< Phone\ntyped meanwhile\n=======\nv2 from laptop\n>>>>>>> Remote\n");
 	});
 
 	it("completes on the next sync what a crash cut off, with nothing lost or doubled", async () => {
@@ -335,7 +337,11 @@ describe("concurrent changes and interruptions", () => {
 		expect(await rejection(syncNow(laptop))).toBeInstanceOf(SimulatedCrash);
 		await syncNow(laptop);
 
-		expect(mirror(remote).map((entry) => entry.path).sort()).toEqual(["a.md", "b.md", "c.md"]);
+		expect(
+			mirror(remote)
+				.map((entry) => entry.path)
+				.sort(),
+		).toEqual(["a.md", "b.md", "c.md"]);
 		for (const name of ["a.md", "b.md", "c.md"]) expect(remoteText(remote, name)).toBe(`text of ${name}`);
 		expect([...laptop.deviceStore.snapshot.keys()].sort()).toEqual(["a.md", "b.md", "c.md"]);
 	});

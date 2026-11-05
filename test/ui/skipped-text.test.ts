@@ -41,7 +41,10 @@ describe("skippedLines", () => {
 });
 
 describe("skippedLines with a limit", () => {
-	const many = Array.from({ length: 25 }, (_, index) => ({ path: `f${String(index).padStart(2, "0")}.tmp`, reason: "ignored" as const }));
+	const many = Array.from({ length: 25 }, (_, index) => ({
+		path: `f${String(index).padStart(2, "0")}.tmp`,
+		reason: "ignored" as const,
+	}));
 
 	it("gives the first files up to the limit and how many more there are", () => {
 		const lines = skippedLines(many, selectStrings("en"), 20);

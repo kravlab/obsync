@@ -59,7 +59,12 @@ describe("the outcome of one test", () => {
 	const none = { describes: [], file: [] };
 
 	it("is the test's own result when it ran", () => {
-		expect(outcomeOf({ fullName: "check 3: a", state: "failed", errors: ["own"] }, { describes: ["teardown failed"], file: ["file failed"] })).toEqual({
+		expect(
+			outcomeOf(
+				{ fullName: "check 3: a", state: "failed", errors: ["own"] },
+				{ describes: ["teardown failed"], file: ["file failed"] },
+			),
+		).toEqual({
 			fullName: "check 3: a",
 			state: "failed",
 			error: "own",
@@ -84,8 +89,12 @@ describe("the outcome of one test", () => {
 	});
 
 	it("takes the nearest describe's error, before the next describe's and the file's", () => {
-		expect(outcomeOf({ fullName: "check 3: a", state: "skipped" }, { describes: ["inner", "outer"], file: ["file"] })).toMatchObject({ error: "inner" });
-		expect(outcomeOf({ fullName: "check 3: a", state: "passed" }, { describes: ["inner", "outer"], file: ["file"] })).toMatchObject({ error: "inner" });
+		expect(outcomeOf({ fullName: "check 3: a", state: "skipped" }, { describes: ["inner", "outer"], file: ["file"] })).toMatchObject({
+			error: "inner",
+		});
+		expect(outcomeOf({ fullName: "check 3: a", state: "passed" }, { describes: ["inner", "outer"], file: ["file"] })).toMatchObject({
+			error: "inner",
+		});
 	});
 
 	it("is a failure with its describe's error when it passed but the describe's afterAll failed", () => {

@@ -22,7 +22,7 @@ describe("withConnectErrorLog", () => {
 		const log = new RecordingLog();
 		const clock = new ManualClock();
 		clock.advance(AFTERNOON);
-		const failure = { cause: "permanent", detail: "HTTP 400: Bad HTTP \"Content-Type\" header" } as const;
+		const failure = { cause: "permanent", detail: 'HTTP 400: Bad HTTP "Content-Type" header' } as const;
 
 		withConnectErrorLog(inner, log, clock).reportConnectFailure(failure);
 

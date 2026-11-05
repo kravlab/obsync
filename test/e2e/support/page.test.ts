@@ -2,7 +2,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { helpSections, practices } from "../../../src/ui/help-text";
 import { selectStrings } from "../../../src/ui/i18n/strings";
-import { expectedHelpElements, expectedOnboarding, PAGE_HELPERS, reloadedInLanguageProgram, reloadInLanguageProgram, untilAnswered } from "./page";
+import {
+	expectedHelpElements,
+	expectedOnboarding,
+	PAGE_HELPERS,
+	reloadedInLanguageProgram,
+	reloadInLanguageProgram,
+	untilAnswered,
+} from "./page";
 import { runInPage } from "./page-runner";
 
 afterEach(() => {
@@ -12,7 +19,11 @@ afterEach(() => {
 /** A page's localStorage, over a map. */
 function storage(): Pick<Storage, "getItem" | "setItem" | "removeItem"> {
 	const items = new Map<string, string>();
-	return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => void items.set(key, value), removeItem: (key) => void items.delete(key) };
+	return {
+		getItem: (key) => items.get(key) ?? null,
+		setItem: (key, value) => void items.set(key, value),
+		removeItem: (key) => void items.delete(key),
+	};
 }
 
 /** A page's globals once Obsidian has loaded in `locale`, with the plugin `seamsync` loaded or not. */
@@ -126,7 +137,9 @@ describe("untilAnswered", () => {
 		const mustGoOn = () => {
 			throw new Error("Obsidian exited");
 		};
-		await expect(untilAnswered(ask, { timeoutMs: 10_000, what: "Obsidian did not answer", mustGoOn })).rejects.toThrow("Obsidian exited");
+		await expect(untilAnswered(ask, { timeoutMs: 10_000, what: "Obsidian did not answer", mustGoOn })).rejects.toThrow(
+			"Obsidian exited",
+		);
 		expect(ask).not.toHaveBeenCalled();
 	});
 });
@@ -156,13 +169,17 @@ describe("withSettings()", () => {
 
 	it("closes the settings when what it runs fails", async () => {
 		const { globals, events } = settingsWith(createDiv());
-		await expect(runInPage(`${PAGE_HELPERS} await withSettings(async () => { throw new Error("boom"); });`, globals)).rejects.toThrow("boom");
+		await expect(runInPage(`${PAGE_HELPERS} await withSettings(async () => { throw new Error("boom"); });`, globals)).rejects.toThrow(
+			"boom",
+		);
 		expect(events.at(-1)).toBe("closed");
 	});
 
 	it("fails, closing the settings, when another tab stays shown", async () => {
 		const { globals, events } = settingsWith(createDiv(), () => "editor");
-		await expect(runInPage(`${PAGE_HELPERS} await withSettings(async () => "never");`, globals)).rejects.toThrow(/the plugin's settings tab/);
+		await expect(runInPage(`${PAGE_HELPERS} await withSettings(async () => "never");`, globals)).rejects.toThrow(
+			/the plugin's settings tab/,
+		);
 		expect(events.at(-1)).toBe("closed");
 	});
 });
@@ -183,16 +200,19 @@ describe("settingRow()", () => {
 		addRow(document.body, "Device name", "outside");
 		const root = document.body.createDiv();
 		addRow(root, "Device name", "inside");
-		const found = await runInPage(`${PAGE_HELPERS} return (await settingRow("Device name", activeDocument.body.lastElementChild)).dataset.mark;`, {});
+		const found = await runInPage(
+			`${PAGE_HELPERS} return (await settingRow("Device name", activeDocument.body.lastElementChild)).dataset.mark;`,
+			{},
+		);
 		expect(found).toBe("inside");
 	});
 
 	it("fails naming the row it waited for", async () => {
 		addRow(document.body, "Device name", "outside");
 		document.body.createDiv();
-		await expect(runInPage(`${PAGE_HELPERS} await settingRow("Device name", activeDocument.body.lastElementChild);`, {})).rejects.toThrow(
-			/the Device name row/,
-		);
+		await expect(
+			runInPage(`${PAGE_HELPERS} await settingRow("Device name", activeDocument.body.lastElementChild);`, {}),
+		).rejects.toThrow(/the Device name row/);
 	});
 });
 
@@ -241,7 +261,9 @@ describe("noticeAmong()", () => {
 	it("is the first of the notices that match, in document order, whatever the order of the outcomes", async () => {
 		document.body.createDiv({ cls: "notice", text: "Disconnect failed" });
 		document.body.createDiv({ cls: "notice", text: "Disconnected" });
-		expect(await runInPage(`${PAGE_HELPERS} return noticeAmong(["Disconnected", "Disconnect failed"]);`, {})).toBe("Disconnect failed");
+		expect(await runInPage(`${PAGE_HELPERS} return noticeAmong(["Disconnected", "Disconnect failed"]);`, {})).toBe(
+			"Disconnect failed",
+		);
 	});
 
 	it("is nothing when no notice is one of the outcomes, or none is shown", async () => {
@@ -258,7 +280,10 @@ describe("dropdowns()", () => {
 		addSelect(row, "dropdown", ["first"]);
 		addSelect(row, "dropdown is-measuring", [null]);
 		addSelect(row, "dropdown", ["second"]);
-		const found = await runInPage(`${PAGE_HELPERS} return dropdowns(activeDocument.body.lastElementChild).map((s) => s.options[0].value);`, {});
+		const found = await runInPage(
+			`${PAGE_HELPERS} return dropdowns(activeDocument.body.lastElementChild).map((s) => s.options[0].value);`,
+			{},
+		);
 		expect(found).toEqual(["first", "second"]);
 	});
 
@@ -276,7 +301,10 @@ describe("dropdown()", () => {
 		const row = document.body.createDiv();
 		addSelect(row, "dropdown", ["mine", "remote"]);
 		addSelect(row, "dropdown is-measuring", [null]);
-		const found = await runInPage(`${PAGE_HELPERS} const s = dropdown(activeDocument.body.lastElementChild); return [s.classList.contains("is-measuring"), [...s.options].map((o) => o.value)];`, {});
+		const found = await runInPage(
+			`${PAGE_HELPERS} const s = dropdown(activeDocument.body.lastElementChild); return [s.classList.contains("is-measuring"), [...s.options].map((o) => o.value)];`,
+			{},
+		);
 		expect(found).toEqual([false, ["mine", "remote"]]);
 	});
 
@@ -284,14 +312,19 @@ describe("dropdown()", () => {
 		const row = document.body.createDiv();
 		addSelect(row, "dropdown is-measuring", [null]);
 		addSelect(row, "dropdown", ["mine", "remote"]);
-		const found = await runInPage(`${PAGE_HELPERS} const s = dropdown(activeDocument.body.lastElementChild); return [s.classList.contains("is-measuring"), [...s.options].map((o) => o.value)];`, {});
+		const found = await runInPage(
+			`${PAGE_HELPERS} const s = dropdown(activeDocument.body.lastElementChild); return [s.classList.contains("is-measuring"), [...s.options].map((o) => o.value)];`,
+			{},
+		);
 		expect(found).toEqual([false, ["mine", "remote"]]);
 	});
 
 	it("fails naming the dropdown when there is no real one", async () => {
 		const row = document.body.createDiv();
 		addSelect(row, "dropdown is-measuring", [null]);
-		await expect(runInPage(`${PAGE_HELPERS} dropdown(activeDocument.body.lastElementChild);`, {})).rejects.toThrow(/the dropdown is missing/);
+		await expect(runInPage(`${PAGE_HELPERS} dropdown(activeDocument.body.lastElementChild);`, {})).rejects.toThrow(
+			/the dropdown is missing/,
+		);
 	});
 });
 
@@ -299,7 +332,11 @@ describe("dropdown()", () => {
 function addSyncWindow(selected: string): HTMLElement {
 	const sync = document.body.createDiv({ cls: "modal seamsync-sync-window" });
 	const tabs = sync.createDiv({ cls: "seamsync-sync-tabs" });
-	for (const tab of ["Conflicts", "Activity", "Help"]) tabs.createEl("button", { cls: tab === selected ? "seamsync-sync-tab seamsync-sync-tab-selected" : "seamsync-sync-tab", text: tab });
+	for (const tab of ["Conflicts", "Activity", "Help"])
+		tabs.createEl("button", {
+			cls: tab === selected ? "seamsync-sync-tab seamsync-sync-tab-selected" : "seamsync-sync-tab",
+			text: tab,
+		});
 	sync.createDiv({ cls: "seamsync-sync-body" });
 	return sync;
 }
@@ -341,14 +378,20 @@ describe("syncWindow()", () => {
 describe("openSyncWindow()", () => {
 	it("runs the Open sync window command when given none, and resolves with the window", async () => {
 		const { globals, ran } = commandsOpeningSyncWindow();
-		const opened = await runInPage(`${PAGE_HELPERS} return (await openSyncWindow()).classList.contains("seamsync-sync-window");`, globals);
+		const opened = await runInPage(
+			`${PAGE_HELPERS} return (await openSyncWindow()).classList.contains("seamsync-sync-window");`,
+			globals,
+		);
 		expect(opened).toBe(true);
 		expect(ran).toEqual(["seamsync:open-sync-window"]);
 	});
 
 	it("runs the command it is given instead, and resolves with the window", async () => {
 		const { globals, ran } = commandsOpeningSyncWindow();
-		const opened = await runInPage(`${PAGE_HELPERS} return (await openSyncWindow("seamsync:show-help")).classList.contains("seamsync-sync-window");`, globals);
+		const opened = await runInPage(
+			`${PAGE_HELPERS} return (await openSyncWindow("seamsync:show-help")).classList.contains("seamsync-sync-window");`,
+			globals,
+		);
 		expect(opened).toBe(true);
 		expect(ran).toEqual(["seamsync:show-help"]);
 	});
@@ -357,12 +400,16 @@ describe("openSyncWindow()", () => {
 describe("selectedTab()", () => {
 	it("is the text of the selected tab", async () => {
 		addSyncWindow("Activity");
-		expect(await runInPage(`${PAGE_HELPERS} return selectedTab(activeDocument.querySelector(".seamsync-sync-window"));`, {})).toBe("Activity");
+		expect(await runInPage(`${PAGE_HELPERS} return selectedTab(activeDocument.querySelector(".seamsync-sync-window"));`, {})).toBe(
+			"Activity",
+		);
 	});
 
 	it("is nothing when no tab is selected", async () => {
 		addSyncWindow("none");
-		expect(await runInPage(`${PAGE_HELPERS} return selectedTab(activeDocument.querySelector(".seamsync-sync-window")) ?? null;`, {})).toBeNull();
+		expect(
+			await runInPage(`${PAGE_HELPERS} return selectedTab(activeDocument.querySelector(".seamsync-sync-window")) ?? null;`, {}),
+		).toBeNull();
 	});
 });
 
@@ -435,14 +482,20 @@ describe("expectedHelpElements()", () => {
 		const elements = expectedHelpElements(strings);
 		const conflicts = elements.findIndex((element) => element.text === sections[1].heading);
 		expect(elements.slice(conflicts, conflicts + 4).map((element) => element.tag)).toEqual(["h4", "p", "p", "h4"]);
-		expect(elements.filter((element) => element.tag === "ul")).toHaveLength(sections.filter((section) => section.list.length > 0).length);
+		expect(elements.filter((element) => element.tag === "ul")).toHaveLength(
+			sections.filter((section) => section.list.length > 0).length,
+		);
 	});
 });
 
 describe("expectedOnboarding()", () => {
 	it("gives the title, the intro and the practices of the strings, in order", () => {
 		const strings = selectStrings("en");
-		expect(expectedOnboarding(strings)).toEqual({ title: strings.onboardingTitle, intro: strings.onboardingIntro, items: practices(strings) });
+		expect(expectedOnboarding(strings)).toEqual({
+			title: strings.onboardingTitle,
+			intro: strings.onboardingIntro,
+			items: practices(strings),
+		});
 		expect(expectedOnboarding(strings).items).toHaveLength(4);
 	});
 

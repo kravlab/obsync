@@ -40,10 +40,7 @@ describe("FakeProvider fault injection", () => {
 		laptop.beforeNext("write", async () => {
 			await phone.write("note.md", bytes("from phone"));
 		});
-		await expectFailure(
-			laptop.write("note.md", bytes("from laptop"), { kind: "revision", revision }),
-			"preconditionFailed",
-		);
+		await expectFailure(laptop.write("note.md", bytes("from laptop"), { kind: "revision", revision }), "preconditionFailed");
 		expect(await readText(laptop, "note.md")).toBe("from phone");
 	});
 

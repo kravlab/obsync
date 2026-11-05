@@ -28,12 +28,7 @@ function eventText(event: ActivityEvent, strings: Strings): string {
 			return failureLine(strings.activityRevokeFailed, failureText(event.cause, strings), event.detail, strings);
 		case "status":
 			if (event.status.state !== "syncFailed") return statusLabel(event.status, strings);
-			return failureLine(
-				strings.activitySyncFailed,
-				failureText(event.status.cause, strings),
-				event.status.detail,
-				strings,
-			);
+			return failureLine(strings.activitySyncFailed, failureText(event.status.cause, strings), event.status.detail, strings);
 	}
 }
 

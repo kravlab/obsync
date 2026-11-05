@@ -40,9 +40,7 @@ export function describeProviderContract(
 			const written = await provider.write("note.md", bytes("hello"));
 			const { entries } = await provider.list();
 			expect(written).toMatchObject({ kind: "file", path: "note.md", size: 5 });
-			expect(entries).toEqual([
-				expect.objectContaining({ kind: "file", path: "note.md", revision: written.revision, size: 5 }),
-			]);
+			expect(entries).toEqual([expect.objectContaining({ kind: "file", path: "note.md", revision: written.revision, size: 5 })]);
 		});
 
 		it("reads a file with the revision of the bytes it returned, as the write and the listing report it", async () => {
@@ -186,9 +184,7 @@ export function describeProviderContract(
 			const second = await provider.write("two.md", bytes("2"));
 
 			const next = await feed.changes(first.cursor);
-			expect(next.changes).toEqual([
-				expect.objectContaining({ kind: "file", path: "two.md", revision: second.revision }),
-			]);
+			expect(next.changes).toEqual([expect.objectContaining({ kind: "file", path: "two.md", revision: second.revision })]);
 		});
 
 		it("fails an unknown cursor with cursorLost", async (context) => {
@@ -350,10 +346,7 @@ export function describeProviderContract(
 			const provider = await openConditional(context);
 			const { revision } = await provider.write("note.md", bytes("one"));
 			await provider.write("note.md", bytes("theirs"));
-			await expectFailure(
-				provider.write("note.md", bytes("mine"), { kind: "revision", revision }),
-				"preconditionFailed",
-			);
+			await expectFailure(provider.write("note.md", bytes("mine"), { kind: "revision", revision }), "preconditionFailed");
 			expect(await readText(provider, "note.md")).toBe("theirs");
 		});
 

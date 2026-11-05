@@ -99,7 +99,8 @@ export function syncListing(
 	const key = (path: string): string => pathKey(path, caseInsensitive);
 
 	/** Whether `entry` never syncs and is not reported: hidden, or in the configuration folder in no category that is on. */
-	const unsynced = (entry: VaultEntry | RemoteEntry): boolean => !(rules.configuration(entry.path, entry.kind) ?? !isHidden(entry.path));
+	const unsynced = (entry: VaultEntry | RemoteEntry): boolean =>
+		!(rules.configuration(entry.path, entry.kind) ?? !isHidden(entry.path));
 	/** Whether `entry` is a file above the size ceiling. */
 	const tooLarge = (entry: VaultEntry | RemoteEntry): boolean => entry.kind === "file" && entry.size > rules.sizeCeiling;
 	const visible = local.filter((entry) => !unsynced(entry));
@@ -123,9 +124,7 @@ export function syncListing(
 		const parent = parentOf(path);
 		return parent === "" ? path : `${vaultPathOf(parent)}/${nameOf(path)}`;
 	};
-	const remoteKept = remote
-		.filter((entry) => !unsynced(entry))
-		.map((entry) => ({ ...entry, path: vaultPathOf(entry.path) }));
+	const remoteKept = remote.filter((entry) => !unsynced(entry)).map((entry) => ({ ...entry, path: vaultPathOf(entry.path) }));
 
 	/** Why `entry` does not sync, or null when it does as far as it alone tells. */
 	const reasonOf = (entry: VaultEntry | RemoteEntry): SkipReason | null => {

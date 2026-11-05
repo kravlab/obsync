@@ -23,13 +23,7 @@
  */
 import { StateField, type EditorState, type Range, type Text } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view";
-import {
-	conflictBlocks,
-	findBlock,
-	resolutionOf,
-	type ConflictAction,
-	type ConflictBlock,
-} from "../engine/conflict-blocks";
+import { conflictBlocks, findBlock, resolutionOf, type ConflictAction, type ConflictBlock } from "../engine/conflict-blocks";
 import { LOCAL_CLASS, MARKER_CLASS, REMOTE_CLASS, shownSides } from "./conflict-sides";
 import type { Strings } from "./i18n/strings";
 
@@ -228,4 +222,3 @@ class ConflictActions extends WidgetType {
 		return row;
 	}
 }
-

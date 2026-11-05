@@ -20,9 +20,7 @@ function localFile(path: string): VaultEntry {
 
 /** A Remote file at `path`, of size 1, at revision `revision`. */
 function remoteFile(path: string, revision: string, stableId?: string): RemoteEntry {
-	return stableId === undefined
-		? { kind: "file", path, revision, size: 1 }
-		: { kind: "file", path, revision, size: 1, stableId };
+	return stableId === undefined ? { kind: "file", path, revision, size: 1 } : { kind: "file", path, revision, size: 1, stableId };
 }
 
 /** One side of a sync, with the content hash of each file named by path. */
@@ -101,12 +99,9 @@ describe("renames found from the rename hints", () => {
 	});
 
 	it("ignores a hint whose target the vault no longer has", async () => {
-		const { renames } = await renamesOf(
-			{ "a.md": synced("a") },
-			{ entries: [] },
-			{ entries: [remoteFile("a.md", "rev-a")] },
-			[{ from: "a.md", to: "b.md" }],
-		);
+		const { renames } = await renamesOf({ "a.md": synced("a") }, { entries: [] }, { entries: [remoteFile("a.md", "rev-a")] }, [
+			{ from: "a.md", to: "b.md" },
+		]);
 		expect(renames.toRemote).toEqual([]);
 		expect(renames.paths.size).toBe(0);
 	});
@@ -184,12 +179,9 @@ describe("renames meeting a change on the other side", () => {
 	});
 
 	it("keeps a file renamed here and deleted on the Remote", async () => {
-		const { renames } = await renamesOf(
-			{ "old.md": synced("a") },
-			{ entries: [localFile("new.md")] },
-			{ entries: [] },
-			[{ from: "old.md", to: "new.md" }],
-		);
+		const { renames } = await renamesOf({ "old.md": synced("a") }, { entries: [localFile("new.md")] }, { entries: [] }, [
+			{ from: "old.md", to: "new.md" },
+		]);
 		expect(renames.keptHere).toEqual([{ kind: "file", from: "old.md", to: "new.md" }]);
 		expect(renames.toRemote).toEqual([]);
 		expect([...renames.paths]).toEqual(["old.md"]);

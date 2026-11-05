@@ -127,10 +127,7 @@ describe("the activity log", () => {
 
 		second.ui.showStatus({ state: "synced" });
 		second.ui.showStatus({ state: "offline" });
-		expect(second.inner.lastActivity?.map((event) => event.kind === "status" && event.status.state)).toEqual([
-			"offline",
-			"synced",
-		]);
+		expect(second.inner.lastActivity?.map((event) => event.kind === "status" && event.status.state)).toEqual(["offline", "synced"]);
 	});
 
 	it("passes lists and prompts through to the UI unchanged", async () => {

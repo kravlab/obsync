@@ -132,10 +132,7 @@ describe("Dropbox setup requests", () => {
 		const first = await setupOps.write("a.md", bytes("one"));
 		const second = await setupOps.write("a.md", bytes("two"), { kind: "revision", revision: first.revision });
 		expect(second.revision).not.toBe(first.revision);
-		await expectFailure(
-			setupOps.write("a.md", bytes("three"), { kind: "revision", revision: first.revision }),
-			"preconditionFailed",
-		);
+		await expectFailure(setupOps.write("a.md", bytes("three"), { kind: "revision", revision: first.revision }), "preconditionFailed");
 	});
 
 	it("refuses an absent precondition over an identical file", async () => {

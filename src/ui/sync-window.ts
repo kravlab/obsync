@@ -165,8 +165,7 @@ export class SyncWindow extends Modal {
 		const { state } = shown.status;
 		this.header.dot.className = `seamsync-dot seamsync-dot-${statusTone(shown.status)}`;
 		this.header.text.setText(statusText(shown.status, shown.conflicts, shown.skipped, strings));
-		const label =
-			state === "reconnectNeeded" ? strings.reconnect : state === "notConnected" ? strings.connect : strings.syncNow;
+		const label = state === "reconnectNeeded" ? strings.reconnect : state === "notConnected" ? strings.connect : strings.syncNow;
 		this.header.button.setText(label);
 	}
 

@@ -57,7 +57,14 @@ describe("Dropbox provider", () => {
 		expect(batch.changes).toEqual([
 			{ kind: "folder", path: "Notes", stableId: folder.stableId },
 			{ kind: "file", path: "Notes/a.md", revision: first.revision, size: 1, stableId: first.stableId, serverHash: first.serverHash },
-			{ kind: "file", path: "Notes/b.md", revision: second.revision, size: 1, stableId: second.stableId, serverHash: second.serverHash },
+			{
+				kind: "file",
+				path: "Notes/b.md",
+				revision: second.revision,
+				size: 1,
+				stableId: second.stableId,
+				serverHash: second.serverHash,
+			},
 		]);
 	});
 
@@ -72,11 +79,7 @@ describe("Dropbox provider", () => {
 		});
 		dropbox.interceptions.push(
 			json(200, {
-				entries: [
-					meta("deleted", "a"),
-					meta("folder", "a"),
-					meta("file", "a/new.md", { rev: "015a0000000001", size: 3 }),
-				],
+				entries: [meta("deleted", "a"), meta("folder", "a"), meta("file", "a/new.md", { rev: "015a0000000001", size: 3 })],
 				cursor: "next",
 				has_more: false,
 			}),

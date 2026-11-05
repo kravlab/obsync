@@ -20,9 +20,7 @@ export class ManualScheduler implements Scheduler {
 	/** Moves the clock forward by `ms`, running every task that falls due. */
 	advance(ms: number): void {
 		this.clock.advance(ms);
-		const due = [...this.tasks]
-			.filter((entry) => entry.dueAt <= this.clock.now())
-			.sort((a, b) => a.dueAt - b.dueAt);
+		const due = [...this.tasks].filter((entry) => entry.dueAt <= this.clock.now()).sort((a, b) => a.dueAt - b.dueAt);
 		for (const entry of due) {
 			this.tasks.delete(entry);
 			entry.task();

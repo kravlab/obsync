@@ -11,12 +11,7 @@ import { statusLabel } from "./status-label";
  * it, each only when it is not zero, in the user's language: what the
  * status bar item, the ribbon icon's tooltip and the Sync window show.
  */
-export function statusText(
-	status: SyncStatus,
-	conflicts: SyncConflicts,
-	skipped: readonly SkippedFile[],
-	strings: Strings,
-): string {
+export function statusText(status: SyncStatus, conflicts: SyncConflicts, skipped: readonly SkippedFile[], strings: Strings): string {
 	const conflicted = conflictCount(conflicts);
 	const counts = [conflicted > 0 ? fill(strings.conflictsCount, { count: String(conflicted) }) : null, skippedCount(skipped, strings)];
 	return counts.reduce<string>(

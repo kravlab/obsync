@@ -55,9 +55,9 @@ describe("a device store bound to a Connection epoch", () => {
 		await expect(bound.removeSnapshotEntry("note.md")).rejects.toBeInstanceOf(ConnectionChanged);
 		await expect(bound.moveSnapshotEntry("a.md", "b.md", { kind: "folder" })).rejects.toBeInstanceOf(ConnectionChanged);
 		await expect(bound.saveRemoteFeed(null)).rejects.toBeInstanceOf(ConnectionChanged);
-		await expect(
-			bound.saveConnection({ accountId: "a", remoteRoot: "", device: { id: "d", name: "D" } }),
-		).rejects.toBeInstanceOf(ConnectionChanged);
+		await expect(bound.saveConnection({ accountId: "a", remoteRoot: "", device: { id: "d", name: "D" } })).rejects.toBeInstanceOf(
+			ConnectionChanged,
+		);
 		await expect(bound.clear()).rejects.toBeInstanceOf(ConnectionChanged);
 
 		expect(store.snapshotComplete).toBe(false);

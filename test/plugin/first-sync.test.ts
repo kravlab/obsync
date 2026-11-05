@@ -7,13 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fill } from "../../src/ui/i18n/fill";
 import { selectStrings } from "../../src/ui/i18n/strings";
 import type { FakeDropboxAccount } from "../fakes/fake-dropbox";
-import {
-	filesOn,
-	textOn,
-	useDevices,
-	type PluginDevice,
-	type PluginDevices,
-} from "../support/plugin-devices";
+import { filesOn, textOn, useDevices, type PluginDevice, type PluginDevices } from "../support/plugin-devices";
 import { PLUGIN_WAIT, type ConnectChoice } from "../support/plugin-run";
 import { DEVICE_TEST_TIMEOUT_MS } from "../support/timeouts";
 
@@ -27,10 +21,18 @@ function notes(prefix: string, count: number, text: string): Record<string, stri
 }
 
 /** The laptop's vault: 1 note of its own, 3 the phone holds the same, 4 the phone holds differently. */
-const LAPTOP_FILES = { "laptop.md": "from the laptop\n", ...notes("same", 3, "the same on both"), ...notes("differs", 4, "the laptop's line") };
+const LAPTOP_FILES = {
+	"laptop.md": "from the laptop\n",
+	...notes("same", 3, "the same on both"),
+	...notes("differs", 4, "the laptop's line"),
+};
 
 /** The phone's vault: 2 notes of its own, then the laptop's 3 the same and 4 differently, so each preview count is its own. */
-const PHONE_FILES = { ...notes("phone", 2, "from the phone"), ...notes("same", 3, "the same on both"), ...notes("differs", 4, "the phone's line") };
+const PHONE_FILES = {
+	...notes("phone", 2, "from the phone"),
+	...notes("same", 3, "the same on both"),
+	...notes("differs", 4, "the phone's line"),
+};
 
 /** The count lines a First sync preview shows for what it would do. */
 function previewLines(counts: { download: number; upload: number; identical: number; differing: number }): string[] {

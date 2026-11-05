@@ -180,7 +180,8 @@ export const en = {
 	/** Title of the First sync preview. */
 	firstSyncTitle: "First sync",
 	/** What the First sync preview is about. */
-	firstSyncIntro: "This device has not synced with Dropbox yet. Here is what the first sync will do; nothing changes until you start it, and it deletes nothing.",
+	firstSyncIntro:
+		"This device has not synced with Dropbox yet. Here is what the first sync will do; nothing changes until you start it, and it deletes nothing.",
 	/** First sync preview: files only Dropbox has; `{count}` is a number. */
 	firstSyncToDownload: "To download from Dropbox: {count}",
 	/** First sync preview: files only this device has. */
@@ -242,7 +243,8 @@ export const en = {
 	loginCode: "Code",
 	continue: "Continue",
 	/** The pasted code was refused: reused, expired or mistyped. */
-	codeRejected: "Dropbox did not accept this code. It may have been used already or expired. Open Dropbox again and paste the new code.",
+	codeRejected:
+		"Dropbox did not accept this code. It may have been used already or expired. Open Dropbox again and paste the new code.",
 	/** A login to a different account than the device's Connection. */
 	otherAccount: "This device is connected to a different Dropbox account. Disconnect first to switch accounts.",
 	/** Dropbox could not be reached. */
@@ -274,10 +276,9 @@ export const en = {
 	/** Creating a folder whose name is taken. */
 	folderTaken: "A folder with this name already exists.",
 	/** Creating a folder whose name holds a slash. */
-	folderNameInvalid: "A folder name cannot contain \"/\".",
+	folderNameInvalid: 'A folder name cannot contain "/".',
 	/** The chosen folder's provider cannot refuse a write over a newer version, so syncing it could lose changes. */
-	providerUnsupported:
-		"This provider cannot stop two devices from overwriting each other's changes, so this folder cannot be synced.",
+	providerUnsupported: "This provider cannot stop two devices from overwriting each other's changes, so this folder cannot be synced.",
 	deviceName: "Device name",
 	deviceNameDescription: "How other devices name this one, in conflicts and messages.",
 
@@ -296,8 +297,7 @@ export const en = {
 	noticeDisconnectedRevokeFailed:
 		"Disconnected, but Dropbox did not revoke access. Remove the app from the connected apps in your Dropbox settings.",
 	/** A file changed on two devices could not be merged; `{file}` and `{copy}` are vault paths. */
-	noticeConflictCopyCreated:
-		"{file} changed on another device too and could not be merged. This device's version is kept as {copy}.",
+	noticeConflictCopyCreated: "{file} changed on another device too and could not be merged. This device's version is kept as {copy}.",
 	/** A file deleted on this device came back, since another device had edited it; `{file}` is a vault path. */
 	noticeRestoredDeletedHere: "{file} came back: it was deleted on this device but edited on another one.",
 	/** A file edited on this device was kept and uploaded again, though another device deleted it; `{file}` is a vault path. */
@@ -314,14 +314,12 @@ export const en = {
 	/** Configuration files arrived from another device; Obsidian applies them on restart. */
 	noticeConfigurationChanged: "Settings changed on another device. Restart Obsidian to apply them.",
 	/** Dropbox refused this device's login, so sync is paused on it until the user reconnects. */
-	noticeReconnectNeeded:
-		"Dropbox no longer accepts this device's login, so sync is paused here. Open the sync window and reconnect.",
+	noticeReconnectNeeded: "Dropbox no longer accepts this device's login, so sync is paused here. Open the sync window and reconnect.",
 	/** The name policy was not changed, since Dropbox holds files it would name differently; `{files}` lists their vault paths. */
 	noticeNamePolicyRefused:
 		"The name policy was not changed: these files in Dropbox would get names it cannot keep. Rename them first: {files}.",
 	/** Connect window: another device is doing its First sync with the chosen folder; `{device}` is its name. */
-	firstSyncInProgress:
-		"{device} is doing its first sync with this folder. Connect once it has finished, so fewer files conflict.",
+	firstSyncInProgress: "{device} is doing its first sync with this folder. Connect once it has finished, so fewer files conflict.",
 	/** Connect window: connects although another device's First sync is in progress. */
 	connectAnyway: "Connect anyway",
 
@@ -432,7 +430,7 @@ export const en = {
 	connectFailureCodeRejected: "Dropbox did not accept the code",
 	connectFailureOtherAccount: "This device is connected to a different Dropbox account",
 	connectFailureNameTaken: "A folder with this name already exists",
-	connectFailureInvalidName: "The folder name contains \"/\"",
+	connectFailureInvalidName: 'The folder name contains "/"',
 	connectFailureFirstSyncInProgress: "Another device is doing its first sync with this folder",
 	/** Title of the onboarding window shown after a new connection. */
 	onboardingTitle: "Before you sync",
@@ -469,7 +467,8 @@ export const en = {
 	helpSkippedHeading: "Skipped files",
 	/** Help: what never syncs and is not listed as skipped. */
 	helpNeverSynced: "Files and folders whose names start with a dot, and this device's workspace layout, never sync.",
-	helpSkipped: "Other files are skipped while one of these holds, and the skipped list in the sync window names each one with its reason:",
+	helpSkipped:
+		"Other files are skipped while one of these holds, and the skipped list in the sync window names each one with its reason:",
 	/** Help: the reasons a file is skipped. */
 	helpSkippedIgnored: "It matches the ignore list.",
 	helpSkippedName: "Its name cannot be stored in Dropbox.",

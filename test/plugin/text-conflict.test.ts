@@ -124,9 +124,7 @@ describe("text Conflict blocks", { timeout: DEVICE_TEST_TIMEOUT_MS }, () => {
 		view.dispatch({ selection: { anchor: text.indexOf(MIDDLE) } });
 
 		const markers = [...view.contentDOM.querySelectorAll<HTMLElement>(":scope > .seamsync-conflict-marker")];
-		expect(markers.map((marker) => marker.textContent)).toEqual(
-			text.split("\n").filter((line) => /^(<{7}|={7}|>{7})/.test(line)),
-		);
+		expect(markers.map((marker) => marker.textContent)).toEqual(text.split("\n").filter((line) => /^(<{7}|={7}|>{7})/.test(line)));
 		expect(markers.filter((marker) => marker.classList.contains("cm-line"))).toEqual([]);
 	});
 
@@ -147,7 +145,9 @@ describe("text Conflict blocks", { timeout: DEVICE_TEST_TIMEOUT_MS }, () => {
 		const { main } = view.state.selection;
 		expect(press.defaultPrevented).toBe(true);
 		expect([main.anchor, main.head]).toEqual([view.state.doc.line(remoteMarker + 1).from, view.state.doc.line(remoteMarker + 1).from]);
-		const line = [...view.contentDOM.querySelectorAll<HTMLElement>(":scope > .cm-line")].find((element) => element.textContent === ">>>>>>> Remote");
+		const line = [...view.contentDOM.querySelectorAll<HTMLElement>(":scope > .cm-line")].find(
+			(element) => element.textContent === ">>>>>>> Remote",
+		);
 		expect(line?.classList).toContain("seamsync-conflict-marker");
 	});
 
@@ -239,7 +239,12 @@ describe("text Conflict blocks", { timeout: DEVICE_TEST_TIMEOUT_MS }, () => {
 		const { finder: laptop, text } = await textConflictOn("laptop");
 
 		// The first block split after its `=======` line.
-		const sections = await readingView(laptop, text, [[0, 2], [3, 4], [5, 7], [8, 12]]);
+		const sections = await readingView(laptop, text, [
+			[0, 2],
+			[3, 4],
+			[5, 7],
+			[8, 12],
+		]);
 
 		expect(sections.map(({ el }) => el.textContent)).toEqual([
 			panelText("first, mine\n", "Laptop vault", "first, theirs\n"),

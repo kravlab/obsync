@@ -80,12 +80,7 @@ describe("the First sync preview", () => {
 			},
 		]);
 		expect(mirror(remote)).toEqual(mirrorBefore);
-		expect((await phone.vault.list()).map(({ path }) => path).sort()).toEqual([
-			"differs.md",
-			"differs.png",
-			"phone.md",
-			"same.md",
-		]);
+		expect((await phone.vault.list()).map(({ path }) => path).sort()).toEqual(["differs.md", "differs.png", "phone.md", "same.md"]);
 		expect(phone.deviceStore.snapshot.size).toBe(0);
 		expect(phone.ui.lastStatus).toEqual({ state: "firstSyncWaiting" });
 	});
@@ -160,9 +155,7 @@ describe("a First sync of two full sides", () => {
 		expect(remoteText(remote, "differs.png")).toBe("laptop photo");
 		expect(remoteText(remote, `differs (conflict Phone ${localStamp(phone)}).png`)).toBe("phone photo");
 		expect(phone.vault.trashed).toEqual([]);
-		expect(phone.ui.notices).toEqual([
-			{ kind: "firstSyncDone", downloaded: 1, uploaded: 1, conflicted: 1, conflictCopies: 1 },
-		]);
+		expect(phone.ui.notices).toEqual([{ kind: "firstSyncDone", downloaded: 1, uploaded: 1, conflicted: 1, conflictCopies: 1 }]);
 	});
 
 	it("keeps the Remote version of every differing file and the vault's as a Conflict copy, when asked to", async () => {
@@ -175,9 +168,7 @@ describe("a First sync of two full sides", () => {
 		expect(await vaultText(phone, "differs.md")).toBe("line 1\nfrom the laptop");
 		expect(remoteText(remote, `differs (conflict Phone ${stamp}).md`)).toBe("line 1\nfrom the phone");
 		expect(remoteText(remote, `differs (conflict Phone ${stamp}).png`)).toBe("phone photo");
-		expect(phone.ui.notices).toEqual([
-			{ kind: "firstSyncDone", downloaded: 1, uploaded: 1, conflicted: 0, conflictCopies: 2 },
-		]);
+		expect(phone.ui.notices).toEqual([{ kind: "firstSyncDone", downloaded: 1, uploaded: 1, conflicted: 0, conflictCopies: 2 }]);
 	});
 });
 
@@ -248,7 +239,11 @@ describe("a First sync cut off half way", () => {
 		expect(phone.ui.previews).toHaveLength(2);
 		expect(phone.ui.previews[1]).toMatchObject({ toDownload: ["b.md"], identical: ["a.md"] });
 		expect(await vaultText(phone, "b.md")).toBe("b");
-		expect(deviceRecords(remote).map(({ deviceName }) => deviceName).sort()).toEqual(["Laptop", "Phone"]);
+		expect(
+			deviceRecords(remote)
+				.map(({ deviceName }) => deviceName)
+				.sort(),
+		).toEqual(["Laptop", "Phone"]);
 	});
 });
 
@@ -292,7 +287,11 @@ describe("two devices setting up one empty Remote at once", () => {
 		await syncNow(phone);
 
 		expect(remote.get(SETTINGS_PATH)).toBe(settingsBefore);
-		expect(mirror(remote).map(({ path }) => path).sort()).toEqual(["both.md", "laptop.md", "phone.md"]);
+		expect(
+			mirror(remote)
+				.map(({ path }) => path)
+				.sort(),
+		).toEqual(["both.md", "laptop.md", "phone.md"]);
 		for (const device of [laptop, phone]) {
 			expect(await vaultText(device, "laptop.md")).toBe("from the laptop");
 			expect(await vaultText(device, "phone.md")).toBe("from the phone");

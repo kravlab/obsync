@@ -8,10 +8,9 @@ export function noticeText(notice: SyncNotice, strings: Strings): string {
 		case "conflictCopyCreated":
 			return fill(strings.noticeConflictCopyCreated, { file: notice.path, copy: notice.copyPath });
 		case "restoredAfterDelete":
-			return fill(
-				notice.deletedOn === "thisDevice" ? strings.noticeRestoredDeletedHere : strings.noticeRestoredDeletedThere,
-				{ file: notice.path },
-			);
+			return fill(notice.deletedOn === "thisDevice" ? strings.noticeRestoredDeletedHere : strings.noticeRestoredDeletedThere, {
+				file: notice.path,
+			});
 		case "renamedOnBoth":
 			return fill(strings.noticeRenamedOnBoth, { file: notice.path, local: notice.localPath });
 		case "firstSyncDone":
@@ -28,9 +27,8 @@ export function noticeText(notice: SyncNotice, strings: Strings): string {
 		case "namePolicyRefused":
 			return fill(strings.noticeNamePolicyRefused, { files: notice.paths.join(", ") });
 		case "renameBeatsDelete":
-			return fill(
-				notice.deletedOn === "thisDevice" ? strings.noticeRenamedDeletedHere : strings.noticeRenamedDeletedThere,
-				{ file: notice.path },
-			);
+			return fill(notice.deletedOn === "thisDevice" ? strings.noticeRenamedDeletedHere : strings.noticeRenamedDeletedThere, {
+				file: notice.path,
+			});
 	}
 }

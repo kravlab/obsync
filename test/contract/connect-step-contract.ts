@@ -39,10 +39,7 @@ export interface ConnectStepHarness {
  * @param name the provider under test, shown in test names
  * @param createHarness returns a harness on a new account with no folders
  */
-export function describeConnectStepContract(
-	name: string,
-	createHarness: () => Promise<ConnectStepHarness>,
-): void {
+export function describeConnectStepContract(name: string, createHarness: () => Promise<ConnectStepHarness>): void {
 	/** Logs in through `harness` and returns the secret. */
 	async function logIn(harness: ConnectStepHarness): Promise<string> {
 		const attempt = await harness.connectStep.startAuthorization();
@@ -127,9 +124,7 @@ export function describeConnectStepContract(
 			const access = harness.connectStep.access(await logIn(harness));
 			const { root } = await access.createRoot("My vault");
 			await access.openRoot(root).createFolder(".marker");
-			expect(await access.listRoots(".marker")).toEqual([
-				expect.objectContaining({ root, name: "My vault", holdsMarker: true }),
-			]);
+			expect(await access.listRoots(".marker")).toEqual([expect.objectContaining({ root, name: "My vault", holdsMarker: true })]);
 		});
 
 		it("writes a file inside a root only while it is absent, when asked to", async () => {
@@ -139,10 +134,7 @@ export function describeConnectStepContract(
 			await setup.createFolder(".marker");
 			const written = await setup.write(".marker/settings.json", bytes("{}"), { kind: "absent" });
 			expect(written).toMatchObject({ kind: "file", path: ".marker/settings.json", size: 2 });
-			await expectFailure(
-				setup.write(".marker/settings.json", bytes("{ }"), { kind: "absent" }),
-				"preconditionFailed",
-			);
+			await expectFailure(setup.write(".marker/settings.json", bytes("{ }"), { kind: "absent" }), "preconditionFailed");
 		});
 
 		it("keeps working after the access token expires", async () => {

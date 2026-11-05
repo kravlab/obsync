@@ -1,23 +1,11 @@
-import type {
-	AccountAccess,
-	Authorization,
-	ConnectStep,
-	AuthorizationAttempt,
-	RootCandidate,
-} from "../../src/engine/connect-step";
+import type { AccountAccess, Authorization, ConnectStep, AuthorizationAttempt, RootCandidate } from "../../src/engine/connect-step";
 import { ProviderError, type Provider, type ProviderFailure } from "../../src/engine/provider";
 import type { FakeProvider } from "./fake-provider";
 import { FakeRemote, type FakeServiceOptions } from "./fake-remote";
 
 /** The connect-step operations a FakeConnectStep can inject faults into. */
 export type FakeConnectOperation =
-	| "startAuthorization"
-	| "complete"
-	| "listRoots"
-	| "createRoot"
-	| "revoke"
-	| "createFolder"
-	| "write";
+	"startAuthorization" | "complete" | "listRoots" | "createRoot" | "revoke" | "createFolder" | "write";
 
 /**
  * An in-memory cloud service with accounts, for the connect step. Each
@@ -161,9 +149,7 @@ export class FakeConnectStep implements ConnectStep {
 		const account = (): FakeAccount => this.service.accountOf(secret);
 		return {
 			listRoots: (marker) =>
-				this.run("listRoots", () =>
-					[...account().folders].map(([name, remote]) => candidate(name, remote, marker)),
-				),
+				this.run("listRoots", () => [...account().folders].map(([name, remote]) => candidate(name, remote, marker))),
 			createRoot: (name) =>
 				this.run("createRoot", () => {
 					const { folders } = account();

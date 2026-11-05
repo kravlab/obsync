@@ -7,10 +7,7 @@ const LABELS = { local: "Laptop", remote: "Remote" } as const;
 
 /** Merges the texts as `mergeText` merges bytes; fails if any is not text. */
 function merge(base: string | null, local: string, remote: string): string {
-	const merged = mergeText(
-		{ base: base === null ? null : bytes(base), local: bytes(local), remote: bytes(remote) },
-		LABELS,
-	);
+	const merged = mergeText({ base: base === null ? null : bytes(base), local: bytes(local), remote: bytes(remote) }, LABELS);
 	if (merged === null) throw new Error("not merged as text");
 	// ignoreBOM keeps a byte-order mark in the text, where the tests can see it.
 	return new TextDecoder("utf-8", { ignoreBOM: true }).decode(merged.data);
@@ -18,8 +15,7 @@ function merge(base: string | null, local: string, remote: string): string {
 
 /** Whether merging the texts writes a Conflict block. */
 function conflicted(base: string | null, local: string, remote: string): boolean | undefined {
-	return mergeText({ base: base === null ? null : bytes(base), local: bytes(local), remote: bytes(remote) }, LABELS)
-		?.conflicted;
+	return mergeText({ base: base === null ? null : bytes(base), local: bytes(local), remote: bytes(remote) }, LABELS)?.conflicted;
 }
 
 describe("whether a text merge wrote Conflict blocks", () => {
@@ -45,7 +41,9 @@ describe("text merge with a Base", () => {
 	});
 
 	it("writes overlapping edits as a git-style Conflict block, this device's side first", () => {
-		expect(merge("one\ntwo\nthree\n", "one\nmine\nthree\n", "one\ntheirs\nthree\n")).toBe("one\n<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\nthree\n");
+		expect(merge("one\ntwo\nthree\n", "one\nmine\nthree\n", "one\ntheirs\nthree\n")).toBe(
+			"one\n<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\nthree\n",
+		);
 	});
 
 	it("takes the same edit made on both sides as no conflict", () => {
@@ -59,8 +57,10 @@ describe("text merge with a Base", () => {
 
 describe("text merge without a Base", () => {
 	it("keeps common lines once and makes every differing region a Conflict block, picking no side", () => {
-		expect(merge(null, "title\nmine\nmiddle\nend\n", "title\ntheirs\nmiddle\nend\nadded\n")).toBe("title\n<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\nmiddle\nend\n" +
-				"<<<<<<< Laptop\n=======\nadded\n>>>>>>> Remote\n");
+		expect(merge(null, "title\nmine\nmiddle\nend\n", "title\ntheirs\nmiddle\nend\nadded\n")).toBe(
+			"title\n<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\nmiddle\nend\n" +
+				"<<<<<<< Laptop\n=======\nadded\n>>>>>>> Remote\n",
+		);
 	});
 
 	it("takes identical versions as no conflict", () => {
@@ -117,7 +117,9 @@ describe("text merge line endings and BOM", () => {
 	});
 
 	it("writes a Conflict block's markers with the local line endings too", () => {
-		expect(merge("a\nb\n", "a\r\nmine\r\n", "a\ntheirs\n")).toBe("a\r\n<<<<<<< Laptop\r\nmine\r\n=======\r\ntheirs\r\n>>>>>>> Remote\r\n");
+		expect(merge("a\nb\n", "a\r\nmine\r\n", "a\ntheirs\n")).toBe(
+			"a\r\n<<<<<<< Laptop\r\nmine\r\n=======\r\ntheirs\r\n>>>>>>> Remote\r\n",
+		);
 	});
 
 	it("takes a byte-order mark as no difference, keeping the local file's", () => {
@@ -139,7 +141,9 @@ describe("text merge of a note with old markers", () => {
 	it("merges old markers as plain lines, nesting a new Conflict block where needed", () => {
 		const old = "<<<<<<< Phone\nx\n=======\ny\n>>>>>>> Remote\n";
 		expect(merge(old, `${old}added\n`, old.replace("x\n", "X\n"))).toBe("<<<<<<< Phone\nX\n=======\ny\n>>>>>>> Remote\nadded\n");
-		expect(merge(old, old.replace("x\n", "mine\n"), old.replace("x\n", "theirs\n"))).toBe("<<<<<<< Phone\n<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\n=======\ny\n>>>>>>> Remote\n");
+		expect(merge(old, old.replace("x\n", "mine\n"), old.replace("x\n", "theirs\n"))).toBe(
+			"<<<<<<< Phone\n<<<<<<< Laptop\nmine\n=======\ntheirs\n>>>>>>> Remote\n=======\ny\n>>>>>>> Remote\n",
+		);
 	});
 });
 

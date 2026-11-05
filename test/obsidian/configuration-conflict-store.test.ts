@@ -80,7 +80,12 @@ describe("ObsidianConfigurationConflicts", () => {
 		expect(await storeOn(adapter).list()).toEqual(expected);
 		expect(text((await store.read("id-1"))!)).toBe("first");
 		// One description and one data file per version, no shared index a cut-off write could lose.
-		expect([...adapter.files.keys()].sort()).toEqual([`${FOLDER}/id-1`, `${FOLDER}/id-1.json`, `${FOLDER}/id-2`, `${FOLDER}/id-2.json`]);
+		expect([...adapter.files.keys()].sort()).toEqual([
+			`${FOLDER}/id-1`,
+			`${FOLDER}/id-1.json`,
+			`${FOLDER}/id-2`,
+			`${FOLDER}/id-2.json`,
+		]);
 	});
 
 	it("forgets a removed version and its bytes, and gives null for an id not kept", async () => {

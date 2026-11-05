@@ -41,7 +41,11 @@ describe("bugReport", () => {
 			conflicts: NO_CONFLICTS,
 			skipped: [],
 			activity: [
-				{ at: AFTERNOON + 60_000, kind: "status", status: { state: "syncFailed", cause: "permanent", detail: "HTTP 409: path/not_found/" } },
+				{
+					at: AFTERNOON + 60_000,
+					kind: "status",
+					status: { state: "syncFailed", cause: "permanent", detail: "HTTP 409: path/not_found/" },
+				},
 				{ at: AFTERNOON, kind: "connectFailed", cause: "permanent", detail: "HTTP 400: bad client_id" },
 			],
 		});

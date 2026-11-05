@@ -197,9 +197,7 @@ export function createDropboxProvider(client: DropboxClient, root: string, trans
  * left out.
  */
 function remoteEntries(root: string, rootLower: string, listed: readonly Metadata[]): RemoteEntry[] {
-	return remoteChanges(root, rootLower, listed, "list_folder").filter(
-		(change): change is RemoteEntry => change.kind !== "deleted",
-	);
+	return remoteChanges(root, rootLower, listed, "list_folder").filter((change): change is RemoteEntry => change.kind !== "deleted");
 }
 
 /**
@@ -230,9 +228,7 @@ function remoteChanges(root: string, rootLower: string, listed: readonly Metadat
 		// A parent missing from the batch keeps its displayed name, below the root's
 		// segments: the root may show in another Unicode form, of another length.
 		const parentPath =
-			parent === undefined
-				? entry.path_display.split("/").slice(rootSegments, -1).join("/")
-				: pathOf(parentLower, parent);
+			parent === undefined ? entry.path_display.split("/").slice(rootSegments, -1).join("/") : pathOf(parentLower, parent);
 		const path = parentPath === "" ? entry.name : `${parentPath}/${entry.name}`;
 		paths.set(lower, path);
 		return path;

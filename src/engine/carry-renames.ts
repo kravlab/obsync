@@ -86,7 +86,8 @@ export interface RenameSync {
  * copy `copy`; kept a configuration file aside, out of the vault; or
  * nothing, since the Remote can hold no Conflict copy name for it.
  */
-type MovedAside = { readonly kind: "copy"; readonly copy: VaultPath } | { readonly kind: "keptAside" } | { readonly kind: "noCopyName" };
+type MovedAside =
+	{ readonly kind: "copy"; readonly copy: VaultPath } | { readonly kind: "keptAside" } | { readonly kind: "noCopyName" };
 
 /** What carrying renames leaves for the rest of the sync. */
 export interface CarriedRenames {
@@ -158,8 +159,7 @@ export async function carryRenames(renames: Renames, sync: RenameSync): Promise<
 		try {
 			await folderMove.moveFolder(current, to);
 		} catch (error) {
-			const refused =
-				isFailure(error, "preconditionFailed") || isFailure(error, "notFound") || isFailure(error, "permanent");
+			const refused = isFailure(error, "preconditionFailed") || isFailure(error, "notFound") || isFailure(error, "permanent");
 			if (!refused) throw error;
 			await sync.ensureRemoteFolder(to);
 			leftRemoteFolders.push(current);
@@ -368,14 +368,9 @@ export async function carryRenames(renames: Renames, sync: RenameSync): Promise<
 	 * snapshot entry leaves, which cannot be told apart from it; the copy
 	 * then holds the vault's version, nothing lost.
 	 */
-	async function keepRenamed(
-		rename: Rename,
-		kept: readonly Rename[],
-		deletedOn: "thisDevice" | "otherDevice",
-	): Promise<void> {
+	async function keepRenamed(rename: Rename, kept: readonly Rename[], deletedOn: "thisDevice" | "otherDevice"): Promise<void> {
 		await sync.forget(rename.from);
-		const taken =
-			deletedOn === "thisDevice" ? (await vault.stat(rename.to))?.kind === "file" : remote.get(rename.to)?.kind === "file";
+		const taken = deletedOn === "thisDevice" ? (await vault.stat(rename.to))?.kind === "file" : remote.get(rename.to)?.kind === "file";
 		if (rename.kind === "file" && taken) await moveAsideInVault(rename.to);
 		else if (!insideRenamedFolder(rename, kept)) ui.showNotice({ kind: "renameBeatsDelete", path: rename.to, deletedOn });
 	}

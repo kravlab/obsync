@@ -77,10 +77,7 @@ export class FakeDropbox {
 	/** Refresh tokens not revoked, with their account. */
 	private readonly refreshTokens = new Map<string, FakeDropboxAccount>();
 	/** Access tokens issued: their refresh token, expiry time, and whether a test expired them early. */
-	private readonly accessTokens = new Map<
-		string,
-		{ readonly refreshToken: string; readonly expiresAt: number; expired: boolean }
-	>();
+	private readonly accessTokens = new Map<string, { readonly refreshToken: string; readonly expiresAt: number; expired: boolean }>();
 	private lastIssued = 0;
 	/** Upload sessions not finished yet, by session id. */
 	private readonly sessions = new Map<string, FakeSession>();
@@ -902,4 +899,3 @@ function writeConflict(kind: "file" | "folder" | "file_ancestor"): HttpResponse 
 		path: { ".tag": "conflict", conflict: { ".tag": kind } },
 	});
 }
-

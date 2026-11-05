@@ -114,9 +114,7 @@ describe("the device store over IndexedDB", () => {
 
 		await store.markSnapshotComplete();
 
-		await vi.waitFor(() =>
-			expect(consoleError).toHaveBeenCalledWith("seamsync: deleting a snapshot database failed", failure),
-		);
+		await vi.waitFor(() => expect(consoleError).toHaveBeenCalledWith("seamsync: deleting a snapshot database failed", failure));
 	});
 
 	it("clears this device's state when another connection blocks deleting its database, reporting it", async () => {

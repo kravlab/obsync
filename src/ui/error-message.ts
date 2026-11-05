@@ -30,4 +30,3 @@ export function errorDetailLine(error: unknown, strings: Strings): string | unde
 export function detailLine(detail: string | undefined, strings: Strings): string | undefined {
 	return detail === undefined ? undefined : fill(strings.errorDetails, { detail });
 }
-

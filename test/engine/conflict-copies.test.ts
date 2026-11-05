@@ -288,8 +288,7 @@ describe("Conflict copies of files that are not text", () => {
 
 describe("canvas and JSON files changed on two devices", () => {
 	/** A canvas as Obsidian writes one: tab-indented JSON, one value per line. */
-	const canvas = (first: string, last: string): string =>
-		`{\n\t"nodes": [\n\t\t${first},\n\t\t{"id": "pad"},\n\t\t${last}\n\t]\n}\n`;
+	const canvas = (first: string, last: string): string => `{\n\t"nodes": [\n\t\t${first},\n\t\t{"id": "pad"},\n\t\t${last}\n\t]\n}\n`;
 
 	it("applies a clean merge that parses as JSON on both sides, with no copy", async () => {
 		const base = canvas('{"id": "a"}', '{"id": "b"}');

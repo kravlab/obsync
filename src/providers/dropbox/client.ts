@@ -24,9 +24,7 @@ const EXPIRY_MARGIN_MS = 5 * 60 * 1000;
 export type RouteResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: Tagged };
 
 /** A download's result: the file's bytes, or the error a 409 carried. */
-export type DownloadResult =
-	| { readonly ok: true; readonly data: ArrayBuffer }
-	| { readonly ok: false; readonly error: Tagged };
+export type DownloadResult = { readonly ok: true; readonly data: ArrayBuffer } | { readonly ok: false; readonly error: Tagged };
 
 /** An access token and when it stops working, in ms since the epoch. */
 export interface AccessToken {
@@ -235,8 +233,5 @@ function successBody(response: HttpResponse): unknown {
  * escaping as the official JavaScript SDK (`httpHeaderSafeJson`).
  */
 function headerSafeJson(value: unknown): string {
-	return JSON.stringify(value).replace(
-		/[\u007f-￿]/g,
-		(character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
-	);
+	return JSON.stringify(value).replace(/[\u007f-￿]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }

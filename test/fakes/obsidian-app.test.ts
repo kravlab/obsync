@@ -29,7 +29,12 @@ describe("the fake vault's index", () => {
 
 		const root = listed[0];
 		expect(root instanceof TFolder && root.isRoot()).toBe(true);
-		expect(listed.slice(1).map((entry) => entry.path).sort()).toEqual(["notes", "notes/a.md"]);
+		expect(
+			listed
+				.slice(1)
+				.map((entry) => entry.path)
+				.sort(),
+		).toEqual(["notes", "notes/a.md"]);
 	});
 
 	it("finds a file and a folder by path, one object per path, and nothing at a hidden path", () => {

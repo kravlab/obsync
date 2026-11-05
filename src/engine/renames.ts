@@ -322,7 +322,6 @@ function filesOnly<T extends Rename>(renames: readonly T[]): T[] {
 	return renames.filter((rename) => rename.kind === "file");
 }
 
-
 /** Whether `side` has an entry of `kind` at `path` that is new: not in `snapshot`. */
 function isNewAt(side: Side, kind: "file" | "folder", path: VaultPath, snapshot: SyncSnapshot): boolean {
 	return side.entries.get(path)?.kind === kind && !snapshot.has(path);

@@ -3,7 +3,11 @@ import type { ActivityEvent } from "../../src/engine/activity-log";
 import { storableActivity, storedActivity } from "../../src/obsidian/activity-store";
 
 const events: ActivityEvent[] = [
-	{ at: 2_000, kind: "notice", notice: { kind: "conflictCopyCreated", path: "a.png", copyPath: "a (conflict P 2026-10-20 1430).png" } },
+	{
+		at: 2_000,
+		kind: "notice",
+		notice: { kind: "conflictCopyCreated", path: "a.png", copyPath: "a (conflict P 2026-10-20 1430).png" },
+	},
 	{ at: 1_000, kind: "status", status: { state: "syncFailed", cause: "permanent" } },
 ];
 
@@ -126,7 +130,10 @@ describe("stored activity log", () => {
 		["a restore with an unknown side", { kind: "restoredAfterDelete", path: "a.md", deletedOn: "elsewhere" }],
 		["a rename without this device's name", { kind: "renamedOnBoth", path: "b.md" }],
 		["a rename over a delete without its path", { kind: "renameBeatsDelete", deletedOn: "thisDevice" }],
-		["a First sync with a count that is not a number", { kind: "firstSyncDone", downloaded: "1", uploaded: 2, conflicted: 0, conflictCopies: 0 }],
+		[
+			"a First sync with a count that is not a number",
+			{ kind: "firstSyncDone", downloaded: "1", uploaded: 2, conflicted: 0, conflictCopies: 0 },
+		],
 	])("leaves out a notice with %s", (_, notice) => {
 		expect(storedActivity({ formatVersion: 1, events: [{ at: 5, kind: "notice", notice }] })).toEqual([]);
 	});

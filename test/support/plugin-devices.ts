@@ -143,9 +143,9 @@ export function selectedTab(device: PluginDevice): string {
 
 /** The texts of the lines and items the shown tab of the Sync window `device` opened last lists. */
 export function tabLines(device: PluginDevice): string[] {
-	return [...lastSyncWindow(device).querySelectorAll(".seamsync-sync-body .seamsync-sync-line, .seamsync-sync-body .seamsync-sync-item")].map(
-		(line) => line.textContent,
-	);
+	return [
+		...lastSyncWindow(device).querySelectorAll(".seamsync-sync-body .seamsync-sync-line, .seamsync-sync-body .seamsync-sync-item"),
+	].map((line) => line.textContent);
 }
 
 /** The paths of every file in `device`'s vault index, sorted; hidden paths, the configuration's included, are not in it. */
@@ -333,9 +333,7 @@ export class PluginDevices {
 			requestCount: () => sent,
 			windowsOpened: (title) =>
 				// The spy's `this` is each modal opened, which its type does not tell.
-				(opened.mock.contexts as ObsidianFake.Modal[]).filter(
-					(modal) => title === undefined || modal.titleEl.textContent === title,
-				),
+				(opened.mock.contexts as ObsidianFake.Modal[]).filter((modal) => title === undefined || modal.titleEl.textContent === title),
 		};
 		this.started.push(device);
 		await loaded.onload();

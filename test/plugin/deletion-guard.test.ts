@@ -78,11 +78,7 @@ describe("the Deletion guard window", { timeout: DEVICE_TEST_TIMEOUT_MS }, () =>
 		const guard = lastGuard(device);
 		const paragraphs = [...guard.contentEl.querySelectorAll("p")].map((paragraph) => paragraph.textContent);
 
-		expect(paragraphs).toEqual([
-			strings.guardReasonThreshold,
-			fill(strings.guardToRemote, { count: "6" }),
-			strings.guardCloseHint,
-		]);
+		expect(paragraphs).toEqual([strings.guardReasonThreshold, fill(strings.guardToRemote, { count: "6" }), strings.guardCloseHint]);
 		const list = guard.contentEl.querySelector<HTMLElement>(".seamsync-guard-list");
 		expect(list?.isShown()).toBe(false);
 		buttonIn(guard.contentEl, strings.guardReview).click();

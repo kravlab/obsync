@@ -22,12 +22,7 @@ const AUTHORIZE_URL = "https://www.dropbox.com/oauth2/authorize";
  * The scopes the app asks for and nothing else (spec, "Dropbox
  * provider"): listing, download, upload and account info.
  */
-const DROPBOX_SCOPES: readonly string[] = [
-	"files.metadata.read",
-	"files.content.read",
-	"files.content.write",
-	"account_info.read",
-];
+const DROPBOX_SCOPES: readonly string[] = ["files.metadata.read", "files.content.read", "files.content.write", "account_info.read"];
 
 /** Builds the Dropbox connect step. */
 export function createDropboxConnectStep({ appKey, http, clock, transfers }: DropboxOptions): ConnectStep {

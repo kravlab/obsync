@@ -28,7 +28,13 @@ interface Helpers {
 	dropboxCall(token: string, route: string, args: unknown): Promise<{ status: number; json?: unknown }>;
 	dropboxDownload(token: string, path: string, size: number): Promise<ArrayBuffer>;
 	sha256(bytes: ArrayBuffer): Promise<string>;
-	askDropbox<T>(ask: () => Promise<Asked<T> | null>, timeoutMs: number, what: string, everyMs?: number, throttledMs?: number): Promise<T>;
+	askDropbox<T>(
+		ask: () => Promise<Asked<T> | null>,
+		timeoutMs: number,
+		what: string,
+		everyMs?: number,
+		throttledMs?: number,
+	): Promise<T>;
 }
 
 /** What one ask of `askDropbox` answers. */
@@ -39,7 +45,10 @@ interface Asked<T> {
 }
 
 /** The helpers for app key "the-key", run in Node over a fake `app` and `requestUrl` that records every request. */
-function helpersOver(answer: (request: Request) => Answer, secrets: Record<string, string> = {}): { helpers: Helpers; sent: Request[] } {
+function helpersOver(
+	answer: (request: Request) => Answer,
+	secrets: Record<string, string> = {},
+): { helpers: Helpers; sent: Request[] } {
 	const sent: Request[] = [];
 	const app = { secretStorage: { getSecret: (id: string) => secrets[id] ?? null } };
 	const requestUrl = (request: Request) => {
@@ -48,7 +57,10 @@ function helpersOver(answer: (request: Request) => Answer, secrets: Record<strin
 	};
 	// The page's globals the helpers use; the rest are the language's own.
 	const page = createContext({ app, requestUrl, crypto, URLSearchParams, setTimeout });
-	const helpers = runInContext(`(() => {${dropboxHelpers("the-key")}\nreturn { pluginSecret, dropboxAccess, dropboxCall, dropboxDownload, sha256, askDropbox };})()`, page) as Helpers;
+	const helpers = runInContext(
+		`(() => {${dropboxHelpers("the-key")}\nreturn { pluginSecret, dropboxAccess, dropboxCall, dropboxDownload, sha256, askDropbox };})()`,
+		page,
+	) as Helpers;
 	return { helpers, sent };
 }
 
@@ -73,8 +85,17 @@ describe("an access token from the plugin's login", () => {
 		const { helpers, sent } = helpersOver(() => ({ status: 200, json: { access_token: "access" } }));
 		expect(await helpers.dropboxAccess("refresh")).toEqual({ status: 200, token: "access" });
 		expect(sent).toHaveLength(1);
-		expect(sent[0]).toMatchObject({ url: "https://api.dropboxapi.com/oauth2/token", method: "POST", contentType: "application/x-www-form-urlencoded", throw: false });
-		expect(Object.fromEntries(new URLSearchParams(sent[0]?.body))).toEqual({ grant_type: "refresh_token", refresh_token: "refresh", client_id: "the-key" });
+		expect(sent[0]).toMatchObject({
+			url: "https://api.dropboxapi.com/oauth2/token",
+			method: "POST",
+			contentType: "application/x-www-form-urlencoded",
+			throw: false,
+		});
+		expect(Object.fromEntries(new URLSearchParams(sent[0]?.body))).toEqual({
+			grant_type: "refresh_token",
+			refresh_token: "refresh",
+			client_id: "the-key",
+		});
 	});
 
 	it("is refused with Dropbox's status and error, without a token", async () => {
@@ -112,18 +133,24 @@ describe("a Dropbox RPC call", () => {
 describe("downloading a file back", () => {
 	const part = DEFAULT_REQUEST_LIMIT.bytes;
 	/** A fake file whose byte at `index` is `index % 251`, answering the Range a request asks for. */
-	const file = (size: number) => (request: Request): Answer => {
-		const [start, end] = (/^bytes=(\d+)-(\d+)$/.exec(request.headers?.Range ?? "") ?? []).slice(1).map(Number);
-		if (start === undefined || end === undefined) return { status: 200, arrayBuffer: new ArrayBuffer(size) };
-		const bytes = new Uint8Array(end - start + 1).map((_, index) => (start + index) % 251);
-		return { status: 206, arrayBuffer: bytes.buffer };
-	};
+	const file =
+		(size: number) =>
+		(request: Request): Answer => {
+			const [start, end] = (/^bytes=(\d+)-(\d+)$/.exec(request.headers?.Range ?? "") ?? []).slice(1).map(Number);
+			if (start === undefined || end === undefined) return { status: 200, arrayBuffer: new ArrayBuffer(size) };
+			const bytes = new Uint8Array(end - start + 1).map((_, index) => (start + index) % 251);
+			return { status: 206, arrayBuffer: bytes.buffer };
+		};
 
 	it("reads it in Range parts no larger than the plugin's Per-request limit, and puts them together", async () => {
 		const size = 2 * part + 5;
 		const { helpers, sent } = helpersOver(file(size));
 		const bytes = new Uint8Array(await helpers.dropboxDownload("access", "rev:abc", size));
-		expect(sent.map((request) => request.headers?.Range)).toEqual([`bytes=0-${part - 1}`, `bytes=${part}-${2 * part - 1}`, `bytes=${2 * part}-${2 * part + 4}`]);
+		expect(sent.map((request) => request.headers?.Range)).toEqual([
+			`bytes=0-${part - 1}`,
+			`bytes=${part}-${2 * part - 1}`,
+			`bytes=${2 * part}-${2 * part + 4}`,
+		]);
 		expect(sent[0]).toMatchObject({
 			url: "https://content.dropboxapi.com/2/files/download",
 			method: "POST",
@@ -147,16 +174,23 @@ describe("downloading a file back", () => {
 describe("the SHA-256 of bytes", () => {
 	it("is the hex digest", async () => {
 		const { helpers } = helpersOver(() => ({ status: 500 }));
-		expect(await helpers.sha256(new TextEncoder().encode("abc").buffer)).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+		expect(await helpers.sha256(new TextEncoder().encode("abc").buffer)).toBe(
+			"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+		);
 	});
 });
 
 describe("the helpers a page needs without the app key", () => {
 	it("read the plugin's login and hash bytes alone, holding no app key", async () => {
 		const page = createContext({ app: { secretStorage: { getSecret: () => "refresh" } }, crypto });
-		const run = runInContext(`(() => {${PLUGIN_SECRET_HELPER}\n${SHA256_HELPER}\nreturn { pluginSecret, sha256 };})()`, page) as Pick<Helpers, "pluginSecret" | "sha256">;
+		const run = runInContext(`(() => {${PLUGIN_SECRET_HELPER}\n${SHA256_HELPER}\nreturn { pluginSecret, sha256 };})()`, page) as Pick<
+			Helpers,
+			"pluginSecret" | "sha256"
+		>;
 		expect(run.pluginSecret()).toBe("refresh");
-		expect(await run.sha256(new TextEncoder().encode("abc").buffer)).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+		expect(await run.sha256(new TextEncoder().encode("abc").buffer)).toBe(
+			"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+		);
 		expect(`${PLUGIN_SECRET_HELPER}${SHA256_HELPER}`).not.toContain("the-key");
 	});
 });
@@ -174,14 +208,22 @@ describe("asking Dropbox until it holds what a check waits for", () => {
 
 	it("resolves with the value of the first answer that is done", async () => {
 		const { helpers } = helpersOver(() => ({ status: 500 }));
-		const { asked, result } = ask(helpers, [{ status: 200, done: false }, { status: 200, done: true, value: "there" }]);
+		const { asked, result } = ask(helpers, [
+			{ status: 200, done: false },
+			{ status: 200, done: true, value: "there" },
+		]);
 		expect(await result).toBe("there");
 		expect(asked).toHaveBeenCalledTimes(2);
 	});
 
 	it("asks again after a failed ask, a throttled one and one not asked", async () => {
 		const { helpers } = helpersOver(() => ({ status: 500 }));
-		const { asked, result } = ask(helpers, [new Error("offline"), { status: 429, done: false }, null, { status: 200, done: true, value: "there" }]);
+		const { asked, result } = ask(helpers, [
+			new Error("offline"),
+			{ status: 429, done: false },
+			null,
+			{ status: 200, done: true, value: "there" },
+		]);
 		expect(await result).toBe("there");
 		expect(asked).toHaveBeenCalledTimes(4);
 	});
@@ -190,14 +232,17 @@ describe("asking Dropbox until it holds what a check waits for", () => {
 		const { helpers } = helpersOver(() => ({ status: 500 }));
 		const started = Date.now();
 		let calls = 0;
-		const throttledOnce = () => Promise.resolve(calls++ === 0 ? { status: 429, done: false } : { status: 200, done: true, value: "there" });
+		const throttledOnce = () =>
+			Promise.resolve(calls++ === 0 ? { status: 429, done: false } : { status: 200, done: true, value: "there" });
 		expect(await helpers.askDropbox(throttledOnce, 1000, "the file", 1, 60)).toBe("there");
 		expect(Date.now() - started).toBeGreaterThanOrEqual(55);
 	});
 
 	it("fails naming what it waited for once the time is up", async () => {
 		const { helpers } = helpersOver(() => ({ status: 500 }));
-		await expect(ask(helpers, [{ status: 200, done: false }]).result).rejects.toThrow("timed out after 200 ms waiting for the file on Dropbox");
+		await expect(ask(helpers, [{ status: 200, done: false }]).result).rejects.toThrow(
+			"timed out after 200 ms waiting for the file on Dropbox",
+		);
 	});
 });
 

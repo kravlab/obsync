@@ -122,7 +122,9 @@ describe("check 17: a long note merges within the time limit on the phone", () =
 	});
 });
 
-describeOnboardingHelp("check 19 (partial: no settings row): onboarding and help, in English and Russian", phone, { settingsRow: false });
+describeOnboardingHelp("check 19 (partial: no settings row): onboarding and help, in English and Russian", phone, {
+	settingsRow: false,
+});
 
 describe("check 1: connecting through the phone's real requestUrl", () => {
 	it(

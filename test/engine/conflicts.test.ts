@@ -35,7 +35,9 @@ describe("conflictsOf", () => {
 
 describe("conflictCount", () => {
 	it("adds up the three lists", () => {
-		expect(conflictCount({ conflicted: ["a.md", "b.md"], copies: ["c (conflict P 2026-10-20 1430).png"], configuration: [kept] })).toBe(4);
+		expect(
+			conflictCount({ conflicted: ["a.md", "b.md"], copies: ["c (conflict P 2026-10-20 1430).png"], configuration: [kept] }),
+		).toBe(4);
 	});
 });
 

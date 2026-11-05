@@ -1,10 +1,5 @@
 import type { App } from "obsidian";
-import {
-	DEFAULT_SYNC_SCHEDULE,
-	editPauseOf,
-	pollIntervalOf,
-	type SyncSchedule,
-} from "../engine/sync-schedule";
+import { DEFAULT_SYNC_SCHEDULE, editPauseOf, pollIntervalOf, type SyncSchedule } from "../engine/sync-schedule";
 
 /** The localStorage key of this vault's sync schedule settings. */
 const SCHEDULE_KEY = "seamsync-schedule";
@@ -53,8 +48,7 @@ export function storedSyncSchedule(stored: unknown): SyncSchedule {
 		return DEFAULT_SYNC_SCHEDULE;
 	}
 	const editPause = typeof record.editPauseSeconds === "number" ? editPauseOf(record.editPauseSeconds) : null;
-	const pollInterval =
-		typeof record.pollIntervalSeconds === "number" ? pollIntervalOf(record.pollIntervalSeconds) : null;
+	const pollInterval = typeof record.pollIntervalSeconds === "number" ? pollIntervalOf(record.pollIntervalSeconds) : null;
 	if (editPause === null || pollInterval === null) return DEFAULT_SYNC_SCHEDULE;
 	return { editPause, pollInterval };
 }

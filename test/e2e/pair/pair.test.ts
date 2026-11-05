@@ -44,7 +44,15 @@ import {
 } from "../support/dropbox-login";
 import { ASK_EVERY_MS, dropboxAppKey, dropboxHelpers, SHA256_HELPER, THROTTLED_WAIT_MS } from "../support/dropbox-page";
 import { CALL_MS, PAGE_HELPERS, TEST_HEADROOM_MS } from "../support/page";
-import { COMPLETE_SYNC_MS, DEVICE_NAMES_HELPER, DEVICES_LIST_MS, otherDevicesHelpers, RUN_FOLDER, statusHelpers, SYNC_TIMEOUT_MS } from "../support/pair-page";
+import {
+	COMPLETE_SYNC_MS,
+	DEVICE_NAMES_HELPER,
+	DEVICES_LIST_MS,
+	otherDevicesHelpers,
+	RUN_FOLDER,
+	statusHelpers,
+	SYNC_TIMEOUT_MS,
+} from "../support/pair-page";
 import { onePixelPng } from "../support/png";
 
 /**
@@ -216,7 +224,10 @@ describe("check 5: the second device's First sync shows its counts, and both vau
 
 			// The desktop takes the phone's files at its next sync.
 			const union = { ...before.desktop, ...before.phone };
-			await desktop().eval(syncUntil(`${Object.keys(union).length} files`, `app.vault.getFiles().length === ${Object.keys(union).length}`), SYNC_TIMEOUT_MS + CALL_MS);
+			await desktop().eval(
+				syncUntil(`${Object.keys(union).length} files`, `app.vault.getFiles().length === ${Object.keys(union).length}`),
+				SYNC_TIMEOUT_MS + CALL_MS,
+			);
 			expect(await listing(desktop())).toEqual(union);
 			expect(await listing(phone())).toEqual(union);
 		},
@@ -304,10 +315,17 @@ describe("check 6: a change made on the desktop reaches the phone when it comes 
 			} finally {
 				await phone().setNetwork(true);
 			}
-			await phone().eval(`await until(() => app.vault.getAbstractFileByPath(${JSON.stringify(offlineNote)}), ${TRIGGER_LIMIT_MS}, "the desktop's change after the network came back");`);
+			await phone().eval(
+				`await until(() => app.vault.getAbstractFileByPath(${JSON.stringify(offlineNote)}), ${TRIGGER_LIMIT_MS}, "the desktop's change after the network came back");`,
+			);
 			expect(await phoneHas(offlineNote)).toBe(true);
 		},
-		OLD_POLL_GONE_MS + CALL_MS * 12 + (SYNC_TIMEOUT_MS + ASK_EVERY_MS + THROTTLED_WAIT_MS) * 2 + BACKGROUND_MS + TRIGGER_LIMIT_MS * 2 + TEST_HEADROOM_MS,
+		OLD_POLL_GONE_MS +
+			CALL_MS * 12 +
+			(SYNC_TIMEOUT_MS + ASK_EVERY_MS + THROTTLED_WAIT_MS) * 2 +
+			BACKGROUND_MS +
+			TRIGGER_LIMIT_MS * 2 +
+			TEST_HEADROOM_MS,
 	);
 });
 
@@ -351,7 +369,9 @@ describe("check 20: shared settings and devices", () => {
 				COMPLETE_SYNC_MS + CALL_MS,
 			);
 			// The phone's sync passed the note over as ignored, and says so.
-			expect(phoneStatus).toBe(statusText({ state: "synced" }, NO_CONFLICTS, [{ path: IGNORED_NOTE, reason: "ignored" }], phoneStrings));
+			expect(phoneStatus).toBe(
+				statusText({ state: "synced" }, NO_CONFLICTS, [{ path: IGNORED_NOTE, reason: "ignored" }], phoneStrings),
+			);
 			const remoteNames = await phone().eval(`
 				${dropboxAccessProgram()}
 				const listed = await dropboxCall(access.token, "files/list_folder", { path: ${JSON.stringify(`/${RUN_FOLDER}`)} });
@@ -449,15 +469,21 @@ describe("check 20: shared settings and devices", () => {
 				SYNC_TIMEOUT_MS * 3 + CALL_MS,
 			)) as { paused: string; rows: { name: string; options: string[] }[]; preselected: string };
 			// The phone still shows the count of check 20's ignored note.
-			expect(shown.paused).toBe(statusText({ state: "settingsCollision" }, NO_CONFLICTS, [{ path: IGNORED_NOTE, reason: "ignored" }], phoneStrings));
+			expect(shown.paused).toBe(
+				statusText({ state: "settingsCollision" }, NO_CONFLICTS, [{ path: IGNORED_NOTE, reason: "ignored" }], phoneStrings),
+			);
 			// The window preselects this device's value.
 			expect(shown.preselected).toBe("mine");
 			// The size limit as the window shows it, for a limit of `mebibytes`.
-			const ceiling = (mebibytes: number): string => settingValueText("sizeCeilingBytes", { ...DEFAULT_REMOTE_SETTINGS, sizeCeilingBytes: mebibytes * MEBIBYTE }, phoneStrings);
+			const ceiling = (mebibytes: number): string =>
+				settingValueText("sizeCeilingBytes", { ...DEFAULT_REMOTE_SETTINGS, sizeCeilingBytes: mebibytes * MEBIBYTE }, phoneStrings);
 			expect(shown.rows).toEqual([
 				{
 					name: settingNameText("sizeCeilingBytes", phoneStrings),
-					options: [fill(phoneStrings.collisionMine, { value: ceiling(PHONE_CEILING_MIB) }), fill(phoneStrings.collisionRemote, { value: ceiling(DESKTOP_CEILING_MIB) })],
+					options: [
+						fill(phoneStrings.collisionMine, { value: ceiling(PHONE_CEILING_MIB) }),
+						fill(phoneStrings.collisionRemote, { value: ceiling(DESKTOP_CEILING_MIB) }),
+					],
 				},
 			]);
 
@@ -472,7 +498,10 @@ describe("check 20: shared settings and devices", () => {
 			const phoneShows = await phone().eval(`
 				${PAGE_HELPERS}
 				${readSizeLimit(phoneStrings)}`);
-			expect({ desktop: desktopShows, phone: phoneShows }).toEqual({ desktop: String(PHONE_CEILING_MIB), phone: String(PHONE_CEILING_MIB) });
+			expect({ desktop: desktopShows, phone: phoneShows }).toEqual({
+				desktop: String(PHONE_CEILING_MIB),
+				phone: String(PHONE_CEILING_MIB),
+			});
 		},
 		CALL_MS * 8 + SYNC_TIMEOUT_MS * 4 + COMPLETE_SYNC_MS * 2 + TEST_HEADROOM_MS,
 	);
@@ -584,7 +613,11 @@ interface FirstSyncShown {
  * Expects `shown` to count and list `toDownload` and `toUpload`, in any
  * order, with nothing the same or different on both sides.
  */
-function expectFirstSync(shown: FirstSyncShown, strings: Strings, { toDownload, toUpload }: Record<"toDownload" | "toUpload", readonly string[]>): void {
+function expectFirstSync(
+	shown: FirstSyncShown,
+	strings: Strings,
+	{ toDownload, toUpload }: Record<"toDownload" | "toUpload", readonly string[]>,
+): void {
 	const heading = (template: string, paths: readonly string[]): string => fill(template, { count: String(paths.length) });
 	expect(shown.paragraphs).toEqual(
 		expect.arrayContaining([

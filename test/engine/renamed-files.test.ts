@@ -289,9 +289,7 @@ describe("a file renamed onto a path another device just used", () => {
 		const vaultPaths = (await phone.vault.list()).map((entry) => entry.path);
 		expect(vaultPaths.some((path) => path.includes("(conflict"))).toBe(false);
 		expect(mirrorPaths(remote).some((path) => path.includes("(conflict"))).toBe(false);
-		const kept = await Promise.all(
-			vaultPaths.filter((path) => path.endsWith(".md")).map((path) => vaultText(phone, path)),
-		);
+		const kept = await Promise.all(vaultPaths.filter((path) => path.endsWith(".md")).map((path) => vaultText(phone, path)));
 		expect(phone.ui.lastStatus).toEqual({ state: "synced" });
 		expect(kept.join("\n")).toContain("new here");
 		expect(kept.join("\n")).toContain("renamed there");
@@ -357,13 +355,7 @@ describe("a folder renamed on one device", () => {
 		expect(await vaultText(phone, "notes/a.md")).toBe("a");
 		expect(await phone.vault.stat("docs")).toBeNull();
 		expect([...laptop.vault.trashed, ...phone.vault.trashed]).toEqual([]);
-		expect([...phone.deviceStore.snapshot.keys()].sort()).toEqual([
-			"keep.md",
-			"note.md",
-			"notes",
-			"notes/a.md",
-			"notes/b.png",
-		]);
+		expect([...phone.deviceStore.snapshot.keys()].sort()).toEqual(["keep.md", "note.md", "notes", "notes/a.md", "notes/b.png"]);
 	});
 
 	it("keeps a file another device added to the old folder on a service that cannot move folders", async () => {
@@ -482,68 +474,85 @@ async function renameNoteAndDocs({ laptop }: Pair): Promise<void> {
 
 describe("a rename cut off at any step", () => {
 	for (const service of [{}, { fileMove: true, folderMove: true, stableIds: true }] as const) {
-		it(`is completed by the next sync, on a service with ${JSON.stringify(service)}`, async () => {
-			await crashAtEveryStep(service, {
-				async prepare(pair) {
-					await writeDocs(pair.laptop);
-					await syncNow(pair.laptop);
-					await syncNow(pair.phone);
-					await pair.phone.vault.write("docs/a.md", bytes("a edited on phone"));
-					await syncNow(pair.phone);
-					await renameNoteAndDocs(pair);
-				},
-				crashing: ({ laptop }) => laptop,
-				async recover({ laptop, phone }) {
-					await syncNow(laptop);
-					await syncNow(phone);
-				},
-				async check({ remote, laptop, phone }, at) {
-					const paths = mirrorPaths(remote);
-					// A cut-off that leaves the moved file on the Remote while the old one is gone looks like
-					// a rename onto an occupied path: at most a Conflict copy more, nothing lost.
-					expect(paths.filter((path) => !path.includes("(conflict Laptop ")), at).toEqual(
-						["keep.md", "notes", "notes/a.md", "notes/b.png", "renamed.md"],
-					);
-					expect(await vaultPaths(phone), at).toEqual(paths);
-					expect(await vaultPaths(laptop), at).toEqual(paths);
-					expect(remoteText(remote, "notes/a.md"), at).toBe("a edited on phone");
-					expect(await vaultText(laptop, "notes/a.md"), at).toBe("a edited on phone");
-					expect(await vaultText(phone, "renamed.md"), at).toBe("original");
-					const notices = [...laptop.ui.notices, ...phone.ui.notices];
-					expect(notices.filter((notice) => notice.kind !== "conflictCopyCreated"), at).toEqual([]);
-				},
-			});
-		}, EXHAUSTIVE_TEST_TIMEOUT_MS);
+		it(
+			`is completed by the next sync, on a service with ${JSON.stringify(service)}`,
+			async () => {
+				await crashAtEveryStep(service, {
+					async prepare(pair) {
+						await writeDocs(pair.laptop);
+						await syncNow(pair.laptop);
+						await syncNow(pair.phone);
+						await pair.phone.vault.write("docs/a.md", bytes("a edited on phone"));
+						await syncNow(pair.phone);
+						await renameNoteAndDocs(pair);
+					},
+					crashing: ({ laptop }) => laptop,
+					async recover({ laptop, phone }) {
+						await syncNow(laptop);
+						await syncNow(phone);
+					},
+					async check({ remote, laptop, phone }, at) {
+						const paths = mirrorPaths(remote);
+						// A cut-off that leaves the moved file on the Remote while the old one is gone looks like
+						// a rename onto an occupied path: at most a Conflict copy more, nothing lost.
+						expect(
+							paths.filter((path) => !path.includes("(conflict Laptop ")),
+							at,
+						).toEqual(["keep.md", "notes", "notes/a.md", "notes/b.png", "renamed.md"]);
+						expect(await vaultPaths(phone), at).toEqual(paths);
+						expect(await vaultPaths(laptop), at).toEqual(paths);
+						expect(remoteText(remote, "notes/a.md"), at).toBe("a edited on phone");
+						expect(await vaultText(laptop, "notes/a.md"), at).toBe("a edited on phone");
+						expect(await vaultText(phone, "renamed.md"), at).toBe("original");
+						const notices = [...laptop.ui.notices, ...phone.ui.notices];
+						expect(
+							notices.filter((notice) => notice.kind !== "conflictCopyCreated"),
+							at,
+						).toEqual([]);
+					},
+				});
+			},
+			EXHAUSTIVE_TEST_TIMEOUT_MS,
+		);
 
-		it(`is completed by the receiving device's next sync, its own edit kept, on a service with ${JSON.stringify(service)}`, async () => {
-			await crashAtEveryStep(service, {
-				async prepare(pair) {
-					await writeDocs(pair.laptop);
-					await syncNow(pair.laptop);
-					await syncNow(pair.phone);
-					await renameNoteAndDocs(pair);
-					await syncNow(pair.laptop);
-					await pair.phone.vault.write("note.md", bytes("edited on phone"));
-				},
-				crashing: ({ phone }) => phone,
-				async recover({ laptop, phone }) {
-					await syncNow(phone);
-					await syncNow(laptop);
-				},
-				async check({ remote, laptop, phone }, at) {
-					const paths = mirrorPaths(remote);
-					expect(paths, at).toEqual(expect.arrayContaining(["keep.md", "notes", "notes/a.md", "notes/b.png", "renamed.md"]));
-					expect(paths.filter((path) => path.startsWith("docs") || path === "note.md"), at).toEqual([]);
-					expect(await vaultPaths(phone), at).toEqual(paths);
-					expect(await vaultPaths(laptop), at).toEqual(paths);
-					// The phone's edit survives: under the new name, or in a Conflict copy when the crash left that ambiguous.
-					expect(mirrorTexts(remote).some((content) => content.includes("edited on phone")), at).toBe(true);
-				},
-			});
-		}, EXHAUSTIVE_TEST_TIMEOUT_MS);
+		it(
+			`is completed by the receiving device's next sync, its own edit kept, on a service with ${JSON.stringify(service)}`,
+			async () => {
+				await crashAtEveryStep(service, {
+					async prepare(pair) {
+						await writeDocs(pair.laptop);
+						await syncNow(pair.laptop);
+						await syncNow(pair.phone);
+						await renameNoteAndDocs(pair);
+						await syncNow(pair.laptop);
+						await pair.phone.vault.write("note.md", bytes("edited on phone"));
+					},
+					crashing: ({ phone }) => phone,
+					async recover({ laptop, phone }) {
+						await syncNow(phone);
+						await syncNow(laptop);
+					},
+					async check({ remote, laptop, phone }, at) {
+						const paths = mirrorPaths(remote);
+						expect(paths, at).toEqual(expect.arrayContaining(["keep.md", "notes", "notes/a.md", "notes/b.png", "renamed.md"]));
+						expect(
+							paths.filter((path) => path.startsWith("docs") || path === "note.md"),
+							at,
+						).toEqual([]);
+						expect(await vaultPaths(phone), at).toEqual(paths);
+						expect(await vaultPaths(laptop), at).toEqual(paths);
+						// The phone's edit survives: under the new name, or in a Conflict copy when the crash left that ambiguous.
+						expect(
+							mirrorTexts(remote).some((content) => content.includes("edited on phone")),
+							at,
+						).toBe(true);
+					},
+				});
+			},
+			EXHAUSTIVE_TEST_TIMEOUT_MS,
+		);
 	}
 });
-
 
 describe("a file renamed and edited while Obsidian runs", () => {
 	it("is carried as a rename with the edit, from the vault's rename event", async () => {

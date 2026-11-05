@@ -103,9 +103,7 @@ export function conflictBlocks(text: string): ConflictBlock[] {
 	// An opener never closed takes over the first block inside it: its markers were the outer block's.
 	for (const unclosed of open) {
 		if (unclosed.separatorLine !== undefined) continue;
-		const inner = blocks
-			.filter((block) => block.startLine > unclosed.startLine)
-			.sort((a, b) => a.startLine - b.startLine)[0];
+		const inner = blocks.filter((block) => block.startLine > unclosed.startLine).sort((a, b) => a.startLine - b.startLine)[0];
 		if (inner === undefined) continue;
 		blocks.splice(blocks.indexOf(inner), 1, blockOf(unclosed, inner.separatorLine, inner.endLine, inner.remoteLabel));
 	}
@@ -184,11 +182,7 @@ function keptText(block: ConflictBlock, action: ConflictAction): string {
  * the first starting after it, or for `previous` the last starting before
  * it, wrapping around at either end; null when there are none.
  */
-export function adjacentBlock(
-	blocks: readonly ConflictBlock[],
-	line: number,
-	direction: BlockDirection,
-): ConflictBlock | null {
+export function adjacentBlock(blocks: readonly ConflictBlock[], line: number, direction: BlockDirection): ConflictBlock | null {
 	if (direction === "next") return blocks.find((block) => block.startLine > line) ?? blocks[0] ?? null;
 	const before = blocks.filter((block) => block.startLine < line);
 	return before[before.length - 1] ?? blocks[blocks.length - 1] ?? null;
@@ -196,8 +190,7 @@ export function adjacentBlock(
 
 /** A part of a rendered section: plain note text, or a whole Conflict block to show as one. */
 export type SectionPiece =
-	| { readonly kind: "text"; readonly text: string }
-	| { readonly kind: "block"; readonly block: ConflictBlock };
+	{ readonly kind: "text"; readonly text: string } | { readonly kind: "block"; readonly block: ConflictBlock };
 
 /**
  * The lines `lineStart` to `lineEnd` of `text`, a section reading view
@@ -233,7 +226,5 @@ export function sectionPieces(text: string, lineStart: number, lineEnd: number):
 
 /** The blocks of `blocks` that no other block holds. */
 function outermostBlocks(blocks: readonly ConflictBlock[]): ConflictBlock[] {
-	return blocks.filter(
-		(block) => !blocks.some((other) => other.startLine < block.startLine && block.endLine < other.endLine),
-	);
+	return blocks.filter((block) => !blocks.some((other) => other.startLine < block.startLine && block.endLine < other.endLine));
 }

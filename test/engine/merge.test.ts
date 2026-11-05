@@ -1,15 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-	DEFAULT_REMOTE_SETTINGS,
-	METADATA_FOLDER,
-	SETTINGS_PATH,
-	encodeSettings,
-} from "../../src/engine/remote-metadata";
+import { DEFAULT_REMOTE_SETTINGS, METADATA_FOLDER, SETTINGS_PATH, encodeSettings } from "../../src/engine/remote-metadata";
 import { bytes } from "../support/bytes";
 import { FakeRemote } from "../fakes/fake-remote";
 import { connectTestDevice } from "../fakes/test-device";
 import { forgetNotices, remoteText, syncNow, syncedPair, vaultText } from "../support/sync";
-
 
 describe("shared Remote settings at the start of a sync", () => {
 	it("stops before touching anything, as Sync failed, when the Remote has no settings", async () => {
@@ -128,8 +122,7 @@ describe("merging without a true Base", () => {
 		await syncNow(laptop);
 		await syncNow(phone);
 
-		const merged =
-			"<<<<<<< Phone\none\n=======\nONE\n>>>>>>> Remote\ntwo\n<<<<<<< Phone\nTHREE\n=======\nthree\n>>>>>>> Remote\n";
+		const merged = "<<<<<<< Phone\none\n=======\nONE\n>>>>>>> Remote\ntwo\n<<<<<<< Phone\nTHREE\n=======\nthree\n>>>>>>> Remote\n";
 		expect(await vaultText(phone, "note.md")).toBe(merged);
 		expect(remoteText(remote, "note.md")).toBe(merged);
 	});
@@ -194,7 +187,6 @@ describe("what is not merged", () => {
 		expect(await vaultText(phone, "note.md")).toBe("two\n");
 	});
 });
-
 
 describe("edits made at the last moment", () => {
 	it("does not overwrite a note edited just before a download is written into it, merging the two instead", async () => {

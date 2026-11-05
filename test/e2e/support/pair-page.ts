@@ -41,7 +41,13 @@ export const DEVICES_PATH = `/${RUN_FOLDER}/${DEVICES_FOLDER}`;
  *   COMPLETE_SYNC_MS naming `what`.
  */
 export function statusHelpers(strings: Strings): string {
-	const labels = [strings.statusSyncing, strings.statusSynced, strings.statusOffline, strings.statusSyncFailed, strings.statusSettingsCollision];
+	const labels = [
+		strings.statusSyncing,
+		strings.statusSynced,
+		strings.statusOffline,
+		strings.statusSyncFailed,
+		strings.statusSettingsCollision,
+	];
 	const counted = Object.fromEntries(labels.map((label) => [label, fill(strings.statusWithCount, { status: label, count: "" })]));
 	return `
 		const countedStatus = ${JSON.stringify(counted)};

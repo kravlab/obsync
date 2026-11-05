@@ -76,14 +76,18 @@ export class DevToolsPage {
 		try {
 			response = await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(timeoutMs) });
 		} catch (error) {
-			if (error instanceof DOMException && error.name === "TimeoutError") throw new Error(`DevTools: no answer from port ${port} within ${timeoutMs} ms`);
+			if (error instanceof DOMException && error.name === "TimeoutError")
+				throw new Error(`DevTools: no answer from port ${port} within ${timeoutMs} ms`);
 			throw error;
 		}
 		if (!response.ok) throw new Error(`DevTools: /json answered HTTP ${response.status}`);
 		const socket = new WebSocket(pageSocketUrl(await response.json()));
 		try {
 			await new Promise<void>((resolve, reject) => {
-				const timer = setTimeout(() => reject(new Error(`DevTools: the page's connection did not open within ${timeoutMs} ms`)), timeoutMs);
+				const timer = setTimeout(
+					() => reject(new Error(`DevTools: the page's connection did not open within ${timeoutMs} ms`)),
+					timeoutMs,
+				);
 				socket.addEventListener("open", () => (clearTimeout(timer), resolve()), { once: true });
 				socket.addEventListener("error", () => (clearTimeout(timer), reject(new Error("DevTools: the page's connection failed"))), {
 					once: true,
@@ -124,7 +128,11 @@ export class DevToolsPage {
 				},
 			});
 			this.socket.send(
-				JSON.stringify({ id, method: "Runtime.evaluate", params: { expression, awaitPromise: true, returnByValue: true, userGesture: true } }),
+				JSON.stringify({
+					id,
+					method: "Runtime.evaluate",
+					params: { expression, awaitPromise: true, returnByValue: true, userGesture: true },
+				}),
 			);
 		});
 	}

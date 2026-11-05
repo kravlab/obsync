@@ -35,7 +35,13 @@ async function currentBuild(name: string): Promise<FakeApp> {
 	app.saveLocalStorage("seamsync-snapshot-database", { formatVersion: 1, name });
 	app.saveLocalStorage("seamsync-connection", {
 		formatVersion: 1,
-		connection: { accountId: "a1", remoteRoot: "/My vault", device: { id: "d1", name: "Laptop" }, firstSyncDone: true, reconnectNeeded: true },
+		connection: {
+			accountId: "a1",
+			remoteRoot: "/My vault",
+			device: { id: "d1", name: "Laptop" },
+			firstSyncDone: true,
+			reconnectNeeded: true,
+		},
 	});
 	return app;
 }

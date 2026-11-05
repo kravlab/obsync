@@ -138,9 +138,7 @@ describe("an edit beats a delete", () => {
  * `projects`, so deleting the folder stays under the Deletion guard's
  * thresholds.
  */
-async function syncedFolder(
-	remote = new FakeRemote(),
-): Promise<{ remote: FakeRemote; laptop: TestDevice; phone: TestDevice }> {
+async function syncedFolder(remote = new FakeRemote()): Promise<{ remote: FakeRemote; laptop: TestDevice; phone: TestDevice }> {
 	const laptop = connectTestDevice(remote, "Laptop");
 	const phone = connectTestDevice(remote, "Phone");
 	await laptop.vault.createFolder("projects");

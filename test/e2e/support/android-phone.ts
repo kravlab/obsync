@@ -198,7 +198,10 @@ export class AndroidPhone implements LanguagePage {
 				if (this.obsidian?.isClosed()) this.obsidian = await DevToolsPage.open(await forwardDevTools(OBSIDIAN_PACKAGE));
 				return this.eval(reloadedInLanguageProgram(language, this.pluginId), POLL_CALL_MS);
 			},
-			{ timeoutMs: RELOAD_TIMEOUT_MS, what: language === null ? "Obsidian did not reload with no language set" : `Obsidian did not reload in ${language}` },
+			{
+				timeoutMs: RELOAD_TIMEOUT_MS,
+				what: language === null ? "Obsidian did not reload with no language set" : `Obsidian did not reload in ${language}`,
+			},
 		);
 	}
 

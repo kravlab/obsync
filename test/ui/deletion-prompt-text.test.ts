@@ -11,12 +11,8 @@ describe("deletionPromptText", () => {
 		expect(deletionPromptText({ ...prompt, reason: "threshold" }, en).reason).toBe(
 			"This sync would delete more files than the deletion guard allows.",
 		);
-		expect(deletionPromptText({ ...prompt, reason: "missingVault" }, en).reason).toBe(
-			"This vault has none of its synced files left.",
-		);
-		expect(deletionPromptText({ ...prompt, reason: "emptyRemote" }, en).reason).toBe(
-			"Dropbox has none of the synced files left.",
-		);
+		expect(deletionPromptText({ ...prompt, reason: "missingVault" }, en).reason).toBe("This vault has none of its synced files left.");
+		expect(deletionPromptText({ ...prompt, reason: "emptyRemote" }, en).reason).toBe("Dropbox has none of the synced files left.");
 	});
 
 	it("counts each direction, leaving out one with nothing to delete", () => {

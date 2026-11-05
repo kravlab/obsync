@@ -83,7 +83,10 @@ describe("connecting and disconnecting in the running plugin", { timeout: DEVICE
 		await devices.connect(laptop, account, { leaveOnboardingOpen: true });
 		await vi.waitFor(() => laptop.button(strings.onboardingDone), PLUGIN_WAIT);
 
-		laptop.windowsOpened().find((modal) => modal.titleEl.textContent === strings.onboardingTitle)?.close();
+		laptop
+			.windowsOpened()
+			.find((modal) => modal.titleEl.textContent === strings.onboardingTitle)
+			?.close();
 
 		await devices.startFirstSync(laptop);
 	});
@@ -134,6 +137,10 @@ describe("connecting and disconnecting in the running plugin", { timeout: DEVICE
 		const text = await textOn(laptop, log);
 		expect(text).not.toBeNull();
 		// The file was not there before, so the failure's line is its only one.
-		expect(String(text).split("\n").filter((line) => line !== "")).toHaveLength(1);
+		expect(
+			String(text)
+				.split("\n")
+				.filter((line) => line !== ""),
+		).toHaveLength(1);
 	});
 });
