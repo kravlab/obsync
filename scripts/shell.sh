@@ -23,7 +23,8 @@ lint | format) ;;
   ;;
 esac
 
-cd "$(git rev-parse --show-toplevel)"
+toplevel=$(git rev-parse --show-toplevel)
+cd "$toplevel"
 
 # git ls-files, not find: it lists the tracked files only, never
 # node_modules/, dist/ or other ignored output, and `*.sh` matches at any depth.
@@ -37,6 +38,7 @@ files=()
 mapfile -d '' -t files < <(git ls-files -z -- "${pathspecs[@]}" \
   ':(exclude).devcontainer' ':(exclude).config/mise/conf.d' \
   ':(exclude).agents/skills' ':(exclude).claude' ':(exclude).scratch')
+wait $! # git ls-files' status, which < <(...) does not check
 [[ ${#files[@]} -gt 0 ]] || exit 0
 
 if [[ $mode == format ]]; then
