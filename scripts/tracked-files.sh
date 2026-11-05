@@ -17,12 +17,14 @@ fi
 pathspec=$1
 shift
 
-cd "$(git rev-parse --show-toplevel)"
+toplevel=$(git rev-parse --show-toplevel)
+cd "$toplevel"
 
 files=()
 while IFS= read -r -d '' file; do
   [[ -f $file && ! -L $file ]] && files+=("$file")
 done < <(git ls-files -z -- "$pathspec")
+wait $! # git ls-files' status, which < <(...) does not check
 [[ ${#files[@]} -gt 0 ]] || exit 0
 
 exec "$@" "${files[@]}"
