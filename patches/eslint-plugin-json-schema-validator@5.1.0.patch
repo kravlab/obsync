@@ -1,0 +1,13 @@
+diff --git a/lib/rules/no-invalid.js b/lib/rules/no-invalid.js
+index 6c91545c34cbadb551197417b36c7527802a11b8..2342eceb5bb1e9b1b64d03da83433b4f1304924e 100644
+--- a/lib/rules/no-invalid.js
++++ b/lib/rules/no-invalid.js
+@@ -17,7 +17,7 @@ const compat_1 = require("../utils/compat");
+ const CATALOG_URL = "https://www.schemastore.org/api/json/catalog.json";
+ function matchFile(filename, fileMatch) {
+     return (fileMatch.includes(path_1.default.basename(filename)) ||
+-        fileMatch.some((fm) => (0, minimatch_1.default)(filename, fm, { dot: true })));
++        fileMatch.some((fm) => (0, minimatch_1.minimatch)(filename, fm, { dot: true })));
+ }
+ function schemaPathToValidator(schemaPath, context) {
+     const schema = (0, schema_1.loadSchema)(schemaPath, context);

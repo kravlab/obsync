@@ -34,10 +34,10 @@ type SyncKind = "sync" | "reconcile";
  * becoming visible or going online). Only the user lifts a hold of the
  * Deletion guard.
  */
-export type SyncSource = "user" | "automatic";
+type SyncSource = "user" | "automatic";
 
 /** A started engine, as `start` returns it. */
-export interface StartedEngine {
+interface StartedEngine {
 	/** Unsubscribes from the vault and cancels every timer; the shell calls it when the plugin unloads. */
 	readonly stop: () => void;
 	/** Settles once the Connection's status is shown and, when connected, the vault-open sync has run. */

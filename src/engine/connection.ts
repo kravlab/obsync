@@ -152,10 +152,10 @@ export interface ConnectionService {
  * How renaming this device ended: `renamed`, or `emptyName` when the name
  * was blank, or `notConnected` without a Connection to rename.
  */
-export type RenameOutcome = { readonly kind: "renamed" | "emptyName" | "notConnected" };
+type RenameOutcome = { readonly kind: "renamed" | "emptyName" | "notConnected" };
 
 /** How forgetting a device ended: `forgotten`, or `changed` when its device rewrote its record meanwhile. */
-export type ForgetOutcome = { readonly kind: "forgotten" | "changed" };
+type ForgetOutcome = { readonly kind: "forgotten" | "changed" };
 
 /**
  * How disconnecting ended; the local cleanup ran either way:
@@ -164,7 +164,7 @@ export type ForgetOutcome = { readonly kind: "forgotten" | "changed" };
  * - `revokeFailed`: the service could not be asked, so the login may still
  *   work there until the user revokes it.
  */
-export type DisconnectOutcome = { readonly kind: "disconnected" } | { readonly kind: "revokeFailed" };
+type DisconnectOutcome = { readonly kind: "disconnected" } | { readonly kind: "revokeFailed" };
 
 /** A login waiting for the code the user pastes. */
 export interface PendingAuthorization {
@@ -237,7 +237,7 @@ export interface RemoteChooser {
  *   writes for it, so it cannot be synced (`isSyncable`); nothing was
  *   written there and nothing stored.
  */
-export type ConnectOutcome = { readonly kind: "connected" } | { readonly kind: "unsupportedProvider" };
+type ConnectOutcome = { readonly kind: "connected" } | { readonly kind: "unsupportedProvider" };
 
 /**
  * What choosing an existing folder led to: a `ConnectOutcome`, or

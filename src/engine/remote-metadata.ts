@@ -150,7 +150,7 @@ function isStringList(value: unknown): value is string[] {
  * devices disagreeing. An older mark was left by a First sync that never
  * finished.
  */
-export const FIRST_SYNC_MARK_MS = 6 * 60 * 60 * 1_000;
+const FIRST_SYNC_MARK_MS = 6 * 60 * 60 * 1_000;
 
 /**
  * The name of a device whose record holds a "First sync in progress" mark
@@ -243,11 +243,7 @@ export function encodeDeviceRecord(device: DeviceIdentity, firstSyncStartedAt?: 
  * wrote before, with the "First sync in progress" mark when
  * `firstSyncStartedAt` is given. Only this device writes its record.
  */
-export async function writeDeviceRecord(
-	provider: Provider,
-	device: DeviceIdentity,
-	firstSyncStartedAt?: number,
-): Promise<void> {
+export async function writeDeviceRecord(provider: Provider, device: DeviceIdentity, firstSyncStartedAt?: number): Promise<void> {
 	await provider.createFolder(METADATA_FOLDER);
 	await provider.createFolder(DEVICES_FOLDER);
 	await provider.write(devicePath(device), encodeDeviceRecord(device, firstSyncStartedAt));

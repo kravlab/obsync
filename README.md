@@ -70,15 +70,15 @@ not written to the vault, to the plugin's `data.json` or to Dropbox.
 
 ### Commands
 
-| Command | What it does |
-|---|---|
-| Sync now | Syncs right away. Also lifts a deletion guard pause. |
-| Full reconcile | Syncs by listing the whole Remote instead of reading the change feed. |
-| Open sync window | Opens the sync window. |
-| Show conflicts / Show skipped files / Show activity / Show help | Opens the sync window on that tab. |
-| Next conflict / Previous conflict | Moves between conflict blocks in the open note. |
-| Restore local configuration | Restores this device's version of a configuration file replaced in a conflict. |
-| Reconnect to Dropbox | Offered only when Dropbox asks for a new login. |
+| Command                                                         | What it does                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Sync now                                                        | Syncs right away. Also lifts a deletion guard pause.                           |
+| Full reconcile                                                  | Syncs by listing the whole Remote instead of reading the change feed.          |
+| Open sync window                                                | Opens the sync window.                                                         |
+| Show conflicts / Show skipped files / Show activity / Show help | Opens the sync window on that tab.                                             |
+| Next conflict / Previous conflict                               | Moves between conflict blocks in the open note.                                |
+| Restore local configuration                                     | Restores this device's version of a configuration file replaced in a conflict. |
+| Reconnect to Dropbox                                            | Offered only when Dropbox asks for a new login.                                |
 
 On desktop the status bar shows the sync state; on mobile a ribbon icon
 does. Selecting it opens the sync window.
@@ -87,23 +87,23 @@ does. Selecting it opens the sync window.
 
 This device only:
 
-| Setting | Default | Range |
-|---|---|---|
-| Post-edit pause (seconds) | 2 | 1 to 60 |
-| Polling interval (seconds) | 60 | 10 to 3600 |
-| Per-request limit (MiB) | 16 | 1 to 19 |
-| Deletion guard: files | 100 | 1 to 100000 |
-| Deletion guard: percent | 50 | 1 to 100 |
-| Sync settings and hotkeys / Sync themes and snippets / Sync plugins | off | |
+| Setting                                                             | Default | Range       |
+| ------------------------------------------------------------------- | ------- | ----------- |
+| Post-edit pause (seconds)                                           | 2       | 1 to 60     |
+| Polling interval (seconds)                                          | 60      | 10 to 3600  |
+| Per-request limit (MiB)                                             | 16      | 1 to 19     |
+| Deletion guard: files                                               | 100     | 1 to 100000 |
+| Deletion guard: percent                                             | 50      | 1 to 100    |
+| Sync settings and hotkeys / Sync themes and snippets / Sync plugins | off     |             |
 
 All devices, stored on the Remote and saved with **Apply to all devices**:
 
-| Setting | Default |
-|---|---|
+| Setting                    | Default            |
+| -------------------------- | ------------------ |
 | Names Dropbox cannot store | Skip and list them |
-| Text files | `md`, `txt` |
-| Ignore list | empty |
-| Size limit (MiB) | 100 |
+| Text files                 | `md`, `txt`        |
+| Ignore list                | empty              |
+| Size limit (MiB)           | 100                |
 
 ## How it works
 
@@ -124,8 +124,8 @@ The design is recorded in [docs/adr/](docs/adr/) and the terms in
 
 ## Development
 
-Tools: Node.js, pnpm and lefthook, at the versions pinned in
-[mise.toml](mise.toml). With [mise](https://mise.jdx.dev/):
+Tools: Node.js, pnpm, lefthook, gitleaks, typos, shellcheck and shfmt,
+at the versions pinned in [mise.toml](mise.toml). With [mise](https://mise.jdx.dev/):
 
 ```bash
 mise install
@@ -139,6 +139,8 @@ pnpm install --frozen-lockfile
 lefthook install
 ```
 
+`mise run setup-dev` does all three.
+
 A dev container is provided in [.devcontainer/](.devcontainer/).
 
 The build bundles a Dropbox app key, which is never committed. Set
@@ -146,15 +148,32 @@ The build bundles a Dropbox app key, which is never committed. Set
 file; the build stops with an error without it. The app must have App
 Folder access.
 
-| Command | What it does |
-|---|---|
-| `pnpm build` | Type-checks, then bundles the plugin into `dist/`, minified. |
-| `pnpm dev` | Rebuilds `dist/` on every change, with inline source maps. |
-| `pnpm typecheck` | Type-checks. |
-| `pnpm lint` | Lints with `eslint-plugin-obsidianmd`; any warning fails. |
-| `pnpm test` | Runs the unit and plugin tests. |
+| Command              | What it does                                                 |
+| -------------------- | ------------------------------------------------------------ |
+| `pnpm build`         | Type-checks, then bundles the plugin into `dist/`, minified. |
+| `pnpm dev`           | Rebuilds `dist/` on every change, with inline source maps.   |
+| `pnpm typecheck`     | Type-checks.                                                 |
+| `pnpm lint`          | Lints with `eslint-plugin-obsidianmd`; any warning fails.    |
+| `pnpm lint:md`       | Lints the tracked Markdown files.                            |
+| `pnpm lint:sh`       | Lints the shell scripts and checks their format.             |
+| `pnpm spell`         | Spell-checks with typos.                                     |
+| `pnpm knip`          | Finds unused files, exports and dependencies.                |
+| `pnpm format`        | Formats the tracked files with Prettier.                     |
+| `pnpm format:check`  | Checks the format, changing nothing.                         |
+| `pnpm test`          | Runs the unit and plugin tests.                              |
+| `pnpm test:coverage` | Runs the tests; fails below the coverage thresholds.         |
 
-The pre-commit hook runs the type check, lint and tests.
+`mise run check` runs every check that changes nothing.
+
+The git hooks (lefthook.yml) check:
+
+- pre-commit: formats the staged files (Prettier, shfmt), then scans
+  them for secrets (gitleaks), spelling, Markdown and shell lint, and
+  runs the type check, lint and tests;
+- commit-msg: Conventional Commits, subject up to 50 characters, body
+  lines up to 72, and no Claude Code session link;
+- pre-push: the build, the tests with coverage, knip, `pnpm audit`, and
+  a secret scan of the commits being pushed.
 
 ## Testing
 

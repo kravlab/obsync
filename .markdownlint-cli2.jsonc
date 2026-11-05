@@ -1,0 +1,16 @@
+// markdownlint-cli2: lints the Markdown files it is given, but the ones
+// below. It is given files, not globs: the staged ones by the pre-commit
+// hook, every tracked one by `pnpm lint:md` (scripts/tracked-files.sh), so
+// local files git ignores are never linted.
+{
+	// markdownlint's own style for Prettier: it turns off the rules whose
+	// checks Prettier's formatting would fail (line length, list indent,
+	// blank lines, ...), since `pnpm format` already owns those.
+	"config": {
+		"extends": "markdownlint/style/prettier",
+	},
+	// Skip what the formatters leave alone too (see .prettierignore): the
+	// devcontainer template's files, vendored agent skills, Claude Code's own
+	// files, and working notes under .scratch/.
+	"ignores": [".devcontainer/", ".config/mise/conf.d/", ".agents/skills/", ".claude/", ".scratch/"],
+}

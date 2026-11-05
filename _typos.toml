@@ -1,0 +1,21 @@
+# typos: spell-checks every file that .gitignore does not list, but the ones
+# below, which the formatters and linters leave alone too (see .prettierignore):
+# the devcontainer template's files, vendored agent skills, Claude Code's own
+# files, working notes under .scratch/, and the lockfile.
+[files]
+extend-exclude = [
+	".devcontainer/",
+	".config/mise/conf.d/",
+	".agents/skills/",
+	".claude/",
+	".scratch/",
+	"pnpm-lock.yaml",
+]
+
+# A word cut short by a \uXXXX escape, as in "caf\\u00e9" (café), is
+# not a word of its own; one or two backslashes, for a string written
+# inside another string.
+[default]
+extend-ignore-re = [
+	'[A-Za-z]+\\{1,2}u[0-9A-Fa-f]{4}',
+]

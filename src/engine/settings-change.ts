@@ -16,12 +16,7 @@ import { parseWholeNumber } from "./whole-number";
 export type SharedSettingName = keyof RemoteSettings;
 
 /** Every shared Remote setting, in the order the user sees them. */
-export const SHARED_SETTING_NAMES: readonly SharedSettingName[] = [
-	"namePolicy",
-	"textExtensions",
-	"ignoreList",
-	"sizeCeilingBytes",
-];
+const SHARED_SETTING_NAMES: readonly SharedSettingName[] = ["namePolicy", "textExtensions", "ignoreList", "sizeCeilingBytes"];
 
 /**
  * A change of the shared Remote settings the user made on this device,
@@ -217,12 +212,7 @@ function sameValue(a: RemoteSettings[SharedSettingName], b: RemoteSettings[Share
  * them out or read them as other files. No name can be found for them, so
  * the change waits until the user renames them.
  */
-export function namePolicyBlockers(
-	paths: readonly RemotePath[],
-	rules: NameRules,
-	from: NamePolicy,
-	to: NamePolicy,
-): VaultPath[] {
+export function namePolicyBlockers(paths: readonly RemotePath[], rules: NameRules, from: NamePolicy, to: NamePolicy): VaultPath[] {
 	const before = pathCodec(rules, from);
 	const after = pathCodec(rules, to);
 	return paths

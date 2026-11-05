@@ -78,14 +78,26 @@
  * upload refused by its precondition is left too; the next sync merges
  * again.
  */
-import { configurationCategoriesOf, withConfigurationFolder, type ConfigurationCategories, type ConfigurationLayout } from "./configuration";
+import {
+	configurationCategoriesOf,
+	withConfigurationFolder,
+	type ConfigurationCategories,
+	type ConfigurationLayout,
+} from "./configuration";
 import { conflictCopyPath } from "./conflict-copy";
 import { holdsConflictBlocks } from "./conflicts";
 import { contentHash } from "./content-hash";
 import { guardReason, type DeletionGuardSettings } from "./deletion-guard";
 import { findDeletions } from "./deletions";
 import { ignoreList } from "./ignore-list";
-import { ensureVaultFolder as createVaultFolders, withVaultWrites, type LocalVault, type VaultEntry, type VaultFile, type VaultPath } from "./local-vault";
+import {
+	ensureVaultFolder as createVaultFolders,
+	withVaultWrites,
+	type LocalVault,
+	type VaultEntry,
+	type VaultFile,
+	type VaultPath,
+} from "./local-vault";
 import { comparePaths, foldersDownTo, isWithin, parentOf, pathKey } from "./paths";
 import type { Clock, ConfigurationConflictStore, DeviceIdentity, DeviceStore, RemoteFeed, UiPort } from "./ports";
 import {
@@ -171,13 +183,13 @@ export interface SyncRun {
 }
 
 /** The configuration folder as one sync takes it (configuration.ts). */
-export interface SyncedConfiguration {
+interface SyncedConfiguration {
 	readonly layout: ConfigurationLayout;
 	readonly categories: ConfigurationCategories;
 }
 
 /** What a First sync needs besides an ordinary sync. */
-export interface FirstSyncRun {
+interface FirstSyncRun {
 	/**
 	 * Called once the user started the First sync from its preview, before
 	 * anything is written: the engine registers the device and marks the
@@ -258,7 +270,11 @@ export async function runSync({
 	// The user's own choice, not another device's change: no restart notice.
 	for (const id of restores) await restoreKept(unwatchedVault, configurationConflicts, id);
 	const { caseInsensitive } = storedAs.nameRules;
-	const codec = withConfigurationFolder(pathCodec(storedAs.nameRules, settings.namePolicy), configuration.layout.configDir, caseInsensitive);
+	const codec = withConfigurationFolder(
+		pathCodec(storedAs.nameRules, settings.namePolicy),
+		configuration.layout.configDir,
+		caseInsensitive,
+	);
 	// From here on every provider call takes and gives vault paths.
 	const provider = namedProvider(storedAs, codec);
 	const storedFeed = await deviceStore.loadRemoteFeed();
@@ -305,7 +321,11 @@ export async function runSync({
 		try {
 			return await step();
 		} catch (error) {
-			const reason = isFailure(error, "nameNotRepresentable") ? "nameNotRepresentable" : isFailure(error, "tooLarge") ? "tooLarge" : null;
+			const reason = isFailure(error, "nameNotRepresentable")
+				? "nameNotRepresentable"
+				: isFailure(error, "tooLarge")
+					? "tooLarge"
+					: null;
 			if (reason === null) throw error;
 			if (kind === "file") refused.push({ path, reason });
 			return REFUSED;
@@ -533,7 +553,8 @@ export async function runSync({
 		const folder = parentOf(path);
 		const remoteFolder = folder === "" ? "" : codec.toRemote(folder);
 		if (remoteFolder === null) return null;
-		const pathRoom = maxPathLength === undefined ? Number.POSITIVE_INFINITY : maxPathLength - remoteFolder.length - (folder === "" ? 0 : 1);
+		const pathRoom =
+			maxPathLength === undefined ? Number.POSITIVE_INFINITY : maxPathLength - remoteFolder.length - (folder === "" ? 0 : 1);
 		const room = Math.min(maxSegmentLength ?? Number.POSITIVE_INFINITY, pathRoom);
 		const remoteKeys = new Set([...remote.keys()].map((listed) => pathKey(listed, caseInsensitive)));
 		for (let number = from; ; number += 1) {
@@ -562,11 +583,7 @@ export async function runSync({
 	const ensureVaultFolder = (path: VaultPath): Promise<void> => createVaultFolders(vault, path);
 
 	/** Writes to the Remote; undefined when the precondition no longer holds. */
-	async function writeRemote(
-		path: VaultPath,
-		data: ArrayBuffer,
-		precondition: Precondition,
-	): Promise<RemoteFile | undefined> {
+	async function writeRemote(path: VaultPath, data: ArrayBuffer, precondition: Precondition): Promise<RemoteFile | undefined> {
 		try {
 			return await provider.write(path, data, precondition);
 		} catch (error) {
@@ -1031,10 +1048,7 @@ export async function runSync({
 		},
 		guard,
 	);
-	const answer =
-		reason === null
-			? "apply"
-			: await ui.askDeletions({ reason, toRemote: toRemotePaths, toVault: deletions.toVault });
+	const answer = reason === null ? "apply" : await ui.askDeletions({ reason, toRemote: toRemotePaths, toVault: deletions.toVault });
 	if (!inRunEpoch()) throw new ConnectionChanged();
 	if (answer === null) return { held: "deletions", skipped: skipped(), snapshot };
 
@@ -1173,11 +1187,7 @@ async function listRemote(
  * included, as Dropbox says of a file replacing a folder: "remove all its
  * children".
  */
-function applyChanges(
-	previous: readonly RemoteEntry[],
-	changes: readonly Change[],
-	caseInsensitive: boolean,
-): RemoteEntry[] {
+function applyChanges(previous: readonly RemoteEntry[], changes: readonly Change[], caseInsensitive: boolean): RemoteEntry[] {
 	const keyOf = (path: string): string => pathKey(path, caseInsensitive);
 	const byKey = new Map<string, RemoteEntry>();
 	for (const entry of previous) byKey.set(keyOf(entry.path), entry);

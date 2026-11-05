@@ -14,16 +14,16 @@ import type { SyncConflicts } from "../../src/engine/conflicts";
 import type { ActivityEvent, ActivityUi } from "../../src/engine/activity-log";
 import type { ConnectFailure, ConnectionUi, RevokeFailure } from "../../src/engine/connection";
 import { createConnectionEpoch, type ConnectionEpoch } from "../../src/engine/connection-epoch";
-import { DEFAULT_DELETION_GUARD, type DeletionAnswer, type DeletionGuardSettings, type DeletionPrompt } from "../../src/engine/deletion-guard";
+import {
+	DEFAULT_DELETION_GUARD,
+	type DeletionAnswer,
+	type DeletionGuardSettings,
+	type DeletionPrompt,
+} from "../../src/engine/deletion-guard";
 import type { FirstSyncAnswer, FirstSyncPreview } from "../../src/engine/first-sync";
 import type { LocalVault, VaultPath } from "../../src/engine/local-vault";
 import type { SyncNotice } from "../../src/engine/notices";
-import {
-	DEFAULT_REMOTE_SETTINGS,
-	METADATA_FOLDER,
-	SETTINGS_PATH,
-	encodeSettings,
-} from "../../src/engine/remote-metadata";
+import { DEFAULT_REMOTE_SETTINGS, METADATA_FOLDER, SETTINGS_PATH, encodeSettings } from "../../src/engine/remote-metadata";
 import type { Provider } from "../../src/engine/provider";
 import type { RemoteSettings } from "../../src/engine/remote-metadata";
 import type { SettingsChange, SettingsCollisionAnswer, SettingsCollisionPrompt } from "../../src/engine/settings-change";
@@ -160,7 +160,7 @@ export class InMemoryDeviceStore implements DeviceStore {
 }
 
 /** A configuration conflict store in memory; ids count up from `kept-1`. */
-export class InMemoryConfigurationConflicts implements ConfigurationConflictStore {
+class InMemoryConfigurationConflicts implements ConfigurationConflictStore {
 	/** Every kept version with its bytes, oldest first. */
 	private readonly kept: { readonly version: KeptConfiguration; readonly data: ArrayBuffer }[] = [];
 	private nextId = 1;
@@ -174,7 +174,12 @@ export class InMemoryConfigurationConflicts implements ConfigurationConflictStor
 
 	/** Newest first: by time kept, the later kept first among the same time. */
 	list(): Promise<readonly KeptConfiguration[]> {
-		return Promise.resolve(this.kept.map(({ version }) => version).reverse().sort((a, b) => b.keptAt - a.keptAt));
+		return Promise.resolve(
+			this.kept
+				.map(({ version }) => version)
+				.reverse()
+				.sort((a, b) => b.keptAt - a.keptAt),
+		);
 	}
 
 	read(id: string): Promise<ArrayBuffer | null> {
@@ -474,10 +479,8 @@ function crashingDeviceStore(store: InMemoryDeviceStore, crash: CrashPoints): De
 		loadSnapshot: () => store.loadSnapshot(),
 		saveSnapshotEntry: (path, entry, base) =>
 			crash.step(`save snapshot entry ${path}`, () => store.saveSnapshotEntry(path, entry, base)),
-		removeSnapshotEntry: (path) =>
-			crash.step(`remove snapshot entry ${path}`, () => store.removeSnapshotEntry(path)),
-		moveSnapshotEntry: (from, to, entry) =>
-			crash.step(`move snapshot entry ${from}`, () => store.moveSnapshotEntry(from, to, entry)),
+		removeSnapshotEntry: (path) => crash.step(`remove snapshot entry ${path}`, () => store.removeSnapshotEntry(path)),
+		moveSnapshotEntry: (from, to, entry) => crash.step(`move snapshot entry ${from}`, () => store.moveSnapshotEntry(from, to, entry)),
 		loadBase: (path) => store.loadBase(path),
 		hasSnapshot: () => store.hasSnapshot(),
 		markSnapshotComplete: () => crash.step("mark snapshot complete", () => store.markSnapshotComplete()),

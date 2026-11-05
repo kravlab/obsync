@@ -22,7 +22,7 @@ export interface VaultFile {
 }
 
 /** A folder in the vault. */
-export interface VaultFolder {
+interface VaultFolder {
 	readonly kind: "folder";
 	readonly path: VaultPath;
 }

@@ -1,9 +1,38 @@
-# Git hooks, installed by `lefthook install`.
+# Git hooks, installed by `lefthook install` (`mise run setup-dev` runs it).
+# Each job names its tool's config for what it leaves out (.prettierignore,
+# _typos.toml, .markdownlint-cli2.jsonc, scripts/shell.sh), so the hooks and
+# the `pnpm` scripts skip the same files.
 
-# Nothing is committed unless the types check, lint is clean and every
-# test passes; a flaky test blocks too, since it is a failing test.
+# Nothing is committed unless the staged files are formatted, no secret is
+# staged, spelling and Markdown and shell scripts are clean, the types check,
+# lint is clean and every test passes; a flaky test blocks too, since it is a
+# failing test. Jobs run in order: the formatters first, since a file they
+# rewrite is staged again (stage_fixed), before the others check it. This
+# stages the whole rewritten file, so a file with changes staged in part is
+# committed with all of them.
 pre-commit:
   jobs:
+    # Every staged file but symlinks, which Prettier refuses when named on
+    # its command line; it skips the types it does not know
+    # (--ignore-unknown), as `pnpm format` does.
+    - name: prettier
+      file_types: not symlink
+      run: pnpm exec prettier --write --ignore-unknown --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+    - name: shfmt
+      glob: "*.sh"
+      run: scripts/shell.sh format {staged_files}
+      stage_fixed: true
+    - name: gitleaks
+      run: gitleaks git --pre-commit --staged --redact --verbose --no-banner
+    - name: typos
+      run: typos --force-exclude {staged_files}
+    - name: markdownlint
+      glob: "*.md"
+      run: pnpm exec markdownlint-cli2 -- {staged_files}
+    - name: shellcheck
+      glob: "*.sh"
+      run: scripts/shell.sh lint {staged_files}
     - name: typecheck
       run: pnpm typecheck
     - name: lint
@@ -11,13 +40,37 @@ pre-commit:
     - name: tests
       run: pnpm test
 
+# The message is checked for Conventional Commits and the length limits
+# (commitlint.config.mjs), and for a Claude Code session link, which must not
+# reach the history. {1} is the path of the message file; quoted, because it
+# may hold a space.
 commit-msg:
   jobs:
-    # A Claude Code session link must not reach the history. {1} is the path
-    # of the message file; quoted, because it may hold a space.
+    - name: commitlint
+      run: pnpm exec commitlint --edit "{1}"
     - name: no session link
-      run: |
-        if grep -qE 'claude\.ai/code/session_[A-Za-z0-9]' "{1}"; then
-          echo "commit message contains a Claude Code session link (claude.ai/code/session_…)" >&2
-          exit 1
-        fi
+      run: .claude/hooks/no-session-link.sh < "{1}"
+
+# What a push must not break: the plugin builds, the tests pass with the
+# coverage thresholds, nothing is unused, no dependency has a known
+# vulnerability, and the commits being pushed hold no secret.
+pre-push:
+  jobs:
+    - name: build
+      run: pnpm build
+    - name: tests with coverage
+      run: pnpm test:coverage
+    - name: knip
+      run: pnpm knip
+    # pnpm audit asks the registry for today's advisories: it needs the
+    # network, and a new advisory on any dependency stops a push until it is
+    # dealt with. Offline it retries for long, so it is cut off with a clear
+    # error instead of hanging the push.
+    - name: audit
+      run: pnpm audit
+      timeout: 1m
+    # {1} is the remote's name. The script reads the refs git sends on stdin,
+    # which lefthook passes on only with use_stdin; without it, the hook hangs.
+    - name: gitleaks
+      run: scripts/hooks/gitleaks-pushed.sh {1}
+      use_stdin: true

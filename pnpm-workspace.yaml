@@ -4,4 +4,16 @@ allowBuilds:
   # (@esbuild/<platform>) is installed and runs.
   esbuild: true
 patchedDependencies:
+  # minimatch 11 (see overrides) has no default export; use the named one.
+  eslint-plugin-json-schema-validator@5.1.0: patches/eslint-plugin-json-schema-validator@5.1.0.patch
   node-diff3@3.2.1: patches/node-diff3@3.2.1.patch
+# Transitive dependencies lifted out of the version ranges that `pnpm audit`
+# reports as vulnerable, so the pre-push audit passes. Each selector names
+# only the vulnerable range, so other copies of the package keep the version
+# their dependents asked for. Drop an entry once its dependents require a
+# patched version themselves.
+overrides:
+  "re2js@>=2.2.0 <2.8.7": ^2.8.7 # via markdownlint-cli2
+  "katex@>=0.11.0 <0.18.2": ^0.18.2 # via markdownlint-cli2
+  "fast-uri@>=3.0.0 <3.1.9": ^3.1.9 # via ajv (commitlint, eslint-plugin-obsidianmd)
+  "minimatch@>=7.0.0 <11.0.1": ^11.0.1 # via eslint-plugin-obsidianmd

@@ -13,7 +13,7 @@ export interface StoredFile {
 }
 
 /** A folder as the fake service stores it. */
-export interface StoredFolder {
+interface StoredFolder {
 	readonly kind: "folder";
 	/** The entry's stable id, when the service gives stable ids. */
 	readonly id?: string;
@@ -208,13 +208,15 @@ export class FakeRemote {
 		const rules = this.nameRules;
 		if (rules.maxPathLength !== undefined && path.length > rules.maxPathLength) return false;
 		const reserved = new Set(rules.reservedNames.map((name) => this.key(name)));
-		return path.split("/").every(
-			(segment) =>
-				!rules.forbiddenCharacters.some((character) => segment.includes(character)) &&
-				!rules.forbiddenAtEnd.some((character) => segment.endsWith(character)) &&
-				!reserved.has(this.key(segment)) &&
-				(rules.maxSegmentLength === undefined || segment.length <= rules.maxSegmentLength),
-		);
+		return path
+			.split("/")
+			.every(
+				(segment) =>
+					!rules.forbiddenCharacters.some((character) => segment.includes(character)) &&
+					!rules.forbiddenAtEnd.some((character) => segment.endsWith(character)) &&
+					!reserved.has(this.key(segment)) &&
+					(rules.maxSegmentLength === undefined || segment.length <= rules.maxSegmentLength),
+			);
 	}
 
 	/** `path` with its folders as they are stored: their case on a case-insensitive service. */

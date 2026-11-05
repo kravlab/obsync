@@ -1,0 +1,8 @@
+# Read by shfmt (scripts/shell.sh): the project's shell scripts indent with
+# two spaces. Nothing else is set here; Prettier takes its style from
+# prettier.config.mjs.
+root = true
+
+[*.sh]
+indent_style = space
+indent_size = 2

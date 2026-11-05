@@ -48,7 +48,8 @@ export interface LanguagePage extends ObsidianPage {
  * right after this one still reaches the old page.
  */
 export function reloadInLanguageProgram(language: string | null): string {
-	const store = language === null ? `localStorage.removeItem("language");` : `localStorage.setItem("language", ${JSON.stringify(language)});`;
+	const store =
+		language === null ? `localStorage.removeItem("language");` : `localStorage.setItem("language", ${JSON.stringify(language)});`;
 	return `
 		window.seamsyncReloading = true;
 		${store}
@@ -241,7 +242,7 @@ export interface ButtonsFound {
 }
 
 /** The minimum height of a button on a phone (spec, check 14). */
-export const MIN_BUTTON_PX = 44;
+const MIN_BUTTON_PX = 44;
 
 /** Expects `found` to be a phone window with buttons, none below MIN_BUTTON_PX. */
 export function expectPhoneButtons(found: ButtonsFound): void {

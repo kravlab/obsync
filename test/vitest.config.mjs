@@ -6,7 +6,9 @@
 // pair scenarios drive a real Obsidian and run by their own commands
 // (`pnpm test:e2e:desktop`, `pnpm test:e2e:android`, `pnpm test:e2e:pair`),
 // so they are left out here; their helpers' tests (test/e2e/support/) are
-// not. The paths below are relative to the repository root, set as `root`.
+// not. Coverage is measured only by `pnpm test:coverage`, which fails when
+// it drops below the thresholds. The paths below are relative to the
+// repository root, set as `root`.
 import { fileURLToPath } from "node:url";
 import { configDefaults, defineConfig } from "vitest/config";
 
@@ -25,5 +27,15 @@ export default defineConfig({
 		include: ["test/**/*.test.ts"],
 		exclude: [...configDefaults.exclude, "test/e2e/desktop/**", "test/e2e/android/**", "test/e2e/pair/**"],
 		setupFiles: ["test/support/obsidian-setup.ts"],
+		coverage: {
+			provider: "v8",
+			// Only the plugin's code; a src/ file no test loads counts as uncovered.
+			include: ["src/**/*.ts"],
+			// A summary only: it writes no report files into the repository.
+			reporter: ["text-summary"],
+			// The measured coverage, rounded down. They stop it from sliding;
+			// raise them as the tests grow.
+			thresholds: { lines: 96, branches: 87, functions: 93, statements: 93 },
+		},
 	},
 });

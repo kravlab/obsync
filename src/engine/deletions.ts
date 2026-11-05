@@ -13,7 +13,7 @@ import type { SyncListing } from "./sync-listing";
 import type { SyncedFile, SyncSnapshot } from "./sync-snapshot";
 
 /** A file to delete on the Remote, on condition that it still has `revision`. */
-export interface RemoteDeletion {
+interface RemoteDeletion {
 	readonly path: VaultPath;
 	/** The revision the Remote holds with the content the snapshot records. */
 	readonly revision: string;
@@ -67,11 +67,7 @@ export interface Deletions {
  * path; anything else there (another kind now, or a path left out) is
  * left as it is.
  */
-export async function findDeletions(
-	snapshot: SyncSnapshot,
-	listing: SyncListing,
-	checks: DeletionChecks,
-): Promise<Deletions> {
+export async function findDeletions(snapshot: SyncSnapshot, listing: SyncListing, checks: DeletionChecks): Promise<Deletions> {
 	const localFiles = new Map(
 		listing.local.filter((entry): entry is VaultFile => entry.kind === "file").map((file) => [file.path, file] as const),
 	);
@@ -99,10 +95,7 @@ export async function findDeletions(
 		if (goneHere) {
 			const there = remote.get(path);
 			if (there?.kind !== "file") continue;
-			const revision =
-				there.revision === synced.revision
-					? there.revision
-					: await checks.remoteRevisionIfUnchanged(path, synced);
+			const revision = there.revision === synced.revision ? there.revision : await checks.remoteRevisionIfUnchanged(path, synced);
 			if (revision === null) remoteChanged.push(path);
 			else toRemote.push({ path, revision });
 		} else if (goneThere) {

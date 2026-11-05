@@ -2,9 +2,13 @@
 
 [tools]
 "github:kravlab/hostrunner" = "latest"
+gitleaks = "8.30.1"  # scans for secrets, in commits and in the history
 lefthook = "2.1.14"  # runs the git hooks (lefthook.yml)
 node = "24.21.0"  # runs the build, lint and tests
 pnpm = "12.13.0"  # installs package.json's devDependencies
+shellcheck = "0.11.0"  # lints the shell scripts
+shfmt = "3.14.1"  # formats the shell scripts
+typos = "1.51.1"  # spell-checks the sources and docs
 
 # Development tasks; each runs the package.json script of the same name, so
 # `mise run <task>` and `pnpm run <script>` do the same thing.
@@ -25,19 +29,48 @@ run = "pnpm run lint"
 description = "Run the Vitest suite once"
 run = "pnpm run test"
 
+[tasks."test:coverage"]
+description = "Run the Vitest suite once; fails below the coverage thresholds"
+run = "pnpm run test:coverage"
+
+[tasks.format]
+description = "Format every tracked file with Prettier, rewriting them"
+run = "pnpm run format"
+
+[tasks."format:check"]
+description = "Check that every tracked file is formatted, without rewriting any"
+run = "pnpm run format:check"
+
+[tasks."lint:md"]
+description = "Lint every tracked Markdown file"
+run = "pnpm run lint:md"
+
+[tasks."lint:sh"]
+description = "Lint and check the format of the shell scripts"
+run = "pnpm run lint:sh"
+
+[tasks.spell]
+description = "Spell-check every tracked file"
+run = "pnpm run spell"
+
+[tasks.knip]
+description = "Find unused files, exports and dependencies"
+run = "pnpm run knip"
+
 [tasks.check]
-description = "Type-check, lint and test"
-depends = ["typecheck", "lint", "test"]
+description = "Everything that changes nothing: types, formatting, lint, spelling, unused code, tests with coverage"
+depends = ["typecheck", "format:check", "lint", "lint:md", "lint:sh", "spell", "knip", "test:coverage"]
 
 # What a new devcontainer runs (postCreateCommand); they replace the
 # template's defaults in .config/mise/conf.d/devcontainer.toml, which only
 # run mise install. The lockfile is frozen so a container never resolves
-# versions other than the committed ones.
+# versions other than the committed ones. `lefthook install` is last: it
+# needs the tools the hooks call, and it writes the hooks into .git/hooks/.
 
 [tasks.setup-dev]
-description = "Install the tools and devDependencies in the everyday devcontainer"
-run = "mise install && pnpm install --frozen-lockfile"
+description = "Install the tools, devDependencies and git hooks in the everyday devcontainer"
+run = ["mise install", "pnpm install --frozen-lockfile", "lefthook install"]
 
 [tasks.setup-agent]
-description = "Install the tools and devDependencies in the Claude Code devcontainer"
+description = "Install the tools, devDependencies and git hooks in the Claude Code devcontainer"
 depends = ["setup-dev"]  # the same setup in both containers

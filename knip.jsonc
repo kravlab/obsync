@@ -1,0 +1,18 @@
+// knip: reports unused files, exports and dependencies.
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	// What runs: the plugin's entry point, every test file (the unit tests and
+	// the desktop, Android and pair scenarios), the Vitest configs, and the
+	// build and lint configs in scripts/.
+	"entry": ["src/main.ts", "test/**/*.test.ts", "test/**/vitest*.config.mjs", "scripts/*.mjs"],
+	// What is checked. Leaves out the devcontainer template's files,
+	// .config/mise/conf.d/, vendored agent skills (.agents/skills/), Claude
+	// Code's own files and worktrees (.claude/), and working notes (.scratch/),
+	// as the formatters and linters do (see .prettierignore).
+	"project": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.mjs"],
+	// commitlint runs from the commit-msg hook (lefthook.yml), whose jobs knip
+	// does not read; markdownlint-cli2 runs from the pre-commit hook and, by
+	// `pnpm lint:md`, through scripts/tracked-files.sh, whose arguments knip
+	// does not read either.
+	"ignoreDependencies": ["@commitlint/cli", "markdownlint-cli2"],
+}

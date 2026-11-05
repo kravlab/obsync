@@ -40,4 +40,14 @@ export default defineConfig([
 			"obsidianmd/prefer-window-timers": "off",
 		},
 	},
+	// The tests of scripts/ run the project's shell scripts in throwaway git
+	// repositories, not plugin code: they spawn processes and use temporary
+	// files and `process`.
+	{
+		files: ["test/scripts/**/*.ts"],
+		languageOptions: { globals: { process: "readonly" } },
+		rules: {
+			"obsidianmd/no-nodejs-modules": "off",
+		},
+	},
 ]);
